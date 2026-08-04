@@ -21,6 +21,7 @@ class ClaimRoleRequest(BaseModel):
 
 class ClaimRoleResponse(BaseModel):
     spouse_id: uuid.UUID
+    device_id: uuid.UUID
     role: str
     access_token: str
     refresh_token: str
@@ -57,6 +58,7 @@ class LoginTotpResponse(BaseModel):
     access_token: str | None = None
     refresh_token: str | None = None
     spouse_id: uuid.UUID | None = None
+    device_id: uuid.UUID | None = None
     role: str | None = None
 
 
@@ -69,6 +71,7 @@ class LoginFaceResponse(BaseModel):
     access_token: str
     refresh_token: str
     spouse_id: uuid.UUID
+    device_id: uuid.UUID
     role: str
 
 

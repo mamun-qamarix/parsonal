@@ -204,7 +204,31 @@ confirmed, leaving no way back into the TOTP setup screen. Two fixes:
   `TotpSetupScreen` — recovering even a fully killed-and-reopened app, not
   just a backgrounded one.
 
-## 15. Repo layout
+## 16. Device management + a real token-revocation bug fix
+
+**Decision:** added a Devices screen (Settings) listing every device across
+BOTH spouses -- with a husband/wife badge per card, so it's clear whose
+phone is whose -- with a delete/revoke action. Either spouse can revoke
+any device (lost/stolen phone, shared-trust model consistent with the
+rest of the app); a revoked device must re-do the full setup-code flow to
+get back in, it cannot just log in again.
+
+While building this, found that revocation couldn't have worked at all:
+`create_refresh_token()` already had a `device_id` claim, but every call
+site passed a throwaway `uuid.uuid4()` instead of the actual `Device.id`
+(the Device row didn't exist yet when the token was minted), and
+`/auth/refresh` never checked the Devices table in the first place. Fixed
+both: the Device row is now created and flushed *before* its refresh
+token is minted (so the token embeds the real id), and `/auth/refresh`
+now 401s if that Device row no longer exists.
+
+**Consequence:** this invalidates refresh tokens minted before this fix
+(their embedded device_id was random, matches nothing) -- any
+already-logged-in session will need to log in again (password + TOTP)
+the next time its 15-minute access token expires and it tries to refresh.
+Necessary and safe -- no data loss, just a re-login.
+
+## 17. Repo layout
 
 **Decision:** Monorepo at the project root:
 - `/backend` — FastAPI backend, admin panel, Docker Compose, install script

@@ -54,13 +54,21 @@ def _create_challenge_token(spouse_id: str, role: str, device_name: str, token_t
 
 
 async def _issue_full_login(db: AsyncSession, spouse: Spouse, device_name: str) -> dict:
-    refresh_token = create_refresh_token(str(spouse.id), device_id=str(uuid.uuid4()))
+    # The Device row must exist (and have its real id) *before* the refresh
+    # token is minted, since the token embeds that id -- that's what lets
+    # /auth/refresh reject a token whose Device has since been deleted.
+    # See DECISIONS.md #16.
     device = Device(
         spouse_id=spouse.id,
         device_name=device_name,
-        refresh_token_hash=hash_secret(refresh_token),
+        refresh_token_hash="",  # placeholder, replaced below once we know the token
     )
     db.add(device)
+    await db.flush()
+
+    refresh_token = create_refresh_token(str(spouse.id), device_id=str(device.id))
+    device.refresh_token_hash = hash_secret(refresh_token)
+
     db.add(AuditLogEntry(actor_id=spouse.id, action="auth.login", target_type="spouse", target_id=spouse.id))
     await db.commit()
 
@@ -69,6 +77,7 @@ async def _issue_full_login(db: AsyncSession, spouse: Spouse, device_name: str) 
         "access_token": access_token,
         "refresh_token": refresh_token,
         "spouse_id": spouse.id,
+        "device_id": device.id,
         "role": spouse.role.value,
     }
 
@@ -101,13 +110,16 @@ async def claim_role(payload: ClaimRoleRequest, db: AsyncSession = Depends(get_d
     db.add(spouse)
     await db.flush()
 
-    refresh_token = create_refresh_token(str(spouse.id), device_id=str(uuid.uuid4()))
     device = Device(
         spouse_id=spouse.id,
         device_name=payload.device_name,
-        refresh_token_hash=hash_secret(refresh_token),
+        refresh_token_hash="",
     )
     db.add(device)
+    await db.flush()
+
+    refresh_token = create_refresh_token(str(spouse.id), device_id=str(device.id))
+    device.refresh_token_hash = hash_secret(refresh_token)
 
     if payload.role == "husband":
         code.claimed_husband = True
@@ -125,6 +137,7 @@ async def claim_role(payload: ClaimRoleRequest, db: AsyncSession = Depends(get_d
     access_token = create_access_token(str(spouse.id), payload.role)
     return ClaimRoleResponse(
         spouse_id=spouse.id,
+        device_id=device.id,
         role=payload.role,
         access_token=access_token,
         refresh_token=refresh_token,
@@ -290,6 +303,23 @@ async def refresh_token_endpoint(payload: RefreshRequest, db: AsyncSession = Dep
     spouse = result.scalar_one_or_none()
     if spouse is None:
         raise HTTPException(status_code=401, detail="Spouse not found")
+
+    # A deleted Device (revoked from the Devices screen) must not be able
+    # to refresh its way back in. Older tokens minted before this device_id
+    # fix (DECISIONS.md #16) won't carry a valid device_id and are treated
+    # as revoked too -- they'll need to log in again, which is safe.
+    device_id_claim = claims.get("device_id")
+    device = None
+    if device_id_claim:
+        try:
+            device_result = await db.execute(select(Device).where(Device.id == uuid.UUID(device_id_claim), Device.spouse_id == spouse_id))
+            device = device_result.scalar_one_or_none()
+        except ValueError:
+            device = None
+    if device is None:
+        raise HTTPException(status_code=401, detail="This device has been removed. Please set up the app again.")
+    device.last_seen_at = datetime.now(timezone.utc)
+    await db.commit()
 
     access_token = create_access_token(str(spouse.id), spouse.role.value)
     return RefreshResponse(access_token=access_token)
