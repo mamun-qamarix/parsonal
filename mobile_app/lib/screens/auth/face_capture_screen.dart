@@ -12,10 +12,16 @@ enum _LivenessStage { waitingOpenEyes, waitingBlink, done }
 /// Captures a single still frame from the front camera after confirming a
 /// blink (simple, fully on-device liveness check — see DECISIONS.md §7).
 /// Pops with the captured JPEG bytes, or null if the user backs out.
+///
+/// Uses repeated still captures (takePicture + InputImage.fromFilePath)
+/// rather than a raw camera image stream: decoding a normal JPEG file is
+/// far more reliable across real devices than manually converting each
+/// platform's raw YUV/NV21 frame format, which varies enough between
+/// devices/CameraX versions to silently fail on some phones.
 class FaceCaptureScreen extends StatefulWidget {
   final String title;
   final String instructions;
-  const FaceCaptureScreen({super.key, this.title = 'Face verification', this.instructions = 'Look at the camera and blink naturally'});
+  const FaceCaptureScreen({super.key, this.title = 'মুখ যাচাই', this.instructions = 'ক্যামেরার দিকে সরাসরি তাকান, তারপর স্বাভাবিকভাবে চোখের পলক ফেলুন'});
 
   @override
   State<FaceCaptureScreen> createState() => _FaceCaptureScreenState();
@@ -25,16 +31,17 @@ class _FaceCaptureScreenState extends State<FaceCaptureScreen> {
   CameraController? _controller;
   late final FaceDetector _detector;
   _LivenessStage _stage = _LivenessStage.waitingOpenEyes;
-  bool _busy = false;
-  bool _capturing = false;
-  String _hint = 'Getting camera ready...';
+  bool _checking = false;
+  bool _done = false;
+  String _hint = 'ক্যামেরা প্রস্তুত হচ্ছে...';
+  Timer? _pollTimer;
   Timer? _timeoutTimer;
 
   @override
   void initState() {
     super.initState();
     _detector = FaceDetector(
-      options: FaceDetectorOptions(enableClassification: true, performanceMode: FaceDetectorMode.fast),
+      options: FaceDetectorOptions(enableClassification: true, performanceMode: FaceDetectorMode.accurate),
     );
     _init();
   }
@@ -49,7 +56,6 @@ class _FaceCaptureScreenState extends State<FaceCaptureScreen> {
       front,
       ResolutionPreset.medium,
       enableAudio: false,
-      imageFormatGroup: Platform.isAndroid ? ImageFormatGroup.nv21 : ImageFormatGroup.bgra8888,
     );
     await controller.initialize();
     if (!mounted) {
@@ -58,32 +64,34 @@ class _FaceCaptureScreenState extends State<FaceCaptureScreen> {
     }
     setState(() {
       _controller = controller;
-      _hint = 'Look at the camera';
+      _hint = 'আপনার মুখ ফ্রেমের মাঝখানে রাখুন';
     });
-    await controller.startImageStream(_onFrame);
-    _timeoutTimer = Timer(const Duration(seconds: 45), () {
-      if (mounted && _stage != _LivenessStage.done) {
+    _pollTimer = Timer.periodic(const Duration(milliseconds: 900), (_) => _checkOnce());
+    _timeoutTimer = Timer(const Duration(seconds: 60), () {
+      if (mounted && !_done) {
         Navigator.of(context).pop(null);
       }
     });
   }
 
-  Future<void> _onFrame(CameraImage image) async {
-    if (_busy || _capturing || _controller == null) return;
-    _busy = true;
+  Future<void> _checkOnce() async {
+    if (_checking || _done || _controller == null || !_controller!.value.isInitialized) return;
+    _checking = true;
+    XFile? file;
     try {
-      final inputImage = _toInputImage(image, _controller!.description);
-      if (inputImage == null) return;
+      file = await _controller!.takePicture();
+      final inputImage = InputImage.fromFilePath(file.path);
       final faces = await _detector.processImage(inputImage);
+
       if (faces.isEmpty) {
-        if (mounted) setState(() => _hint = 'No face detected — center your face in frame');
+        if (mounted) setState(() => _hint = 'কোনো মুখ দেখা যাচ্ছে না — ক্যামেরার দিকে তাকান');
         return;
       }
       final face = faces.first;
       final leftOpen = face.leftEyeOpenProbability;
       final rightOpen = face.rightEyeOpenProbability;
       if (leftOpen == null || rightOpen == null) {
-        if (mounted) setState(() => _hint = 'Hold still...');
+        if (mounted) setState(() => _hint = 'স্থির থাকুন...');
         return;
       }
       final avgOpen = (leftOpen + rightOpen) / 2;
@@ -91,56 +99,39 @@ class _FaceCaptureScreenState extends State<FaceCaptureScreen> {
       if (_stage == _LivenessStage.waitingOpenEyes) {
         if (avgOpen > 0.6) {
           _stage = _LivenessStage.waitingBlink;
-          if (mounted) setState(() => _hint = 'Great — now blink');
+          if (mounted) setState(() => _hint = 'ভালো — এবার একবার চোখের পলক ফেলুন');
         } else {
-          if (mounted) setState(() => _hint = 'Open your eyes and look at the camera');
+          if (mounted) setState(() => _hint = 'চোখ খুলে ক্যামেরার দিকে তাকান');
         }
       } else if (_stage == _LivenessStage.waitingBlink) {
-        if (avgOpen < 0.3) {
+        if (avgOpen < 0.35) {
           _stage = _LivenessStage.done;
-          if (mounted) setState(() => _hint = 'Blink detected — capturing...');
-          await _captureStill();
+          _done = true;
+          _pollTimer?.cancel();
+          _timeoutTimer?.cancel();
+          if (mounted) setState(() => _hint = '✓ সফল হয়েছে!');
+          await Future.delayed(const Duration(milliseconds: 700));
+          final bytes = await File(file.path).readAsBytes();
+          if (mounted) Navigator.of(context).pop(bytes);
+          return;
         }
       }
     } catch (_) {
-      // Ignore transient per-frame processing errors.
+      // Ignore a single failed check — the next poll tick will retry.
     } finally {
-      _busy = false;
+      final leftover = file;
+      if (leftover != null && !_done) {
+        // Clean up intermediate captures; the final success frame is read
+        // and popped above before this runs (guarded by _done).
+        File(leftover.path).delete().catchError((_) => File(leftover.path));
+      }
+      _checking = false;
     }
-  }
-
-  Future<void> _captureStill() async {
-    if (_capturing || _controller == null) return;
-    _capturing = true;
-    try {
-      await _controller!.stopImageStream();
-      final file = await _controller!.takePicture();
-      final bytes = await File(file.path).readAsBytes();
-      if (mounted) Navigator.of(context).pop(bytes);
-    } catch (_) {
-      if (mounted) Navigator.of(context).pop(null);
-    }
-  }
-
-  InputImage? _toInputImage(CameraImage image, CameraDescription camera) {
-    final rotation = InputImageRotationValue.fromRawValue(camera.sensorOrientation) ?? InputImageRotation.rotation0deg;
-    final format = InputImageFormatValue.fromRawValue(image.format.raw);
-    if (format == null) return null;
-    if (image.planes.isEmpty) return null;
-    final plane = image.planes.first;
-    return InputImage.fromBytes(
-      bytes: plane.bytes,
-      metadata: InputImageMetadata(
-        size: Size(image.width.toDouble(), image.height.toDouble()),
-        rotation: rotation,
-        format: format,
-        bytesPerRow: plane.bytesPerRow,
-      ),
-    );
   }
 
   @override
   void dispose() {
+    _pollTimer?.cancel();
     _timeoutTimer?.cancel();
     _controller?.dispose();
     _detector.close();
@@ -157,7 +148,22 @@ class _FaceCaptureScreenState extends State<FaceCaptureScreen> {
         alignment: Alignment.center,
         children: [
           if (controller != null && controller.value.isInitialized)
-            Center(child: AspectRatio(aspectRatio: controller.value.aspectRatio, child: CameraPreview(controller)))
+            Center(
+              child: ClipRect(
+                child: FittedBox(
+                  fit: BoxFit.cover,
+                  child: SizedBox(
+                    // camera plugin reports size/aspectRatio in the sensor's
+                    // landscape orientation; swapping width/height here is
+                    // what keeps a front-facing portrait preview from
+                    // looking squished.
+                    width: controller.value.previewSize?.height ?? 1,
+                    height: controller.value.previewSize?.width ?? 1,
+                    child: CameraPreview(controller),
+                  ),
+                ),
+              ),
+            )
           else
             const CircularProgressIndicator(color: AppColors.halalGreen),
           Positioned(
@@ -172,7 +178,11 @@ class _FaceCaptureScreenState extends State<FaceCaptureScreen> {
                 children: [
                   Text(widget.instructions, style: const TextStyle(color: Colors.white70), textAlign: TextAlign.center),
                   const SizedBox(height: 8),
-                  Text(_hint, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold), textAlign: TextAlign.center),
+                  Text(
+                    _hint,
+                    style: TextStyle(color: _done ? AppColors.halalGreenDark : Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                    textAlign: TextAlign.center,
+                  ),
                 ],
               ),
             ),

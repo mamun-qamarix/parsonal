@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../core/theme/app_theme.dart';
 import '../../providers/session_provider.dart';
 import '../../services/auth_service.dart';
+import '../../widgets/password_field.dart';
 import 'face_capture_screen.dart';
 
 /// Password reset requires BOTH spouses to independently pass face
@@ -31,9 +32,9 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
     try {
       final result = await AuthService().passwordResetInitiate(widget.role);
       _tokenController.text = result['reset_token'];
-      setState(() => _message = 'Share this code with your spouse so they can verify on their own phone too.');
+      setState(() => _message = 'এই কোডটা আপনার সঙ্গীকে দিন, যাতে তিনিও নিজের ফোন থেকে যাচাই করতে পারেন।');
     } catch (_) {
-      setState(() => _message = 'Could not start password reset.');
+      setState(() => _message = 'রিসেট শুরু করা যায়নি।');
     } finally {
       setState(() => _loading = false);
     }
@@ -42,7 +43,7 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
   Future<void> _verifyMyFace() async {
     final myRole = context.read<SessionProvider>().role ?? widget.role;
     if (_tokenController.text.isEmpty) {
-      setState(() => _message = 'Enter the reset code first.');
+      setState(() => _message = 'আগে রিসেট কোডটা দিন।');
       return;
     }
     final bytes = await Navigator.of(context).push<dynamic>(MaterialPageRoute(builder: (_) => const FaceCaptureScreen()));
@@ -53,10 +54,10 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
       setState(() {
         _husbandVerified = result['husband_verified'] == true;
         _wifeVerified = result['wife_verified'] == true;
-        _message = 'Verified.';
+        _message = 'যাচাই সম্পন্ন হয়েছে।';
       });
     } catch (_) {
-      setState(() => _message = 'Face verification failed.');
+      setState(() => _message = 'মুখ যাচাই ব্যর্থ হয়েছে।');
     } finally {
       setState(() => _loading = false);
     }
@@ -64,16 +65,16 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
 
   Future<void> _complete() async {
     if (_newPassword.text.length < 8) {
-      setState(() => _message = 'New password must be at least 8 characters.');
+      setState(() => _message = 'নতুন পাসওয়ার্ড কমপক্ষে ৮ অক্ষরের হতে হবে।');
       return;
     }
     setState(() => _loading = true);
     try {
       await AuthService().passwordResetComplete(resetToken: _tokenController.text.trim(), newPassword: _newPassword.text);
       if (!mounted) return;
-      setState(() => _message = 'Password changed. Go back and log in with the new password.');
+      setState(() => _message = 'পাসওয়ার্ড বদলানো হয়েছে। এখন ফিরে গিয়ে নতুন পাসওয়ার্ড দিয়ে লগইন করুন।');
     } catch (_) {
-      setState(() => _message = 'Could not complete reset — make sure both spouses have verified.');
+      setState(() => _message = 'রিসেট সম্পন্ন করা যায়নি — নিশ্চিত করুন দুজনেই যাচাই করেছেন।');
     } finally {
       setState(() => _loading = false);
     }
@@ -82,38 +83,39 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
   @override
   Widget build(BuildContext context) {
     final bothVerified = _husbandVerified && _wifeVerified;
+    final roleText = widget.role == 'husband' ? 'স্বামীর' : 'স্ত্রীর';
     return Scaffold(
-      appBar: AppBar(title: const Text('Reset password')),
+      appBar: AppBar(title: const Text('পাসওয়ার্ড রিসেট করুন')),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('Resetting the ${widget.role} password requires both of you to verify your face.', style: Theme.of(context).textTheme.bodyMedium),
+              Text('$roleText পাসওয়ার্ড রিসেট করতে দুজনকেই নিজের মুখ দিয়ে যাচাই করতে হবে।', style: Theme.of(context).textTheme.bodyMedium),
               const SizedBox(height: 20),
-              OutlinedButton(onPressed: _loading ? null : _start, child: const Text('Start reset / get code')),
+              OutlinedButton(onPressed: _loading ? null : _start, child: const Text('রিসেট শুরু করুন / কোড নিন')),
               const SizedBox(height: 12),
-              TextField(controller: _tokenController, decoration: const InputDecoration(labelText: 'Reset code')),
+              TextField(controller: _tokenController, decoration: const InputDecoration(labelText: 'রিসেট কোড', helperText: 'অন্য স্পাউজের ফোন থেকে হলে এখানে কোডটা পেস্ট করুন')),
               const SizedBox(height: 12),
-              ElevatedButton(onPressed: _loading ? null : _verifyMyFace, child: const Text('Verify my face')),
+              ElevatedButton(onPressed: _loading ? null : _verifyMyFace, child: const Text('আমার মুখ যাচাই করুন')),
               const SizedBox(height: 16),
               Row(
                 children: [
                   Icon(Icons.man, color: _husbandVerified ? AppColors.halalGreen : Colors.grey),
                   const SizedBox(width: 4),
-                  const Text('Husband'),
+                  const Text('স্বামী'),
                   const SizedBox(width: 16),
                   Icon(Icons.woman, color: _wifeVerified ? AppColors.halalGreen : Colors.grey),
                   const SizedBox(width: 4),
-                  const Text('Wife'),
+                  const Text('স্ত্রী'),
                 ],
               ),
               const SizedBox(height: 20),
               if (bothVerified) ...[
-                TextField(controller: _newPassword, obscureText: true, decoration: const InputDecoration(labelText: 'New password')),
+                PasswordField(controller: _newPassword, labelText: 'নতুন পাসওয়ার্ড'),
                 const SizedBox(height: 12),
-                ElevatedButton(onPressed: _loading ? null : _complete, child: const Text('Set new password')),
+                ElevatedButton(onPressed: _loading ? null : _complete, child: const Text('নতুন পাসওয়ার্ড সেট করুন')),
               ],
               if (_message != null) ...[
                 const SizedBox(height: 16),

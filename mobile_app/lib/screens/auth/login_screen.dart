@@ -5,6 +5,7 @@ import '../../core/security/duress_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../providers/session_provider.dart';
 import '../../services/auth_service.dart';
+import '../../widgets/password_field.dart';
 import 'password_reset_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -38,7 +39,7 @@ class _LoginScreenState extends State<LoginScreen> {
       final challenge = await AuthService().loginPassword(role: role, password: _password.text, deviceName: 'this phone');
       session.setPendingChallenge(challenge);
     } catch (e) {
-      setState(() => _error = 'Incorrect password, or the server is unreachable.');
+      setState(() => _error = 'পাসওয়ার্ড ভুল হয়েছে, অথবা সার্ভারে সংযোগ করা যাচ্ছে না।');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -57,25 +58,30 @@ class _LoginScreenState extends State<LoginScreen> {
             children: [
               Icon(role == 'husband' ? Icons.man : Icons.woman, size: 56, color: AppColors.halalGreen),
               const SizedBox(height: 8),
-              Text('Welcome back, ${role[0].toUpperCase()}${role.substring(1)}', textAlign: TextAlign.center, style: Theme.of(context).textTheme.titleLarge),
+              Text(
+                role == 'husband' ? 'ফিরে আসার জন্য স্বাগতম' : 'ফিরে আসার জন্য স্বাগতম',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+              const SizedBox(height: 4),
+              const Text('আপনার পাসওয়ার্ড দিন, এরপর মুখ দিয়ে যাচাই করতে হবে', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
               const SizedBox(height: 24),
-              TextField(
+              PasswordField(
                 controller: _password,
-                obscureText: true,
+                labelText: 'পাসওয়ার্ড',
                 autofocus: true,
-                decoration: const InputDecoration(labelText: 'Password'),
                 onSubmitted: (_) => _submit(),
               ),
               const SizedBox(height: 16),
               if (_error != null) Padding(padding: const EdgeInsets.only(bottom: 12), child: Text(_error!, style: const TextStyle(color: Colors.red))),
               ElevatedButton(
                 onPressed: _loading ? null : _submit,
-                child: _loading ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Continue'),
+                child: _loading ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('পরবর্তী'),
               ),
               const SizedBox(height: 12),
               TextButton(
                 onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => PasswordResetScreen(role: role))),
-                child: const Text('Forgot password?'),
+                child: const Text('পাসওয়ার্ড ভুলে গেছেন?'),
               ),
             ],
           ),

@@ -7,6 +7,7 @@ import '../../core/theme/app_theme.dart';
 import '../../providers/session_provider.dart';
 import '../../services/auth_service.dart';
 import '../../services/profile_service.dart';
+import '../../widgets/password_field.dart';
 import '../onboarding/welcome_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -50,7 +51,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _setDuressPin() async {
     final pin = _duressPinController.text.trim();
     if (pin.length < 4) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('PIN must be at least 4 digits')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('পিন কমপক্ষে ৪ সংখ্যার হতে হবে')));
       return;
     }
     final spouseId = context.read<SessionProvider>().spouseId!;
@@ -61,18 +62,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
       // Local check is what matters at panic time; server copy is best-effort backup.
     }
     _duressPinController.clear();
-    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Duress PIN set')));
+    if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('বিপদের পিন সেট হয়েছে')));
   }
 
   Future<void> _logout() async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Log out of this device?'),
-        content: const Text('You\'ll need the setup code again to reconnect this device.'),
+        title: const Text('এই ডিভাইস থেকে লগ আউট করবেন?'),
+        content: const Text('আবার এই ডিভাইস যুক্ত করতে হলে নতুন করে সেটআপ কোড লাগবে।'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Log out')),
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('বাতিল')),
+          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('লগ আউট')),
         ],
       ),
     );
@@ -87,34 +88,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Widget build(BuildContext context) {
     final session = context.watch<SessionProvider>();
     return Scaffold(
-      appBar: AppBar(title: const Text('Settings')),
+      appBar: AppBar(title: const Text('সেটিংস')),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
-                const _SectionTitle('Appearance'),
+                const _SectionTitle('চেহারা'),
                 SwitchListTile(
-                  title: const Text('Show "Favorite Lines" screen'),
+                  title: const Text('"Favorite Lines" স্ক্রিন দেখান'),
+                  subtitle: const Text('স্বামী-স্ত্রীর একে অপরকে লেখা বিশেষ লাইনগুলোর জন্য আলাদা স্ক্রিন', style: TextStyle(fontSize: 12)),
                   value: _favoriteLinesEnabled,
                   onChanged: _toggleFavoriteLines,
                 ),
                 const SizedBox(height: 12),
-                const _SectionTitle('Security'),
+                const _SectionTitle('নিরাপত্তা'),
                 ListTile(
-                  title: const Text('Auto-lock after inactivity'),
-                  subtitle: Slider(
-                    value: session.autoLockMinutes.toDouble(),
-                    min: 1,
-                    max: 30,
-                    divisions: 29,
-                    label: '${session.autoLockMinutes} min',
-                    onChanged: (v) => setState(() => session.autoLockMinutesAndPersist = v.round()),
+                  title: const Text('নিষ্ক্রিয় থাকলে অটো-লক'),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('এত মিনিট কিছু না করলে অ্যাপ নিজে থেকে লক হয়ে যাবে', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      Slider(
+                        value: session.autoLockMinutes.toDouble(),
+                        min: 1,
+                        max: 30,
+                        divisions: 29,
+                        label: '${session.autoLockMinutes} মিনিট',
+                        onChanged: (v) => setState(() => session.autoLockMinutesAndPersist = v.round()),
+                      ),
+                    ],
                   ),
                 ),
                 ListTile(
-                  title: const Text('Home screen name'),
-                  subtitle: Text(IconDisguiseService.options[_identity] ?? 'Real'),
+                  title: const Text('হোম স্ক্রিনে অ্যাপের নাম'),
+                  subtitle: Text('${IconDisguiseService.options[_identity] ?? 'আসল নাম'}\nঅ্যাপটাকে অন্য নাম/আইকনে লুকিয়ে রাখতে চাইলে বদলান', style: const TextStyle(fontSize: 12)),
+                  isThreeLine: true,
                   trailing: DropdownButton<String>(
                     value: _identity,
                     items: IconDisguiseService.options.entries.map((e) => DropdownMenuItem(value: e.key, child: Text(e.value))).toList(),
@@ -131,31 +140,34 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Text('Duress / panic PIN', style: TextStyle(fontWeight: FontWeight.w600)),
-                      const Text('Enter this instead of your password to open a decoy screen with no real content.', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                      const Text('বিপদের পিন (Duress PIN)', style: TextStyle(fontWeight: FontWeight.w600)),
+                      const Text(
+                        'কেউ জোর করে ফোন খুলতে বললে, আসল পাসওয়ার্ডের বদলে এই পিনটা দিলে একটা খালি/ভুয়া স্ক্রিন দেখাবে — আসল কনটেন্ট দেখা যাবে না।',
+                        style: TextStyle(color: Colors.grey, fontSize: 12),
+                      ),
                       const SizedBox(height: 8),
                       Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Expanded(
-                            child: TextField(
+                            child: PasswordField(
                               controller: _duressPinController,
-                              obscureText: true,
+                              labelText: 'নতুন বিপদের পিন',
                               keyboardType: TextInputType.number,
-                              decoration: const InputDecoration(hintText: 'New duress PIN'),
                             ),
                           ),
                           const SizedBox(width: 8),
-                          FilledButton(onPressed: _setDuressPin, child: const Text('Set')),
+                          FilledButton(onPressed: _setDuressPin, child: const Text('সেট করুন')),
                         ],
                       ),
                     ],
                   ),
                 ),
                 const SizedBox(height: 24),
-                const _SectionTitle('Account'),
+                const _SectionTitle('অ্যাকাউন্ট'),
                 ListTile(
                   leading: const Icon(Icons.logout, color: AppColors.rejected),
-                  title: const Text('Log out of this device'),
+                  title: const Text('এই ডিভাইস থেকে লগ আউট করুন'),
                   onTap: _logout,
                 ),
               ],

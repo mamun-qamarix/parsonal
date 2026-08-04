@@ -27,14 +27,14 @@ class _ScanSetupScreenState extends State<ScanSetupScreen> {
         builder: (_) => ClaimRoleScreen(server: server, token: code, vmkB64: vmk),
       ));
     } catch (_) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('That QR code / text does not look like a valid setup code.')));
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('এই QR কোড বা টেক্সটটা সঠিক সেটআপ কোড বলে মনে হচ্ছে না।')));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Scan setup code')),
+      appBar: AppBar(title: const Text('সেটআপ কোড স্ক্যান করুন')),
       body: Stack(
         children: [
           MobileScanner(
@@ -46,13 +46,23 @@ class _ScanSetupScreenState extends State<ScanSetupScreen> {
             },
           ),
           Positioned(
+            top: 24,
+            left: 24,
+            right: 24,
+            child: Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(12)),
+              child: const Text('অ্যাডমিন প্যানেলে দেখানো QR কোডটা ফ্রেমের মধ্যে ধরুন', style: TextStyle(color: Colors.white), textAlign: TextAlign.center),
+            ),
+          ),
+          Positioned(
             left: 0,
             right: 0,
             bottom: 24,
             child: Center(
               child: FilledButton.tonal(
                 onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Enter manually instead'),
+                child: const Text('স্ক্যান না করে হাতে টাইপ করুন'),
               ),
             ),
           ),

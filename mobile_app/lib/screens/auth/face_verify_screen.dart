@@ -43,7 +43,7 @@ class _FaceVerifyScreenState extends State<FaceVerifyScreen> {
         spouseId: result['spouse_id'],
       );
     } catch (e) {
-      setState(() => _error = 'Face didn\'t match. Try again.');
+      setState(() => _error = 'মুখ মেলেনি। আবার চেষ্টা করুন।');
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -52,7 +52,7 @@ class _FaceVerifyScreenState extends State<FaceVerifyScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Face verification')),
+      appBar: AppBar(title: const Text('মুখ যাচাই')),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -62,18 +62,18 @@ class _FaceVerifyScreenState extends State<FaceVerifyScreen> {
             children: [
               const Icon(Icons.face, size: 64, color: AppColors.halalGreen),
               const SizedBox(height: 16),
-              const Text('Now verify it\'s really you.', textAlign: TextAlign.center),
+              const Text('এবার নিশ্চিত করুন সত্যিই আপনি এসেছেন।', textAlign: TextAlign.center),
               const SizedBox(height: 24),
               if (_error != null) Padding(padding: const EdgeInsets.only(bottom: 12), child: Text(_error!, style: const TextStyle(color: Colors.red), textAlign: TextAlign.center)),
               ElevatedButton.icon(
                 icon: const Icon(Icons.camera_alt),
                 onPressed: _loading ? null : _start,
-                label: _loading ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Verify with face'),
+                label: _loading ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('মুখ দিয়ে যাচাই করুন'),
               ),
               const SizedBox(height: 12),
               TextButton(
                 onPressed: () => context.read<SessionProvider>().cancelFaceVerify(),
-                child: const Text('Back'),
+                child: const Text('পেছনে যান'),
               ),
             ],
           ),
