@@ -24,6 +24,7 @@ from app.schemas.auth import (
     FaceEnrollRequest,
     DuressSetRequest,
     PasswordResetInitiateRequest, PasswordResetVerifyRequest, PasswordResetCompleteRequest,
+    SpouseOut,
 )
 from app.services.security import (
     hash_secret, verify_secret, create_access_token, create_refresh_token,
@@ -132,6 +133,11 @@ async def claim_role(payload: ClaimRoleRequest, db: AsyncSession = Depends(get_d
         totp_secret=totp_secret,
         totp_provisioning_uri=totp_service.provisioning_uri(totp_secret, f"{payload.role}@couplevault"),
     )
+
+
+@router.get("/me", response_model=SpouseOut)
+async def get_me(spouse: Spouse = Depends(get_current_spouse)):
+    return SpouseOut.from_spouse(spouse)
 
 
 @router.post("/totp/setup-confirm")

@@ -53,6 +53,8 @@ class _ClaimRoleScreenState extends State<ClaimRoleScreen> {
             accessToken: result['access_token'],
             refreshToken: result['refresh_token'],
             vmkB64: result['vmk_b64'],
+            totpSecret: result['totp_secret'],
+            totpProvisioningUri: result['totp_provisioning_uri'],
           );
     } catch (e) {
       setState(() => _error = describeApiError(e));

@@ -38,7 +38,7 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
       final challenge = await AuthService().loginPassword(role: role, password: _password.text, deviceName: 'this phone');
-      session.setPendingChallenge(challenge);
+      session.setPendingTotpChallenge(challenge);
     } catch (e) {
       setState(() => _error = describeApiError(e));
     } finally {
@@ -65,7 +65,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 4),
-              const Text('আপনার পাসওয়ার্ড দিন, এরপর মুখ দিয়ে যাচাই করতে হবে', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
+              const Text('আপনার পাসওয়ার্ড দিন, এরপর অথেন্টিকেটর কোড দিতে হবে', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
               const SizedBox(height: 24),
               PasswordField(
                 controller: _password,

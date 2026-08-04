@@ -23,15 +23,37 @@ class AuthService {
     return res.data as Map<String, dynamic>;
   }
 
+  Future<Map<String, dynamic>> getMe() async {
+    final res = await _dio.get('/auth/me');
+    return res.data as Map<String, dynamic>;
+  }
+
+  Future<void> totpSetupConfirm(String code) async {
+    await _dio.post('/auth/totp/setup-confirm', data: {'code': code});
+  }
+
   Future<void> enrollFace(Uint8List jpegBytes) async {
     await _dio.post('/auth/face/enroll', data: {
       'face_image_b64': base64Encode(jpegBytes),
     });
   }
 
+  Future<void> enableFace() async {
+    await _dio.post('/auth/face/enable');
+  }
+
+  Future<void> disableFace() async {
+    await _dio.post('/auth/face/disable');
+  }
+
   Future<String> loginPassword({required String role, required String password, required String deviceName}) async {
     final res = await _dio.post('/auth/login/password', data: {'role': role, 'password': password, 'device_name': deviceName});
     return res.data['challenge_token'] as String;
+  }
+
+  Future<Map<String, dynamic>> loginTotp({required String challengeToken, required String code}) async {
+    final res = await _dio.post('/auth/login/totp', data: {'challenge_token': challengeToken, 'code': code});
+    return res.data as Map<String, dynamic>;
   }
 
   Future<Map<String, dynamic>> loginFace({required String challengeToken, required Uint8List jpegBytes}) async {
@@ -51,11 +73,11 @@ class AuthService {
     return res.data as Map<String, dynamic>;
   }
 
-  Future<Map<String, dynamic>> passwordResetVerifyFace({required String resetToken, required String role, required Uint8List jpegBytes}) async {
-    final res = await _dio.post('/auth/password-reset/verify-face', data: {
+  Future<Map<String, dynamic>> passwordResetVerify({required String resetToken, required String role, required String code}) async {
+    final res = await _dio.post('/auth/password-reset/verify', data: {
       'reset_token': resetToken,
       'role': role,
-      'face_image_b64': base64Encode(jpegBytes),
+      'code': code,
     });
     return res.data as Map<String, dynamic>;
   }

@@ -8,7 +8,16 @@ import '../core/network/api_client.dart';
 import '../core/network/ws_client.dart';
 import '../core/storage/secure_storage_service.dart';
 
-enum SessionState { unknown, needsSetup, needsFaceEnroll, locked, needsFaceVerify, authenticated, decoy }
+enum SessionState {
+  unknown,
+  needsSetup,
+  needsTotpSetup,
+  locked,
+  needsTotpVerify,
+  needsFaceVerify,
+  authenticated,
+  decoy,
+}
 
 class SessionProvider extends ChangeNotifier {
   static const _kAutoLockMinutesPref = 'auto_lock_minutes';
@@ -17,10 +26,15 @@ class SessionProvider extends ChangeNotifier {
   String? role;
   String? spouseId;
   Uint8List? vmk;
-  bool faceEnrolled = false;
-  String? _pendingChallengeToken;
   Timer? _autoLockTimer;
   int autoLockMinutes = 5;
+
+  // Set right after claim, consumed by TotpSetupScreen, then cleared.
+  String? pendingTotpSecret;
+  String? pendingTotpProvisioningUri;
+
+  String? _pendingTotpChallengeToken;
+  String? _pendingFaceChallengeToken;
 
   set autoLockMinutesAndPersist(int value) {
     autoLockMinutes = value;
@@ -41,7 +55,6 @@ class SessionProvider extends ChangeNotifier {
     }
     role = await SecureStorageService.instance.role;
     spouseId = await SecureStorageService.instance.spouseId;
-    faceEnrolled = await SecureStorageService.instance.faceEnrolled;
     final vmkB64 = await SecureStorageService.instance.vmkB64;
     if (vmkB64 != null) vmk = base64Decode(vmkB64);
     state = SessionState.locked;
@@ -55,6 +68,8 @@ class SessionProvider extends ChangeNotifier {
     required String accessToken,
     required String refreshToken,
     required String vmkB64,
+    required String totpSecret,
+    required String totpProvisioningUri,
   }) async {
     await ApiClient.instance.configureBaseUrl(server);
     await SecureStorageService.instance.saveSession(
@@ -63,33 +78,52 @@ class SessionProvider extends ChangeNotifier {
     this.role = role;
     this.spouseId = spouseId;
     vmk = base64Decode(vmkB64);
-    faceEnrolled = false;
-    state = SessionState.needsFaceEnroll;
+    pendingTotpSecret = totpSecret;
+    pendingTotpProvisioningUri = totpProvisioningUri;
+    state = SessionState.needsTotpSetup;
     notifyListeners();
   }
 
-  void markFaceEnrolled() {
-    faceEnrolled = true;
-    SecureStorageService.instance.setFaceEnrolled(true);
+  /// Called once /auth/totp/setup-confirm succeeds during onboarding --
+  /// the access/refresh tokens from claim are already valid, so this goes
+  /// straight to the home screen (matches the old face-enroll-then-home
+  /// behavior, just with TOTP as the confirmed factor).
+  void completeTotpSetup() {
+    pendingTotpSecret = null;
+    pendingTotpProvisioningUri = null;
     state = SessionState.authenticated;
     WsClient.instance.connect();
     resetAutoLockTimer();
     notifyListeners();
   }
 
-  void setPendingChallenge(String token) {
-    _pendingChallengeToken = token;
-    state = SessionState.needsFaceVerify;
+  void setPendingTotpChallenge(String token) {
+    _pendingTotpChallengeToken = token;
+    state = SessionState.needsTotpVerify;
     notifyListeners();
   }
 
-  void cancelFaceVerify() {
-    _pendingChallengeToken = null;
+  String? get pendingTotpChallengeToken => _pendingTotpChallengeToken;
+
+  void cancelTotpVerify() {
+    _pendingTotpChallengeToken = null;
     state = SessionState.locked;
     notifyListeners();
   }
 
-  String? get pendingChallengeToken => _pendingChallengeToken;
+  void setPendingFaceChallenge(String token) {
+    _pendingFaceChallengeToken = token;
+    state = SessionState.needsFaceVerify;
+    notifyListeners();
+  }
+
+  String? get pendingChallengeToken => _pendingFaceChallengeToken;
+
+  void cancelFaceVerify() {
+    _pendingFaceChallengeToken = null;
+    state = SessionState.locked;
+    notifyListeners();
+  }
 
   Future<void> completeLogin({required String accessToken, required String refreshToken, required String role, required String spouseId}) async {
     final server = await SecureStorageService.instance.server;
@@ -99,7 +133,8 @@ class SessionProvider extends ChangeNotifier {
     );
     this.role = role;
     this.spouseId = spouseId;
-    faceEnrolled = true;
+    _pendingTotpChallengeToken = null;
+    _pendingFaceChallengeToken = null;
     state = SessionState.authenticated;
     WsClient.instance.connect();
     resetAutoLockTimer();
@@ -134,7 +169,6 @@ class SessionProvider extends ChangeNotifier {
     role = null;
     spouseId = null;
     vmk = null;
-    faceEnrolled = false;
     state = SessionState.needsSetup;
     notifyListeners();
   }

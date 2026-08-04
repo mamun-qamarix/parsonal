@@ -3,8 +3,6 @@ from datetime import datetime
 
 from pydantic import BaseModel
 
-from app.schemas.common import ORMBase
-
 
 class SetupCodeCreateResponse(BaseModel):
     token: str
@@ -105,9 +103,19 @@ class PasswordResetCompleteRequest(BaseModel):
     new_password: str
 
 
-class SpouseOut(ORMBase):
+class SpouseOut(BaseModel):
     id: uuid.UUID
     role: str
     face_enrolled: bool
     face_verification_enabled: bool
     totp_confirmed: bool
+
+    @classmethod
+    def from_spouse(cls, spouse) -> "SpouseOut":
+        return cls(
+            id=spouse.id,
+            role=spouse.role.value,
+            face_enrolled=spouse.face_enrolled,
+            face_verification_enabled=spouse.face_verification_enabled,
+            totp_confirmed=spouse.totp_confirmed,
+        )

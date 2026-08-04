@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/network/error_helper.dart';
 import '../../core/security/duress_service.dart';
 import '../../core/security/icon_disguise_service.dart';
 import '../../core/theme/app_theme.dart';
@@ -8,6 +9,7 @@ import '../../providers/session_provider.dart';
 import '../../services/auth_service.dart';
 import '../../services/profile_service.dart';
 import '../../widgets/password_field.dart';
+import '../auth/face_capture_screen.dart';
 import '../onboarding/welcome_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -24,6 +26,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _identity = 'real';
   final _duressPinController = TextEditingController();
   bool _loading = true;
+  bool _faceEnrolled = false;
+  bool _faceVerificationEnabled = false;
+  bool _faceToggleBusy = false;
 
   @override
   void initState() {
@@ -34,12 +39,50 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _load() async {
     final value = await _profileService.getSetting('favorite_lines_enabled', fallback: 'true');
     final identity = await IconDisguiseService.getCurrentIdentity();
+    Map<String, dynamic>? me;
+    try {
+      me = await _authService.getMe();
+    } catch (_) {
+      // Non-fatal: the face toggle just won't reflect server state until reload.
+    }
     if (mounted) {
       setState(() {
         _favoriteLinesEnabled = value == 'true';
         _identity = identity;
+        if (me != null) {
+          _faceEnrolled = me['face_enrolled'] == true;
+          _faceVerificationEnabled = me['face_verification_enabled'] == true;
+        }
         _loading = false;
       });
+    }
+  }
+
+  Future<void> _toggleFaceVerification(bool value) async {
+    setState(() => _faceToggleBusy = true);
+    try {
+      if (value) {
+        if (_faceEnrolled) {
+          await _authService.enableFace();
+        } else {
+          final bytes = await Navigator.of(context).push<dynamic>(MaterialPageRoute(
+            builder: (_) => const FaceCaptureScreen(title: 'মুখ রেজিস্ট্রেশন', instructions: 'ক্যামেরার দিকে তাকান, তারপর চোখের পলক ফেলুন'),
+          ));
+          if (bytes == null) {
+            setState(() => _faceToggleBusy = false);
+            return;
+          }
+          await _authService.enrollFace(bytes);
+          _faceEnrolled = true;
+        }
+      } else {
+        await _authService.disableFace();
+      }
+      if (mounted) setState(() => _faceVerificationEnabled = value);
+    } catch (e) {
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(describeApiError(e))));
+    } finally {
+      if (mounted) setState(() => _faceToggleBusy = false);
     }
   }
 
@@ -103,6 +146,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 const SizedBox(height: 12),
                 const _SectionTitle('নিরাপত্তা'),
+                SwitchListTile(
+                  title: const Text('মুখ ভেরিফিকেশন (ঐচ্ছিক)'),
+                  subtitle: const Text(
+                    'অন করলে পাসওয়ার্ড ও অথেন্টিকেটর কোডের পাশাপাশি প্রতিবার লগইনে মুখ দিয়েও যাচাই করতে হবে — বাড়তি নিরাপত্তার জন্য',
+                    style: TextStyle(fontSize: 12),
+                  ),
+                  value: _faceVerificationEnabled,
+                  onChanged: _faceToggleBusy ? null : _toggleFaceVerification,
+                  secondary: _faceToggleBusy ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2)) : null,
+                ),
                 ListTile(
                   title: const Text('নিষ্ক্রিয় থাকলে অটো-লক'),
                   subtitle: Column(
