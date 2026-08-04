@@ -7,6 +7,7 @@ import 'providers/session_provider.dart';
 import 'screens/auth/decoy_home_screen.dart';
 import 'screens/auth/face_verify_screen.dart';
 import 'screens/auth/login_screen.dart';
+import 'screens/auth/login_totp_setup_screen.dart';
 import 'screens/auth/totp_setup_screen.dart';
 import 'screens/auth/totp_verify_screen.dart';
 import 'screens/home/home_shell.dart';
@@ -62,6 +63,8 @@ class AuthGate extends StatelessWidget {
         return const LoginScreen();
       case SessionState.needsTotpVerify:
         return const TotpVerifyScreen();
+      case SessionState.needsLoginTotpSetup:
+        return const LoginTotpSetupScreen();
       case SessionState.needsFaceVerify:
         return const FaceVerifyScreen();
       case SessionState.authenticated:

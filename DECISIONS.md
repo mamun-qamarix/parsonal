@@ -275,6 +275,52 @@ never alters existing tables (#2), this pattern is how additive schema
 tweaks now ship without requiring a full database reset on every
 release, unlike the breaking change in #13.
 
+## 21. TOTP moved from per-spouse to per-device
+
+**Request:** the product owner asked that the password stay a single
+shared secret per role (whoever sets it first, it applies everywhere for
+that role), but the authenticator (TOTP) code be set up independently on
+each device -- i.e. adding a second phone for the same role (via #19's
+pairing) should NOT just inherit the first phone's authenticator entry;
+it should get its own.
+
+**Decision:** `totp_secret`/`totp_confirmed` moved from `Spouse` to
+`Device`. Password verification is unchanged (still checked against
+`Spouse.password_hash`, shared). `/auth/login/password` now looks up the
+calling device (by `device_uuid`, #20) after the password checks out:
+- Device found and its TOTP already confirmed -> `mode: "verify"`
+  (unchanged flow: `/auth/login/totp` against that device's own secret).
+- Device not found, or found but never confirmed -> `mode: "setup"`: a
+  fresh (or resumed-pending) TOTP secret for THIS device is returned, and
+  a new `POST /auth/login/totp-setup-confirm` endpoint confirms it and
+  finishes login, mirroring `/auth/totp/setup-confirm` (used for the very
+  first device at claim time, which still works unchanged, just reading
+  `device.totp_secret` instead of the spouse's now).
+
+This composes directly with #19's pairing feature: a newly-paired device
+naturally lands in `mode: "setup"` on its first login (new `device_uuid`,
+no confirmed TOTP yet) and is walked through its own QR/authenticator
+setup before finishing login -- exactly the requested behavior, no
+special-casing needed between "pairing" and "any other new device".
+
+Access tokens now embed `device_id` (needed so `/auth/me` and
+`/auth/totp/setup-info|setup-confirm` know which device's TOTP state
+they're reading/writing). Password reset (`/auth/password-reset/verify`)
+no longer has one spouse-level secret to check against -- it accepts a
+code from *any* of that spouse's confirmed devices, since the reset flow
+doesn't know in advance which device the person is holding.
+
+**Migration:** `devices.totp_secret`/`totp_confirmed` were added via the
+same idempotent `ALTER ... ADD COLUMN IF NOT EXISTS` pattern as #20. For
+deployments that still have the old `spouses.totp_secret`/`totp_confirmed`
+columns, `init_models()` runs a one-time backfill copying each spouse's
+secret onto every one of their existing Device rows (`WHERE
+device.totp_secret IS NULL`) -- so already-working phones keep their
+existing authenticator entry working, instead of every current user
+being forced to redo TOTP setup after this update. Verified both the
+backfill and the new-device "setup vs verify" branching against a local
+Postgres.
+
 ## 19. Add Device (peer-to-peer pairing)
 
 **Problem:** each role (`husband`/`wife`) can only be claimed once, ever

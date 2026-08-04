@@ -38,8 +38,16 @@ class _LoginScreenState extends State<LoginScreen> {
         session.enterDecoyMode();
         return;
       }
-      final challenge = await AuthService().loginPassword(role: role, password: _password.text, deviceName: 'this phone');
-      session.setPendingTotpChallenge(challenge);
+      final result = await AuthService().loginPassword(role: role, password: _password.text, deviceName: 'this phone');
+      if (result['mode'] == 'setup') {
+        session.setPendingLoginTotpSetup(
+          challengeToken: result['setup_challenge_token'],
+          secret: result['totp_secret'],
+          uri: result['totp_provisioning_uri'],
+        );
+      } else {
+        session.setPendingTotpChallenge(result['challenge_token']);
+      }
     } catch (e) {
       setState(() => _error = describeApiError(e));
     } finally {

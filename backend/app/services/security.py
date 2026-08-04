@@ -42,9 +42,11 @@ def generate_vmk() -> bytes:
     return secrets.token_bytes(32)
 
 
-def create_access_token(subject: str, role: str) -> str:
+def create_access_token(subject: str, role: str, device_id: str | None = None) -> str:
     expire = datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_expire_minutes)
     payload = {"sub": subject, "role": role, "exp": expire, "type": "access"}
+    if device_id:
+        payload["device_id"] = device_id
     return jwt.encode(payload, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
 

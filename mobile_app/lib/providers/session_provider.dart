@@ -15,6 +15,7 @@ enum SessionState {
   needsTotpSetup,
   locked,
   needsTotpVerify,
+  needsLoginTotpSetup,
   needsFaceVerify,
   authenticated,
   decoy,
@@ -37,6 +38,14 @@ class SessionProvider extends ChangeNotifier {
 
   String? _pendingTotpChallengeToken;
   String? _pendingFaceChallengeToken;
+
+  // Set when /auth/login/password comes back in "setup" mode -- this
+  // device has never confirmed its own authenticator entry yet (new
+  // install, or newly paired onto an already-claimed role). See
+  // DECISIONS.md #21.
+  String? _pendingLoginTotpSetupChallengeToken;
+  String? pendingLoginTotpSetupSecret;
+  String? pendingLoginTotpSetupUri;
 
   set autoLockMinutesAndPersist(int value) {
     autoLockMinutes = value;
@@ -136,6 +145,24 @@ class SessionProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setPendingLoginTotpSetup({required String challengeToken, required String secret, required String uri}) {
+    _pendingLoginTotpSetupChallengeToken = challengeToken;
+    pendingLoginTotpSetupSecret = secret;
+    pendingLoginTotpSetupUri = uri;
+    state = SessionState.needsLoginTotpSetup;
+    notifyListeners();
+  }
+
+  String? get pendingLoginTotpSetupChallengeToken => _pendingLoginTotpSetupChallengeToken;
+
+  void cancelLoginTotpSetup() {
+    _pendingLoginTotpSetupChallengeToken = null;
+    pendingLoginTotpSetupSecret = null;
+    pendingLoginTotpSetupUri = null;
+    state = SessionState.locked;
+    notifyListeners();
+  }
+
   void setPendingFaceChallenge(String token) {
     _pendingFaceChallengeToken = token;
     state = SessionState.needsFaceVerify;
@@ -167,6 +194,9 @@ class SessionProvider extends ChangeNotifier {
     if (deviceId != null) this.deviceId = deviceId;
     _pendingTotpChallengeToken = null;
     _pendingFaceChallengeToken = null;
+    _pendingLoginTotpSetupChallengeToken = null;
+    pendingLoginTotpSetupSecret = null;
+    pendingLoginTotpSetupUri = null;
     state = SessionState.authenticated;
     WsClient.instance.connect();
     resetAutoLockTimer();

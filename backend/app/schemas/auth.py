@@ -44,7 +44,15 @@ class LoginPasswordRequest(BaseModel):
 
 
 class LoginPasswordResponse(BaseModel):
-    challenge_token: str  # short-lived token proving password step passed; TOTP step required next
+    mode: str  # "verify" (this device already has a confirmed authenticator) | "setup" (this device needs one)
+    # Present when mode == "verify":
+    challenge_token: str | None = None
+    # Present when mode == "setup": this device has never confirmed an
+    # authenticator app before (new install, or a newly-paired device) --
+    # each device gets its own independent TOTP secret. See DECISIONS.md.
+    setup_challenge_token: str | None = None
+    totp_secret: str | None = None
+    totp_provisioning_uri: str | None = None
 
 
 class LoginTotpRequest(BaseModel):
@@ -116,11 +124,11 @@ class SpouseOut(BaseModel):
     totp_confirmed: bool
 
     @classmethod
-    def from_spouse(cls, spouse) -> "SpouseOut":
+    def from_spouse(cls, spouse, device=None) -> "SpouseOut":
         return cls(
             id=spouse.id,
             role=spouse.role.value,
             face_enrolled=spouse.face_enrolled,
             face_verification_enabled=spouse.face_verification_enabled,
-            totp_confirmed=spouse.totp_confirmed,
+            totp_confirmed=device.totp_confirmed if device is not None else False,
         )

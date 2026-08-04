@@ -37,9 +37,16 @@ async def list_devices(
 ):
     """Every registered device across BOTH spouses -- either of you can see
     and revoke any device (e.g. a lost/stolen phone), matching the app's
-    shared-trust model. See DECISIONS.md #16."""
+    shared-trust model. See DECISIONS.md #16. Devices mid-pairing that
+    never finished their own authenticator setup (DECISIONS.md #21) are
+    left out -- they've never actually been able to log in, so listing them
+    would just be confusing clutter; retrying pairing on the same phone
+    resumes the same pending row rather than piling up new ones."""
     result = await db.execute(
-        select(Device, Spouse.role).join(Spouse, Spouse.id == Device.spouse_id).order_by(Device.last_seen_at.desc())
+        select(Device, Spouse.role)
+        .join(Spouse, Spouse.id == Device.spouse_id)
+        .where(Device.totp_confirmed == True)  # noqa: E712
+        .order_by(Device.last_seen_at.desc())
     )
     rows = result.all()
     return [

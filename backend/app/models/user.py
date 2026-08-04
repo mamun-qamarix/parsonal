@@ -22,13 +22,6 @@ class Spouse(Base, UUIDPk, TimestampMixin):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     duress_pin_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
-    # Mandatory second factor: TOTP (Google Authenticator / Authy / etc).
-    # totp_secret is generated at claim time; totp_confirmed only flips to
-    # True once the spouse has proven they actually saved it (entered one
-    # valid code back) -- see DECISIONS.md.
-    totp_secret: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    totp_confirmed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-
     # Face verification is optional, opt-in from Settings/Profile -- see
     # DECISIONS.md. face_enrolled: has ever completed CompreFace enrollment.
     # face_verification_enabled: currently required as an extra login step.
@@ -52,6 +45,17 @@ class Device(Base, UUIDPk, TimestampMixin):
     # Nullable: older app versions never sent one, and rows created before
     # this column existed have none. See DECISIONS.md.
     device_uuid: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+    # The authenticator-app (TOTP) second factor is per-DEVICE, not
+    # per-spouse -- the password is the one thing shared across a spouse's
+    # devices; each device gets its own independent authenticator entry.
+    # Generated when the device first appears (claim, or the first login
+    # attempt from a newly-paired device); totp_confirmed only flips True
+    # once that device has proven it (entered one valid code back). See
+    # DECISIONS.md.
+    totp_secret: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    totp_confirmed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
     push_token: Mapped[str | None] = mapped_column(String(255), nullable=True)
     refresh_token_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)

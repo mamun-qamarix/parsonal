@@ -53,18 +53,29 @@ class AuthService {
     await _dio.post('/auth/face/disable');
   }
 
-  Future<String> loginPassword({required String role, required String password, required String deviceName}) async {
+  /// Returns the raw response: {mode: "verify", challenge_token} when this
+  /// device already has a confirmed authenticator entry, or
+  /// {mode: "setup", setup_challenge_token, totp_secret,
+  /// totp_provisioning_uri} when it needs to set up its own first (new
+  /// install, or a device newly paired onto an already-claimed role). See
+  /// DECISIONS.md #21.
+  Future<Map<String, dynamic>> loginPassword({required String role, required String password, required String deviceName}) async {
     final res = await _dio.post('/auth/login/password', data: {
       'role': role,
       'password': password,
       'device_name': deviceName,
       'device_uuid': await DeviceIdentityService.getOrCreate(),
     });
-    return res.data['challenge_token'] as String;
+    return res.data as Map<String, dynamic>;
   }
 
   Future<Map<String, dynamic>> loginTotp({required String challengeToken, required String code}) async {
     final res = await _dio.post('/auth/login/totp', data: {'challenge_token': challengeToken, 'code': code});
+    return res.data as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> loginTotpSetupConfirm({required String challengeToken, required String code}) async {
+    final res = await _dio.post('/auth/login/totp-setup-confirm', data: {'challenge_token': challengeToken, 'code': code});
     return res.data as Map<String, dynamic>;
   }
 
