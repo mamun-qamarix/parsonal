@@ -25,6 +25,7 @@ class _CreateEntryScreenState extends State<CreateEntryScreen> {
   String? _categoryId;
   XFile? _picked;
   bool _saving = false;
+  double? _uploadProgress; // 0.0-1.0 while a file is actively uploading
   String? _error;
   late List<Category> _categories = widget.categories;
 
@@ -69,13 +70,22 @@ class _CreateEntryScreenState extends State<CreateEntryScreen> {
     }
     setState(() {
       _saving = true;
+      _uploadProgress = null;
       _error = null;
     });
     try {
       final mediaIds = <String>[];
       if (_picked != null) {
         final bytes = await File(_picked!.path).readAsBytes();
-        final asset = await MediaService().upload(vmk, kind: widget.contentType == 'photo' ? 'image' : 'video', bytes: bytes);
+        final asset = await MediaService().upload(
+          vmk,
+          kind: widget.contentType == 'photo' ? 'image' : 'video',
+          bytes: bytes,
+          onSendProgress: (sent, total) {
+            if (total <= 0 || !mounted) return;
+            setState(() => _uploadProgress = sent / total);
+          },
+        );
         mediaIds.add(asset.id);
       }
       await VaultService().createEntry(
@@ -89,7 +99,7 @@ class _CreateEntryScreenState extends State<CreateEntryScreen> {
     } catch (e) {
       setState(() => _error = describeApiError(e));
     } finally {
-      if (mounted) setState(() => _saving = false);
+      if (mounted) setState(() { _saving = false; _uploadProgress = null; });
     }
   }
 
@@ -130,9 +140,24 @@ class _CreateEntryScreenState extends State<CreateEntryScreen> {
               ),
               const SizedBox(height: 20),
               if (_error != null) Padding(padding: const EdgeInsets.only(bottom: 12), child: ErrorMessageBox(_error!)),
+              if (_saving && _picked != null) ...[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(999),
+                  child: LinearProgressIndicator(value: _uploadProgress, minHeight: 6),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  _uploadProgress != null ? 'আপলোড হচ্ছে... ${(_uploadProgress! * 100).toStringAsFixed(0)}%' : 'আপলোড শুরু হচ্ছে...',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+                const SizedBox(height: 12),
+              ],
               ElevatedButton(
                 onPressed: _saving ? null : _submit,
-                child: _saving ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Save to vault'),
+                child: _saving
+                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Text('Save to vault'),
               ),
             ],
           ),

@@ -95,6 +95,11 @@ server {
     listen 80;
     server_name ${DOMAIN};
 
+    # nginx defaults to 1MB, which 413s any photo/video upload -- media is
+    # capped at 1GB by the backend itself (MAX_UPLOAD_MB in .env), so this
+    # just needs to not be stricter than that.
+    client_max_body_size 1024m;
+
     location / {
         proxy_pass http://127.0.0.1:${BACKEND_HOST_PORT:-18000};
         proxy_http_version 1.1;
@@ -104,6 +109,11 @@ server {
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
+        # Generous timeouts so a big upload/download on a slow mobile
+        # connection doesn't get cut off mid-transfer.
+        proxy_read_timeout 600s;
+        proxy_send_timeout 600s;
+        client_body_timeout 600s;
     }
 }
 EOF

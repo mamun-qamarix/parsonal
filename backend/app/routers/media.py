@@ -16,6 +16,15 @@ router = APIRouter(prefix="/media", tags=["media"])
 settings = get_settings()
 
 
+def _upload_size(f: UploadFile) -> int:
+    if f.size is not None:
+        return f.size
+    f.file.seek(0, 2)
+    size = f.file.tell()
+    f.file.seek(0)
+    return size
+
+
 @router.post("/upload", response_model=MediaAssetOut)
 async def upload_media(
     kind: str = Form(...),
@@ -27,19 +36,23 @@ async def upload_media(
     if kind not in (k.value for k in MediaKindEnum):
         raise HTTPException(status_code=400, detail="Invalid media kind")
 
-    data = await file.read()
     max_bytes = settings.max_upload_mb * 1024 * 1024
-    if len(data) > max_bytes:
+    size = _upload_size(file)
+    if size > max_bytes:
         raise HTTPException(status_code=413, detail=f"File exceeds {settings.max_upload_mb}MB limit")
 
-    object_key = storage.put_object(data, content_type="application/octet-stream")
+    # Stream straight from the spooled upload file instead of reading it
+    # all into a Python bytes object first -- with uploads up to 1GB now
+    # allowed, that would double peak memory use for no reason. See
+    # DECISIONS.md.
+    object_key = await storage.put_object(file.file, length=size, content_type="application/octet-stream")
 
     thumb_key = None
     if thumbnail is not None:
-        thumb_data = await thumbnail.read()
-        thumb_key = storage.put_object(thumb_data, content_type="application/octet-stream")
+        thumb_size = _upload_size(thumbnail)
+        thumb_key = await storage.put_object(thumbnail.file, length=thumb_size, content_type="application/octet-stream")
 
-    asset = MediaAsset(kind=MediaKindEnum(kind), object_key=object_key, thumbnail_object_key=thumb_key, size_bytes=len(data))
+    asset = MediaAsset(kind=MediaKindEnum(kind), object_key=object_key, thumbnail_object_key=thumb_key, size_bytes=size)
     db.add(asset)
     await db.commit()
     await db.refresh(asset)
@@ -48,7 +61,7 @@ async def upload_media(
 
 async def _stream_object(object_key: str):
     try:
-        data = storage.get_object(object_key)
+        data = await storage.get_object(object_key)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Object not found")
     return StreamingResponse(io.BytesIO(data), media_type="application/octet-stream")

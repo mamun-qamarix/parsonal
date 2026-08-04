@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     fcm_server_key: str = ""
     fcm_project_id: str = ""
 
-    max_upload_mb: int = 200
+    max_upload_mb: int = 1024
     max_chat_attachment_mb: int = 50
 
     setup_code_ttl_hours: int = 24

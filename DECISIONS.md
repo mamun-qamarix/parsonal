@@ -410,6 +410,50 @@ of vault content (server never retains the VMK, so a lost/corrupted VPS
 disk means permanent data loss -- a deliberate security/durability
 trade-off, not an oversight).
 
+## 24. 1GB media uploads: nginx body-size limit, streaming, progress
+
+**Problem:** video upload failed with a raw "status code 413" the app
+couldn't explain specifically. Root cause: nginx defaults to a 1MB
+`client_max_body_size`, and the generated reverse-proxy config
+(`install.sh`, coexisting-with-an-existing-nginx path) never set it --
+so nginx itself rejected anything over 1MB before the request even
+reached the backend.
+
+**Decision:** raised the ceiling to 1GB end to end, and fixed two
+correctness issues surfaced while doing that:
+
+- `install.sh`'s generated nginx template now sets
+  `client_max_body_size 1024m` and generous `proxy_read_timeout` /
+  `proxy_send_timeout` / `client_body_timeout` (600s) so a big transfer
+  on a slow mobile connection doesn't get cut off. Deployments whose
+  nginx config was already generated before this need the same lines
+  added manually (documented for the current deployment).
+- `MAX_UPLOAD_MB` default raised from 200 to 1024.
+- The MinIO client (`minio-py`) is synchronous, and was being called
+  directly inside `async def` route handlers -- a single big
+  upload/download blocked the *entire* event loop for its whole
+  duration, stalling every other request (chat, other users' API calls)
+  meanwhile. All storage calls now run via `run_in_threadpool`.
+- Upload now streams straight from the spooled `UploadFile.file` into
+  MinIO instead of first reading it into a Python `bytes` object --
+  avoids doubling peak backend memory on large files.
+- The app's Dio client used a blanket 20s/30s timeout tuned for quick
+  API calls, which would abort a large, healthy upload/download in
+  progress; media transfer calls now use their own generous (30 min)
+  timeout instead of raising the global default.
+- Added upload progress (`onSendProgress` -> a progress bar with %) on
+  the vault create-entry screen, the one place users pick large video
+  files.
+
+**Known remaining limitation, accepted for now:** the app still
+encrypts the whole file in memory client-side before upload (reads the
+picked file fully into a `Uint8List`, then produces a same-size
+encrypted copy) -- AES-GCM's usual single-tag construction isn't
+naturally chunk-streamable without a framing scheme (e.g. STREAM), which
+would be a much larger change. On a modern phone (4GB+ RAM) a 1GB video
+should be fine; on very low-RAM devices it could still OOM. Not fixed
+here; flagged as a follow-up if it turns out to matter in practice.
+
 ## 19. Add Device (peer-to-peer pairing)
 
 **Problem:** each role (`husband`/`wife`) can only be claimed once, ever
