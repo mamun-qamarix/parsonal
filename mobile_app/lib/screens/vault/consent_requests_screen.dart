@@ -7,6 +7,7 @@ import '../../models/models.dart';
 import '../../providers/session_provider.dart';
 import '../../services/vault_service.dart';
 import '../../widgets/error_message_box.dart';
+import '../../widgets/shimmer_loading.dart';
 import 'entry_detail_screen.dart';
 
 class ConsentRequestsScreen extends StatefulWidget {
@@ -50,7 +51,7 @@ class _ConsentRequestsScreenState extends State<ConsentRequestsScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Approval requests')),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const ShimmerTileList()
           : _requests.isEmpty
               ? const Center(child: Text('No pending requests'))
               : RefreshIndicator(

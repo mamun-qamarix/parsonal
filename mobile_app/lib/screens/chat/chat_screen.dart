@@ -16,6 +16,7 @@ import '../../providers/session_provider.dart';
 import '../../services/chat_service.dart';
 import '../../services/media_service.dart';
 import '../../widgets/decrypted_media.dart';
+import '../../widgets/shimmer_loading.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -155,7 +156,7 @@ class _ChatScreenState extends State<ChatScreen> {
         children: [
           Expanded(
             child: _loading
-                ? const Center(child: CircularProgressIndicator())
+                ? const ShimmerTileList()
                 : ListView.builder(
                     controller: _scrollController,
                     padding: const EdgeInsets.all(12),

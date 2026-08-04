@@ -51,6 +51,7 @@ class _ClaimRoleScreenState extends State<ClaimRoleScreen> {
             server: widget.server,
             role: result['role'],
             spouseId: result['spouse_id'],
+            deviceId: result['device_id'],
             accessToken: result['access_token'],
             refreshToken: result['refresh_token'],
             vmkB64: result['vmk_b64'],

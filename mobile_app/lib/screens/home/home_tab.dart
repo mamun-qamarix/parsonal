@@ -5,6 +5,7 @@ import '../../models/models.dart';
 import '../../providers/session_provider.dart';
 import '../../services/vault_service.dart';
 import '../../widgets/countdown_card.dart';
+import '../../widgets/shimmer_loading.dart';
 import '../../widgets/vault_entry_card.dart';
 import '../favorites/favorites_screen.dart';
 import '../history/history_screen.dart';
@@ -120,7 +121,7 @@ class _RoleVaultViewState extends State<_RoleVaultView> with SingleTickerProvide
         TabBar(controller: _typeTab, tabs: const [Tab(text: 'Text'), Tab(text: 'Photo'), Tab(text: 'Video')], labelColor: Theme.of(context).colorScheme.primary),
         Expanded(
           child: _loading
-              ? const Center(child: CircularProgressIndicator())
+              ? const ShimmerFeedList()
               : TabBarView(
                   controller: _typeTab,
                   children: _contentTypes.map((type) {

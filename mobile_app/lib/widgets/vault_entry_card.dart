@@ -3,15 +3,37 @@ import 'package:intl/intl.dart';
 
 import '../core/theme/app_theme.dart';
 import '../models/models.dart';
+import '../services/vault_service.dart';
 import 'decrypted_media.dart';
 
-class VaultEntryCard extends StatelessWidget {
+/// Social-media-feed-style post card: a full-width media block up top (like
+/// a Facebook/Instagram post) instead of a small side thumbnail, so photos
+/// and videos are actually easy to see while scrolling a list.
+class VaultEntryCard extends StatefulWidget {
   final VaultEntry entry;
   final VoidCallback onTap;
   const VaultEntryCard({super.key, required this.entry, required this.onTap});
 
-  IconData get _icon {
-    switch (entry.contentType) {
+  @override
+  State<VaultEntryCard> createState() => _VaultEntryCardState();
+}
+
+class _VaultEntryCardState extends State<VaultEntryCard> {
+  late bool _favorite = widget.entry.isFavoriteMine;
+  bool _busy = false;
+
+  Future<void> _toggleFavorite() async {
+    setState(() => _busy = true);
+    try {
+      final result = await VaultService().toggleFavorite(widget.entry.id);
+      if (mounted) setState(() => _favorite = result);
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  IconData get _typeIcon {
+    switch (widget.entry.contentType) {
       case 'photo':
         return Icons.image_outlined;
       case 'video':
@@ -23,64 +45,84 @@ class VaultEntryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final hasMedia = entry.mediaAssets.isNotEmpty;
-    final canShowThumb = hasMedia && (entry.contentType == 'photo' || entry.mediaAssets.first.hasThumbnail);
+    final entry = widget.entry;
+    final asset = entry.mediaAssets.isNotEmpty ? entry.mediaAssets.first : null;
+    final accent = entry.authorRole == 'husband' ? AppColors.husband : AppColors.wife;
+
     return Card(
+      clipBehavior: Clip.antiAlias,
       child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (canShowThumb)
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: SizedBox(
-                    width: 64,
-                    height: 64,
-                    child: DecryptedThumbnail(assetId: entry.mediaAssets.first.id, hasThumbnail: entry.mediaAssets.first.hasThumbnail),
+        onTap: widget.onTap,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 8, 8),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 16,
+                    backgroundColor: accent,
+                    child: Icon(entry.authorRole == 'husband' ? Icons.man : Icons.woman, size: 18, color: Colors.white),
                   ),
-                )
-              else
-                Container(
-                  width: 64,
-                  height: 64,
-                  decoration: BoxDecoration(color: AppColors.halalGreen.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
-                  child: Icon(_icon, color: AppColors.halalGreen),
-                ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        CircleAvatar(
-                          radius: 8,
-                          backgroundColor: entry.authorRole == 'husband' ? AppColors.husband : AppColors.wife,
-                          child: Icon(entry.authorRole == 'husband' ? Icons.man : Icons.woman, size: 10, color: Colors.white),
-                        ),
-                        const SizedBox(width: 6),
+                        Text(entry.authorRole == 'husband' ? 'স্বামী' : 'স্ত্রী', style: const TextStyle(fontWeight: FontWeight.w600)),
                         Text(DateFormat.yMMMd().add_jm().format(entry.createdAt.toLocal()), style: Theme.of(context).textTheme.bodySmall),
-                        const Spacer(),
-                        if (entry.isFavoriteMine) const Icon(Icons.favorite, size: 16, color: Colors.redAccent),
                       ],
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      entry.contentType == 'text' ? (entry.decryptedText ?? '') : (entry.contentType == 'photo' ? 'Photo' : 'Video'),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    Text('${entry.viewCount} views', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey)),
+                  ),
+                  IconButton(
+                    onPressed: _busy ? null : _toggleFavorite,
+                    icon: Icon(_favorite ? Icons.favorite : Icons.favorite_border, color: _favorite ? Colors.redAccent : Colors.grey),
+                  ),
+                ],
+              ),
+            ),
+            if (asset != null)
+              AspectRatio(
+                aspectRatio: 16 / 10,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (entry.contentType == 'photo' || asset.hasThumbnail)
+                      DecryptedThumbnail(assetId: asset.id, hasThumbnail: asset.hasThumbnail)
+                    else
+                      Container(color: AppColors.halalGreen.withValues(alpha: 0.08)),
+                    if (entry.contentType == 'video')
+                      Container(
+                        color: Colors.black26,
+                        child: const Center(
+                          child: Icon(Icons.play_circle_fill, size: 56, color: Colors.white),
+                        ),
+                      ),
                   ],
                 ),
               ),
-            ],
-          ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (entry.decryptedText != null && entry.decryptedText!.isNotEmpty)
+                    Text(entry.decryptedText!, maxLines: 3, overflow: TextOverflow.ellipsis)
+                  else if (asset == null)
+                    Row(children: [Icon(_typeIcon, size: 16, color: Colors.grey), const SizedBox(width: 6), Text(entry.contentType, style: const TextStyle(color: Colors.grey))]),
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      const Icon(Icons.visibility_outlined, size: 14, color: Colors.grey),
+                      const SizedBox(width: 4),
+                      Text('${entry.viewCount}', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey)),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
       ),
     );

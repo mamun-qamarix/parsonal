@@ -26,6 +26,7 @@ class SessionProvider extends ChangeNotifier {
   SessionState state = SessionState.unknown;
   String? role;
   String? spouseId;
+  String? deviceId;
   Uint8List? vmk;
   Timer? _autoLockTimer;
   int autoLockMinutes = 5;
@@ -56,6 +57,7 @@ class SessionProvider extends ChangeNotifier {
     }
     role = await SecureStorageService.instance.role;
     spouseId = await SecureStorageService.instance.spouseId;
+    deviceId = await SecureStorageService.instance.deviceId;
     final vmkB64 = await SecureStorageService.instance.vmkB64;
     if (vmkB64 != null) vmk = base64Decode(vmkB64);
 
@@ -86,6 +88,7 @@ class SessionProvider extends ChangeNotifier {
     required String server,
     required String role,
     required String spouseId,
+    required String deviceId,
     required String accessToken,
     required String refreshToken,
     required String vmkB64,
@@ -94,10 +97,11 @@ class SessionProvider extends ChangeNotifier {
   }) async {
     await ApiClient.instance.configureBaseUrl(server);
     await SecureStorageService.instance.saveSession(
-      server: server, accessToken: accessToken, refreshToken: refreshToken, vmkB64: vmkB64, role: role, spouseId: spouseId,
+      server: server, accessToken: accessToken, refreshToken: refreshToken, vmkB64: vmkB64, role: role, spouseId: spouseId, deviceId: deviceId,
     );
     this.role = role;
     this.spouseId = spouseId;
+    this.deviceId = deviceId;
     vmk = base64Decode(vmkB64);
     pendingTotpSecret = totpSecret;
     pendingTotpProvisioningUri = totpProvisioningUri;
@@ -146,14 +150,21 @@ class SessionProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> completeLogin({required String accessToken, required String refreshToken, required String role, required String spouseId}) async {
+  Future<void> completeLogin({
+    required String accessToken,
+    required String refreshToken,
+    required String role,
+    required String spouseId,
+    String? deviceId,
+  }) async {
     final server = await SecureStorageService.instance.server;
     final vmkB64 = await SecureStorageService.instance.vmkB64;
     await SecureStorageService.instance.saveSession(
-      server: server ?? '', accessToken: accessToken, refreshToken: refreshToken, vmkB64: vmkB64 ?? '', role: role, spouseId: spouseId,
+      server: server ?? '', accessToken: accessToken, refreshToken: refreshToken, vmkB64: vmkB64 ?? '', role: role, spouseId: spouseId, deviceId: deviceId,
     );
     this.role = role;
     this.spouseId = spouseId;
+    if (deviceId != null) this.deviceId = deviceId;
     _pendingTotpChallengeToken = null;
     _pendingFaceChallengeToken = null;
     state = SessionState.authenticated;
@@ -194,6 +205,7 @@ class SessionProvider extends ChangeNotifier {
     await SecureStorageService.instance.clearAll();
     role = null;
     spouseId = null;
+    deviceId = null;
     vmk = null;
     state = SessionState.needsSetup;
     notifyListeners();

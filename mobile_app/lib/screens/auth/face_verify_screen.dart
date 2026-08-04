@@ -43,6 +43,7 @@ class _FaceVerifyScreenState extends State<FaceVerifyScreen> {
         refreshToken: result['refresh_token'],
         role: result['role'],
         spouseId: result['spouse_id'],
+        deviceId: result['device_id'],
       );
     } catch (e) {
       setState(() => _error = describeApiError(e));

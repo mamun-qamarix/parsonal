@@ -7,6 +7,7 @@ import '../../providers/session_provider.dart';
 import '../../services/phrase_service.dart';
 import '../../widgets/comment_section.dart';
 import '../../widgets/reaction_bar.dart';
+import '../../widgets/shimmer_loading.dart';
 
 class PhrasesScreen extends StatefulWidget {
   const PhrasesScreen({super.key});
@@ -114,7 +115,7 @@ class _PhraseListState extends State<_PhraseList> {
   @override
   Widget build(BuildContext context) {
     final myRole = context.watch<SessionProvider>().role;
-    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_loading) return const ShimmerTileList();
     if (_phrases.isEmpty) return const Center(child: Text('No lines yet'));
     return RefreshIndicator(
       onRefresh: _load,

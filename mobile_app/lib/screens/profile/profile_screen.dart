@@ -1,10 +1,17 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/network/error_helper.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/models.dart';
 import '../../providers/session_provider.dart';
+import '../../services/media_service.dart';
 import '../../services/profile_service.dart';
+import '../../widgets/decrypted_media.dart';
+import '../../widgets/error_message_box.dart';
 import '../audit/audit_log_screen.dart';
 import '../phrases/phrases_screen.dart';
 import '../settings/settings_screen.dart';
@@ -37,13 +44,13 @@ class _ProfileScreenState extends State<ProfileScreen> with SingleTickerProvider
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Profile'),
+        title: const Text('প্রোফাইল'),
         actions: [
-          IconButton(icon: const Icon(Icons.favorite_border), tooltip: 'Our phrases', onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PhrasesScreen()))),
-          IconButton(icon: const Icon(Icons.fact_check_outlined), tooltip: 'Audit log', onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AuditLogScreen()))),
-          IconButton(icon: const Icon(Icons.settings_outlined), tooltip: 'Settings', onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SettingsScreen()))),
+          IconButton(icon: const Icon(Icons.favorite_border), tooltip: 'আমাদের প্রিয় লাইন', onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PhrasesScreen()))),
+          IconButton(icon: const Icon(Icons.fact_check_outlined), tooltip: 'অডিট লগ', onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AuditLogScreen()))),
+          IconButton(icon: const Icon(Icons.settings_outlined), tooltip: 'সেটিংস', onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SettingsScreen()))),
         ],
-        bottom: TabBar(controller: _tab, tabs: const [Tab(text: 'Husband'), Tab(text: 'Wife')]),
+        bottom: TabBar(controller: _tab, tabs: const [Tab(text: 'স্বামী'), Tab(text: 'স্ত্রী')]),
       ),
       body: TabBarView(
         controller: _tab,
@@ -69,6 +76,8 @@ class _ProfileViewState extends State<_ProfileView> {
   ProfileModel? _profile;
   bool _loading = true;
   bool _editing = false;
+  bool _uploadingPhoto = false;
+  String? _error;
   final _nameController = TextEditingController();
   final _bioController = TextEditingController();
 
@@ -99,29 +108,80 @@ class _ProfileViewState extends State<_ProfileView> {
     _load();
   }
 
+  Future<void> _changePhoto() async {
+    final file = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 85, maxWidth: 1200);
+    if (file == null) return;
+    setState(() {
+      _uploadingPhoto = true;
+      _error = null;
+    });
+    try {
+      final vmk = context.read<SessionProvider>().vmk!;
+      final bytes = await File(file.path).readAsBytes();
+      final asset = await MediaService().upload(vmk, kind: 'image', bytes: bytes);
+      await _service.updateMine(vmk, photoAssetId: asset.id);
+      await _load();
+    } catch (e) {
+      setState(() => _error = describeApiError(e));
+    } finally {
+      if (mounted) setState(() => _uploadingPhoto = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) return const Center(child: CircularProgressIndicator());
     final accent = widget.role == 'husband' ? AppColors.husband : AppColors.wife;
+    final photoId = _profile?.profilePhotoAssetId;
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
         Center(
-          child: CircleAvatar(radius: 44, backgroundColor: accent, child: Icon(widget.role == 'husband' ? Icons.man : Icons.woman, size: 44, color: Colors.white)),
+          child: Stack(
+            children: [
+              ClipOval(
+                child: SizedBox(
+                  width: 88,
+                  height: 88,
+                  child: photoId != null
+                      ? DecryptedThumbnail(assetId: photoId, hasThumbnail: false)
+                      : CircleAvatar(radius: 44, backgroundColor: accent, child: Icon(widget.role == 'husband' ? Icons.man : Icons.woman, size: 44, color: Colors.white)),
+                ),
+              ),
+              if (_isMine)
+                Positioned(
+                  bottom: 0,
+                  right: 0,
+                  child: InkWell(
+                    onTap: _uploadingPhoto ? null : _changePhoto,
+                    borderRadius: BorderRadius.circular(20),
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(color: AppColors.halalGreen, shape: BoxShape.circle, border: Border.all(color: Theme.of(context).scaffoldBackgroundColor, width: 2)),
+                      child: _uploadingPhoto
+                          ? const SizedBox(height: 14, width: 14, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
+                          : const Icon(Icons.camera_alt, size: 14, color: Colors.white),
+                    ),
+                  ),
+                ),
+            ],
+          ),
         ),
+        if (_error != null) Padding(padding: const EdgeInsets.only(top: 8), child: ErrorMessageBox(_error!, textAlign: TextAlign.center)),
         const SizedBox(height: 12),
         if (_editing)
           Column(
             children: [
-              TextField(controller: _nameController, decoration: const InputDecoration(labelText: 'Display name')),
+              TextField(controller: _nameController, decoration: const InputDecoration(labelText: 'নাম')),
               const SizedBox(height: 8),
-              TextField(controller: _bioController, decoration: const InputDecoration(labelText: 'About'), maxLines: 3),
+              TextField(controller: _bioController, decoration: const InputDecoration(labelText: 'সম্পর্কে কিছু কথা'), maxLines: 3),
               const SizedBox(height: 8),
               Row(
                 children: [
-                  Expanded(child: OutlinedButton(onPressed: () => setState(() => _editing = false), child: const Text('Cancel'))),
+                  Expanded(child: OutlinedButton(onPressed: () => setState(() => _editing = false), child: const Text('বাতিল'))),
                   const SizedBox(width: 8),
-                  Expanded(child: FilledButton(onPressed: _save, child: const Text('Save'))),
+                  Expanded(child: FilledButton(onPressed: _save, child: const Text('সংরক্ষণ')))
+                  ,
                 ],
               ),
             ],
@@ -129,13 +189,17 @@ class _ProfileViewState extends State<_ProfileView> {
         else
           Column(
             children: [
-              Text(_profile?.decryptedName?.isNotEmpty == true ? _profile!.decryptedName! : '${widget.role[0].toUpperCase()}${widget.role.substring(1)}', style: Theme.of(context).textTheme.titleLarge, textAlign: TextAlign.center),
+              Text(
+                _profile?.decryptedName?.isNotEmpty == true ? _profile!.decryptedName! : (widget.role == 'husband' ? 'স্বামী' : 'স্ত্রী'),
+                style: Theme.of(context).textTheme.titleLarge,
+                textAlign: TextAlign.center,
+              ),
               if (_profile?.decryptedBio?.isNotEmpty == true) ...[
                 const SizedBox(height: 6),
                 Text(_profile!.decryptedBio!, textAlign: TextAlign.center),
               ],
               if (_isMine)
-                TextButton.icon(onPressed: () => setState(() => _editing = true), icon: const Icon(Icons.edit, size: 16), label: const Text('Edit')),
+                TextButton.icon(onPressed: () => setState(() => _editing = true), icon: const Icon(Icons.edit, size: 16), label: const Text('এডিট করুন')),
             ],
           ),
         const SizedBox(height: 24),

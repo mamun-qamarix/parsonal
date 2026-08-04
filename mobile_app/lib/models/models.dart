@@ -281,3 +281,30 @@ class AuditLogEntryModel {
         createdAt: DateTime.parse(json['created_at']),
       );
 }
+
+class DeviceModel {
+  final String id;
+  final String deviceName;
+  final String role;
+  final bool isThisDevice;
+  final DateTime createdAt;
+  final DateTime lastSeenAt;
+
+  DeviceModel({
+    required this.id,
+    required this.deviceName,
+    required this.role,
+    required this.isThisDevice,
+    required this.createdAt,
+    required this.lastSeenAt,
+  });
+
+  factory DeviceModel.fromJson(Map<String, dynamic> json) => DeviceModel(
+        id: json['id'],
+        deviceName: json['device_name'],
+        role: json['role'],
+        isThisDevice: json['is_this_device'] ?? false,
+        createdAt: DateTime.parse(json['created_at']),
+        lastSeenAt: DateTime.parse(json['last_seen_at']),
+      );
+}

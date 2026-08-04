@@ -16,6 +16,7 @@ class SecureStorageService {
   static const _kVmk = 'vault_master_key';
   static const _kRole = 'role';
   static const _kSpouseId = 'spouse_id';
+  static const _kDeviceId = 'device_id';
   static const _kDuressPin = 'duress_pin_local_hash';
   static const _kFaceEnrolled = 'face_enrolled';
 
@@ -26,6 +27,7 @@ class SecureStorageService {
     required String vmkB64,
     required String role,
     required String spouseId,
+    String? deviceId,
   }) async {
     await Future.wait([
       _storage.write(key: _kServer, value: server),
@@ -34,6 +36,7 @@ class SecureStorageService {
       _storage.write(key: _kVmk, value: vmkB64),
       _storage.write(key: _kRole, value: role),
       _storage.write(key: _kSpouseId, value: spouseId),
+      if (deviceId != null) _storage.write(key: _kDeviceId, value: deviceId),
     ]);
   }
 
@@ -45,6 +48,7 @@ class SecureStorageService {
   Future<String?> get vmkB64 => _storage.read(key: _kVmk);
   Future<String?> get role => _storage.read(key: _kRole);
   Future<String?> get spouseId => _storage.read(key: _kSpouseId);
+  Future<String?> get deviceId => _storage.read(key: _kDeviceId);
 
   Future<void> setFaceEnrolled(bool value) => _storage.write(key: _kFaceEnrolled, value: value.toString());
   Future<bool> get faceEnrolled async => (await _storage.read(key: _kFaceEnrolled)) == 'true';

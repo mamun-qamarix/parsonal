@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../models/models.dart';
 import '../../providers/session_provider.dart';
 import '../../services/vault_service.dart';
+import '../../widgets/shimmer_loading.dart';
 import '../../widgets/vault_entry_card.dart';
 import '../vault/entry_detail_screen.dart';
 
@@ -35,7 +36,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Favorites')),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const ShimmerFeedList()
           : RefreshIndicator(
               onRefresh: _load,
               child: _entries.isEmpty

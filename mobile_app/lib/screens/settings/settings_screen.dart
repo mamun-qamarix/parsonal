@@ -12,6 +12,7 @@ import '../../widgets/error_message_box.dart';
 import '../../widgets/password_field.dart';
 import '../auth/face_capture_screen.dart';
 import '../onboarding/welcome_screen.dart';
+import 'devices_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -219,6 +220,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 const SizedBox(height: 24),
                 const _SectionTitle('অ্যাকাউন্ট'),
+                ListTile(
+                  leading: const Icon(Icons.devices_outlined, color: AppColors.halalGreen),
+                  title: const Text('ডিভাইসসমূহ'),
+                  subtitle: const Text('কোন ডিভাইস কার, দেখুন ও হারানো/পুরনো ডিভাইস সরিয়ে দিন', style: TextStyle(fontSize: 12)),
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DevicesScreen())),
+                ),
                 ListTile(
                   leading: const Icon(Icons.logout, color: AppColors.rejected),
                   title: const Text('এই ডিভাইস থেকে লগ আউট করুন'),

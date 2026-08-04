@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 
 import '../../models/models.dart';
 import '../../services/audit_service.dart';
+import '../../widgets/shimmer_loading.dart';
 
 class AuditLogScreen extends StatefulWidget {
   const AuditLogScreen({super.key});
@@ -42,7 +43,7 @@ class _AuditLogScreenState extends State<AuditLogScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('Audit log')),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const ShimmerTileList()
           : RefreshIndicator(
               onRefresh: _load,
               child: ListView.builder(
