@@ -173,6 +173,28 @@ class SessionProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Starts a device-pairing login: another already-authenticated device
+  /// handed us its role+VMK peer-to-peer (QR/paste, never through the
+  /// server). We stash them locally right away so that by the time the
+  /// normal password->TOTP->(face) flow finishes and calls completeLogin,
+  /// server/vmkB64 are already on disk for it to read. See DECISIONS.md.
+  Future<void> beginPairing({
+    required String server,
+    required String role,
+    required String spouseId,
+    required String vmkB64,
+  }) async {
+    await ApiClient.instance.configureBaseUrl(server);
+    await SecureStorageService.instance.saveSession(
+      server: server, accessToken: '', refreshToken: '', vmkB64: vmkB64, role: role, spouseId: spouseId,
+    );
+    this.role = role;
+    this.spouseId = spouseId;
+    vmk = base64Decode(vmkB64);
+    state = SessionState.locked;
+    notifyListeners();
+  }
+
   void enterDecoyMode() {
     state = SessionState.decoy;
     notifyListeners();

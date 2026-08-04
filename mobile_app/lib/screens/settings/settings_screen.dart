@@ -12,6 +12,7 @@ import '../../widgets/error_message_box.dart';
 import '../../widgets/password_field.dart';
 import '../auth/face_capture_screen.dart';
 import '../onboarding/welcome_screen.dart';
+import 'add_device_screen.dart';
 import 'devices_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -225,6 +226,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: const Text('ডিভাইসসমূহ'),
                   subtitle: const Text('কোন ডিভাইস কার, দেখুন ও হারানো/পুরনো ডিভাইস সরিয়ে দিন', style: TextStyle(fontSize: 12)),
                   onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const DevicesScreen())),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.qr_code_2, color: AppColors.halalGreen),
+                  title: const Text('নতুন ডিভাইস যোগ করুন'),
+                  subtitle: const Text('আপনার নতুন বা দ্বিতীয় ফোনে এই অ্যাকাউন্টটাই যোগ করুন', style: TextStyle(fontSize: 12)),
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AddDeviceScreen())),
                 ),
                 ListTile(
                   leading: const Icon(Icons.logout, color: AppColors.rejected),

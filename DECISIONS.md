@@ -235,3 +235,34 @@ Necessary and safe -- no data loss, just a re-login.
 - `/mobile_app` — Flutter app
 - `project.md` — source spec
 - `DECISIONS.md` — this file
+
+## 19. Add Device (peer-to-peer pairing)
+
+**Problem:** each role (`husband`/`wife`) can only be claimed once, ever
+-- claiming is a one-time "create this half of the account" action, not
+a login. There was no way to add a *second* device to an already-claimed
+role (new phone, lost phone, or a spouse wanting the app on two of their
+own devices) without deleting and re-registering the whole deployment.
+This bit a real user: they'd claimed both roles from a single test phone
+while trying things out, then had no path to move either role onto the
+real, separate phones.
+
+**Decision:** an already-authenticated device can generate a pairing
+code (Settings -> "নতুন ডিভাইস যোগ করুন") containing
+`{type: "device_pairing", server, role, spouse_id, vmk}`, shown as a QR
+(and a copyable text fallback) with an explicit warning that it carries
+the vault's real encryption key. This is peer-to-peer, exactly like the
+existing admin-panel setup code -- it never touches the server, keeping
+the E2E design intact (the server still never learns the VMK).
+
+A new/blank device scans this from WelcomeScreen ("ইতিমধ্যে অ্যাকাউন্ট
+আছে? এই ডিভাইসটা যোগ করুন" -- deliberately a separate entry point from
+"সেটআপ কোড স্ক্যান করুন", since a setup code claims a role for the
+*first* time and a pairing code adds a device to a role already claimed).
+`SessionProvider.beginPairing()` stashes server/role/vmk locally (with
+placeholder empty tokens) and flips state to `locked`, which reuses the
+*existing* LoginScreen -> TotpVerifyScreen -> (optional) FaceVerifyScreen
+flow completely unmodified -- the new device still has to pass a real
+password + TOTP (+ face, if enabled) login against the server to obtain
+its own tokens and Device row. No backend changes were needed; this is
+purely a client-side onboarding path into endpoints that already existed.

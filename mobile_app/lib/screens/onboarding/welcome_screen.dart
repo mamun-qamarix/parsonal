@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import '../../core/theme/app_theme.dart';
 import '../../widgets/error_message_box.dart';
 import 'claim_role_screen.dart';
+import 'pair_device_screen.dart';
 import 'scan_setup_screen.dart';
 
 class WelcomeScreen extends StatefulWidget {
@@ -78,6 +79,20 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                 OutlinedButton(
                   onPressed: () => setState(() => _manualMode = true),
                   child: const Text('কোড হাতে টাইপ করে দিন'),
+                ),
+                const SizedBox(height: 24),
+                const Divider(),
+                const SizedBox(height: 12),
+                const Text(
+                  'ইতিমধ্যে আপনার স্বামী/স্ত্রী এই অ্যাকাউন্ট অন্য ফোনে ব্যবহার করছেন এবং আপনি এই ফোনটাও যোগ করতে চান?',
+                  style: TextStyle(color: Colors.grey, fontSize: 13),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 8),
+                TextButton.icon(
+                  icon: const Icon(Icons.qr_code_2),
+                  label: const Text('ইতিমধ্যে অ্যাকাউন্ট আছে? এই ডিভাইসটা যোগ করুন'),
+                  onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PairDeviceScreen())),
                 ),
               ] else ...[
                 Text('অ্যাডমিন প্যানেল থেকে দেখানো পুরো টেক্সটটা এখানে পেস্ট করুন:', style: Theme.of(context).textTheme.bodyMedium),
