@@ -34,11 +34,20 @@ random secrets, builds and starts every container (Postgres, MinIO,
 CompreFace face-recognition service, the FastAPI backend, and Caddy for
 automatic HTTPS), and prints next steps.
 
-### CompreFace setup (one-time, manual)
+### CompreFace setup (usually automatic)
+
+`install.sh` tries to set this up for you automatically
+(`backend/scripts/provision_compreface.py`) right after the stack comes
+up, and restarts the backend with the key already in place. If it prints
+"Automatic setup didn't complete", CompreFace's console API didn't match
+what the script expects for your CompreFace version — do it manually
+instead (see [DECISIONS.md](DECISIONS.md) §9 for why this one step can't
+be made 100% reliable, since CompreFace's own recognition API — the one
+the backend uses day-to-day — is fully documented, but its account/app
+setup API isn't a stable public contract).
 
 The face-recognition admin UI is intentionally **not** exposed to the
-public internet (see [DECISIONS.md](DECISIONS.md) §9). To create the
-recognition API key the backend needs:
+public internet. To create the recognition API key by hand:
 
 ```bash
 ssh -L 8085:localhost:8085 <you>@<your-vps-ip>
@@ -50,7 +59,7 @@ it, and copy the generated API key. Paste it into `.env` on the VPS as
 `COMPREFACE_RECOGNITION_API_KEY=...`, then:
 
 ```bash
-docker compose restart backend
+docker compose up -d backend
 ```
 
 ### Admin panel

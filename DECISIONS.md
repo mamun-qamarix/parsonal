@@ -91,15 +91,28 @@ like any other media attachment. Chat file attachments capped at 50MB
 
 **Decision:** CompreFace's admin UI (`compreface-fe`) is intentionally bound
 to `127.0.0.1:8085` only (not exposed via Caddy/public internet), to keep
-the attack surface minimal. The install script cannot safely fully
-headlessly provision a CompreFace "Application" + recognition service API
-key without a live instance to verify the exact provisioning API against —
-so this is the **one manual, one-time, SSH-tunnel-only step** required
-after first install (documented step-by-step in `README.md`): tunnel to
-port 8085, create an account + application + recognition service in the
-CompreFace UI, copy the generated API key into `.env` as
-`COMPREFACE_RECOGNITION_API_KEY`, then `docker compose restart backend`.
-Everything else in the app requires zero further manual steps.
+the attack surface minimal.
+
+`install.sh` now *attempts* to fully automate provisioning (organization →
+application → recognition service → API key → written into `.env` →
+backend restarted) via `backend/scripts/provision_compreface.py`, so most
+deployments need zero manual steps for this. This automation talks to
+CompreFace's own console API (org/app/model creation), which — unlike its
+*recognition* API (`/api/v1/recognition/...`, stable and documented, used
+by `app/services/face_verify.py` for every enroll/verify call) — has no
+formal public contract and could differ across CompreFace versions. There
+was no live CompreFace instance available to test the provisioning script
+against while building this, so it's shipped as best-effort: every step is
+guarded, the resulting key is verified against the real recognition API
+before being trusted, and any failure exits non-zero without touching
+`.env` rather than half-provisioning something.
+
+If automation fails, `install.sh` falls back to printing the **one manual,
+one-time, SSH-tunnel-only step** (documented step-by-step in `README.md`):
+tunnel to port 8085, create an account + application + recognition service
+in the CompreFace UI, copy the generated API key into `.env` as
+`COMPREFACE_RECOGNITION_API_KEY`, then `docker compose up -d backend`.
+Either way, everything else in the app requires zero further manual steps.
 
 ## 10. Decrypted video playback uses a private temp file
 

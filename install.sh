@@ -84,10 +84,46 @@ for i in $(seq 1 30); do
   sleep 5
 done
 
-cat <<EOF
+# ---------- 4. Try to auto-provision the CompreFace API key ----------
+# Best-effort: CompreFace's own console API isn't a stable public contract
+# (unlike its recognition API, which app/services/face_verify.py uses and
+# which IS stable/documented). If this doesn't work against your CompreFace
+# version, it's not a failure of the install — just do the manual step
+# printed below instead. See DECISIONS.md §9 and backend/scripts/provision_compreface.py.
+echo
+echo "Attempting automatic face-recognition service setup..."
+COMPREFACE_AUTOSETUP_OK=0
+if docker compose run --rm -T \
+    -v "$(pwd)/.env:/workspace/.env" \
+    -e ENV_FILE_PATH=/workspace/.env \
+    backend python scripts/provision_compreface.py; then
+  COMPREFACE_AUTOSETUP_OK=1
+  echo "Face-recognition service configured automatically."
+  echo "Restarting backend to pick up the new key..."
+  set -a; source .env; set +a
+  docker compose up -d backend
+else
+  echo "Automatic setup didn't complete — you'll need the one manual step below."
+fi
+
+if [ "$COMPREFACE_AUTOSETUP_OK" = "1" ]; then
+  cat <<EOF
 
 ================================================================
- Install complete.
+ Install complete — including face-recognition setup.
+
+ 1. Open https://${DOMAIN}/admin (or http://<server-ip>/admin if
+    you skipped the domain) and set your admin password.
+
+ 2. From the admin panel, generate a setup code/QR for each spouse
+    to scan in the Flutter app.
+================================================================
+EOF
+else
+  cat <<EOF
+
+================================================================
+ Install complete — one manual step left.
 
  1. Open https://${DOMAIN}/admin (or http://<server-ip>/admin if
     you skipped the domain) and set your admin password.
@@ -97,9 +133,10 @@ cat <<EOF
     then open http://localhost:8085 locally, create an account +
     application + recognition service, copy the API key into
     COMPREFACE_RECOGNITION_API_KEY in .env, then run:
-      docker compose restart backend
+      docker compose up -d backend
 
  3. From the admin panel, generate a setup code/QR for each spouse
     to scan in the Flutter app.
 ================================================================
 EOF
+fi
