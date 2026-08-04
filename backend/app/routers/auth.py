@@ -140,6 +140,21 @@ async def get_me(spouse: Spouse = Depends(get_current_spouse)):
     return SpouseOut.from_spouse(spouse)
 
 
+@router.get("/totp/setup-info")
+async def totp_setup_info(spouse: Spouse = Depends(get_current_spouse)):
+    """Lets the app recover the QR/secret if the user was interrupted
+    mid-onboarding (e.g. backgrounded the app to install/open their
+    authenticator app) before confirming -- see DECISIONS.md #14."""
+    if spouse.totp_confirmed:
+        raise HTTPException(status_code=409, detail="Authenticator app already confirmed for this spouse")
+    if spouse.totp_secret is None:
+        raise HTTPException(status_code=409, detail="No TOTP secret on file for this spouse")
+    return {
+        "totp_secret": spouse.totp_secret,
+        "totp_provisioning_uri": totp_service.provisioning_uri(spouse.totp_secret, f"{spouse.role.value}@couplevault"),
+    }
+
+
 @router.post("/totp/setup-confirm")
 async def totp_setup_confirm(payload: TotpSetupConfirmRequest, spouse: Spouse = Depends(get_current_spouse), db: AsyncSession = Depends(get_db)):
     """Proves the spouse actually saved the TOTP secret into an authenticator

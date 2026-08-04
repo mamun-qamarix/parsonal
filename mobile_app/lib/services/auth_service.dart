@@ -28,6 +28,11 @@ class AuthService {
     return res.data as Map<String, dynamic>;
   }
 
+  Future<Map<String, dynamic>> getTotpSetupInfo() async {
+    final res = await _dio.get('/auth/totp/setup-info');
+    return res.data as Map<String, dynamic>;
+  }
+
   Future<void> totpSetupConfirm(String code) async {
     await _dio.post('/auth/totp/setup-confirm', data: {'code': code});
   }

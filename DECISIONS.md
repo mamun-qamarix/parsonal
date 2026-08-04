@@ -185,7 +185,26 @@ opt-in extra step, toggled on/off from Settings/Profile.
   an existing `spouses` table must have its database volume reset for the
   new columns to exist; see README.md.
 
-## 14. Repo layout
+## 14. Onboarding survives being backgrounded
+
+**Decision:** found in the field: a spouse switched away from the app
+mid-onboarding (to install/open Google Authenticator) and returned to find
+themselves bounced to a password-only login screen that could never
+succeed, because `AppLockGuard` unconditionally forced `SessionState.locked`
+on every backgrounding — including mid-setup, before TOTP was ever
+confirmed, leaving no way back into the TOTP setup screen. Two fixes:
+
+- `SessionProvider.lock()` now only actually locks when the session was
+  already `authenticated`; backgrounding during any onboarding/login-in-
+  progress state leaves that state untouched, so returning to the app
+  resumes exactly where it left off.
+- `bootstrap()` (cold start) now asks `GET /auth/me` whether TOTP is
+  confirmed for the stored session, and if not, calls the new
+  `GET /auth/totp/setup-info` to re-fetch the secret/QR and route back to
+  `TotpSetupScreen` — recovering even a fully killed-and-reopened app, not
+  just a backgrounded one.
+
+## 15. Repo layout
 
 **Decision:** Monorepo at the project root:
 - `/backend` — FastAPI backend, admin panel, Docker Compose, install script

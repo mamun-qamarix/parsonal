@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../core/network/api_client.dart';
 import '../core/network/ws_client.dart';
 import '../core/storage/secure_storage_service.dart';
+import '../services/auth_service.dart';
 
 enum SessionState {
   unknown,
@@ -57,6 +58,26 @@ class SessionProvider extends ChangeNotifier {
     spouseId = await SecureStorageService.instance.spouseId;
     final vmkB64 = await SecureStorageService.instance.vmkB64;
     if (vmkB64 != null) vmk = base64Decode(vmkB64);
+
+    // Recover an onboarding that was interrupted (e.g. backgrounded to
+    // install/open an authenticator app) before TOTP was confirmed --
+    // otherwise this would land on a login screen that can never succeed.
+    // See DECISIONS.md #14.
+    try {
+      final me = await AuthService().getMe();
+      if (me['totp_confirmed'] != true) {
+        final info = await AuthService().getTotpSetupInfo();
+        pendingTotpSecret = info['totp_secret'];
+        pendingTotpProvisioningUri = info['totp_provisioning_uri'];
+        state = SessionState.needsTotpSetup;
+        notifyListeners();
+        return;
+      }
+    } catch (_) {
+      // Server unreachable or token issue -- fall through to the normal
+      // locked screen; login will surface any real problem specifically.
+    }
+
     state = SessionState.locked;
     notifyListeners();
   }
@@ -146,7 +167,12 @@ class SessionProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Only actually locks an already-authenticated session. Backgrounding
+  /// the app mid-onboarding or mid-login must NOT force a jump to the
+  /// locked screen -- there'd be no way back into TOTP setup / the
+  /// in-progress login step. See DECISIONS.md #14.
   void lock() {
+    if (state != SessionState.authenticated) return;
     _autoLockTimer?.cancel();
     WsClient.instance.disconnect();
     state = SessionState.locked;
