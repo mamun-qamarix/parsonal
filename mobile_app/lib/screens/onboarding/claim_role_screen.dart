@@ -91,10 +91,10 @@ class _ClaimRoleScreenState extends State<ClaimRoleScreen> {
               const SizedBox(height: 12),
               PasswordField(controller: _password, labelText: 'একটা পাসওয়ার্ড দিন', hintText: 'কমপক্ষে ৮ অক্ষর'),
               const SizedBox(height: 12),
-              PasswordField(controller: _confirm, labelText: 'পাসওয়ার্ড আবার লিখুন'),
+              PasswordField(controller: _confirm, labelText: 'পাসওয়ার্ড আবার লিখুন', onSubmitted: (_) => _submit()),
               const SizedBox(height: 8),
               const Text(
-                'এই পাসওয়ার্ড আর আপনার মুখ — দুটোই লাগবে প্রতিবার অ্যাপ খুলতে। মনে রাখার মতো একটা পাসওয়ার্ড দিন।',
+                'এই পাসওয়ার্ড আর একটা অথেন্টিকেটর কোড — দুটোই লাগবে প্রতিবার অ্যাপ খুলতে (পরের ধাপে সেটআপ করবেন)। মনে রাখার মতো একটা পাসওয়ার্ড দিন।',
                 style: TextStyle(color: Colors.grey, fontSize: 12),
               ),
               const SizedBox(height: 20),

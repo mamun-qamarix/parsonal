@@ -31,6 +31,14 @@ class CoupleVaultApp extends StatelessWidget {
         theme: AppTheme.light(),
         darkTheme: AppTheme.dark(),
         themeMode: ThemeMode.system,
+        // Tap anywhere outside a text field to dismiss the keyboard --
+        // otherwise an open keyboard can cover a button below it, and taps
+        // meant for that button silently land on the keyboard instead.
+        builder: (context, child) => GestureDetector(
+          behavior: HitTestBehavior.translucent,
+          onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+          child: child,
+        ),
         home: const AppLockGuard(child: AuthGate()),
       ),
     );
