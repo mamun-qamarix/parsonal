@@ -46,6 +46,11 @@ DOMAIN=${DOMAIN_VALUE}
 # README.md "Deploying alongside an existing reverse proxy".
 COMPOSE_PROFILES=${COMPOSE_PROFILES_VALUE}
 
+# Host-only port the backend listens on behind the scenes (127.0.0.1 only,
+# never public). Change this if 18000 is also taken by something else on
+# this VPS.
+BACKEND_HOST_PORT=18000
+
 DB_USER=vault
 DB_PASSWORD=$(gen_secret)
 DB_NAME=vault
@@ -87,7 +92,7 @@ server {
     server_name ${DOMAIN};
 
     location / {
-        proxy_pass http://127.0.0.1:8000;
+        proxy_pass http://127.0.0.1:${BACKEND_HOST_PORT:-18000};
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection "upgrade";
