@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/network/error_helper.dart';
 import '../../core/security/duress_service.dart';
+import '../../core/storage/device_name_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../providers/session_provider.dart';
 import '../../services/auth_service.dart';
@@ -38,7 +39,8 @@ class _LoginScreenState extends State<LoginScreen> {
         session.enterDecoyMode();
         return;
       }
-      final result = await AuthService().loginPassword(role: role, password: _password.text, deviceName: 'this phone');
+      final deviceName = await DeviceNameService.detect();
+      final result = await AuthService().loginPassword(role: role, password: _password.text, deviceName: deviceName);
       if (result['mode'] == 'setup') {
         session.setPendingLoginTotpSetup(
           challengeToken: result['setup_challenge_token'],

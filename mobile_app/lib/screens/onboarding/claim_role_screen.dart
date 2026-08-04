@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 
 import '../../core/app_globals.dart';
 import '../../core/network/error_helper.dart';
+import '../../core/storage/device_name_service.dart';
+import '../../core/theme/app_theme.dart';
 import '../../providers/session_provider.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/error_message_box.dart';
@@ -26,6 +28,14 @@ class _ClaimRoleScreenState extends State<ClaimRoleScreen> {
   final _deviceName = TextEditingController(text: 'আমার ফোন');
   bool _loading = false;
   String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    DeviceNameService.detect().then((name) {
+      if (mounted) setState(() => _deviceName.text = name);
+    });
+  }
 
   Future<void> _submit() async {
     if (_password.text.length < 8) {
@@ -98,29 +108,69 @@ class _ClaimRoleScreenState extends State<ClaimRoleScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              const _StepIndicator(step: 1, total: 2, label: 'ধাপ ১/২ — পরিচয় ও পাসওয়ার্ড'),
+              const SizedBox(height: 20),
+              const Icon(Icons.person_add_alt_1_outlined, size: 48, color: AppColors.halalGreen),
+              const SizedBox(height: 12),
               const Text(
-                'আপনাদের মধ্যে কে এই ফোনটা সেটআপ করছেন? এটাই ঠিক করবে অ্যাপে আপনি কার তথ্য হিসেবে চিহ্নিত হবেন।',
+                'আপনাদের মধ্যে কে এই ফোনটা সেটআপ করছেন?',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontWeight: FontWeight.w600),
+                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16),
               ),
-              const SizedBox(height: 8),
-              Center(
-                child: SegmentedButton<String>(
-                  segments: const [
-                    ButtonSegment(value: 'husband', label: Text('স্বামী'), icon: Icon(Icons.man)),
-                    ButtonSegment(value: 'wife', label: Text('স্ত্রী'), icon: Icon(Icons.woman)),
-                  ],
-                  selected: {_role},
-                  onSelectionChanged: (s) => setState(() => _role = s.first),
+              const SizedBox(height: 4),
+              const Text(
+                'এটাই ঠিক করবে অ্যাপে আপনি কার তথ্য হিসেবে চিহ্নিত হবেন।',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey, fontSize: 12),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: _RoleCard(
+                      label: 'স্বামী',
+                      icon: Icons.man,
+                      color: AppColors.husband,
+                      selected: _role == 'husband',
+                      onTap: () => setState(() => _role = 'husband'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _RoleCard(
+                      label: 'স্ত্রী',
+                      icon: Icons.woman,
+                      color: AppColors.wife,
+                      selected: _role == 'wife',
+                      onTap: () => setState(() => _role = 'wife'),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(20),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      TextField(
+                        controller: _deviceName,
+                        decoration: const InputDecoration(
+                          labelText: 'ডিভাইসের নাম',
+                          helperText: 'ফোনের মডেল থেকে স্বয়ংক্রিয়ভাবে বসানো হয়েছে, চাইলে বদলে দিন',
+                          prefixIcon: Icon(Icons.smartphone_outlined),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      PasswordField(controller: _password, labelText: 'একটা পাসওয়ার্ড দিন', hintText: 'কমপক্ষে ৮ অক্ষর'),
+                      const SizedBox(height: 14),
+                      PasswordField(controller: _confirm, labelText: 'পাসওয়ার্ড আবার লিখুন', onSubmitted: (_) => _submit()),
+                    ],
+                  ),
                 ),
               ),
-              const SizedBox(height: 20),
-              TextField(controller: _deviceName, decoration: const InputDecoration(labelText: 'ডিভাইসের নাম', helperText: 'শুধু চেনার জন্য, যেমন "আমার ফোন"')),
               const SizedBox(height: 12),
-              PasswordField(controller: _password, labelText: 'একটা পাসওয়ার্ড দিন', hintText: 'কমপক্ষে ৮ অক্ষর'),
-              const SizedBox(height: 12),
-              PasswordField(controller: _confirm, labelText: 'পাসওয়ার্ড আবার লিখুন', onSubmitted: (_) => _submit()),
-              const SizedBox(height: 8),
               const Text(
                 'এই পাসওয়ার্ড আর একটা অথেন্টিকেটর কোড — দুটোই লাগবে প্রতিবার অ্যাপ খুলতে (পরের ধাপে সেটআপ করবেন)। মনে রাখার মতো একটা পাসওয়ার্ড দিন।',
                 textAlign: TextAlign.center,
@@ -136,6 +186,76 @@ class _ClaimRoleScreenState extends State<ClaimRoleScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _RoleCard extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final bool selected;
+  final VoidCallback onTap;
+
+  const _RoleCard({required this.label, required this.icon, required this.color, required this.selected, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.symmetric(vertical: 18),
+        decoration: BoxDecoration(
+          color: selected ? color.withValues(alpha: 0.14) : Theme.of(context).cardColor,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: selected ? color : Colors.grey.withValues(alpha: 0.3), width: selected ? 2 : 1),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 32, color: selected ? color : Colors.grey),
+            const SizedBox(height: 8),
+            Text(label, style: TextStyle(fontWeight: FontWeight.w600, color: selected ? color : null)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _StepIndicator extends StatelessWidget {
+  final int step;
+  final int total;
+  final String label;
+
+  const _StepIndicator({required this.step, required this.total, required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: List.generate(total, (i) {
+            final active = i < step;
+            return Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 3),
+              child: Container(
+                width: i == step - 1 ? 22 : 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: active ? AppColors.halalGreen : Colors.grey.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+            );
+          }),
+        ),
+        const SizedBox(height: 6),
+        Text(label, style: const TextStyle(color: Colors.grey, fontSize: 11)),
+      ],
     );
   }
 }
