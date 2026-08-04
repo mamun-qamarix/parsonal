@@ -367,6 +367,49 @@ sharing the one persistent code with a phone that already has that role)
 idempotent creation, non-consumption on claim, matching VMK across
 husband/wife claims and across token regeneration.
 
+## 23. Security self-review: CORS lockdown + login rate limiting
+
+**Context:** asked directly how secure this app is; a self-review (not a
+substitute for an independent professional audit, but the closest
+available given no third party has looked at this code) turned up two
+real gaps, fixed here.
+
+1. **CORS wildcard + credentialed admin cookie.** `cors_origins` defaulted
+   to `"*"`, and Starlette's `CORSMiddleware` reflects the request's actual
+   `Origin` back (rather than a literal `*`) whenever `allow_credentials=True`
+   is set -- which the admin panel needs, since it authenticates via an
+   httponly cookie. Combined, this meant ANY website could make
+   cookie-authenticated requests to `/admin/api/*` if the admin ever had
+   an active session and visited that site (classic CSRF-via-permissive-CORS).
+   Fixed: `cors_origin_list` now defaults to the deployment's own
+   `https://{domain}` and treats a literal `"*"` in `.env` as "not set"
+   rather than honoring it -- this self-heals already-deployed `.env`
+   files with the old default without requiring a manual edit.
+
+2. **No rate limiting on auth endpoints.** Password/TOTP/face login,
+   admin login, and password-reset verification had no attempt limit --
+   password guessing in particular had nothing slowing it down (TOTP's
+   own 6-digit space is impractical to brute-force inside one 30s window
+   over a network, but defense-in-depth is still worth having). Added an
+   in-memory, per-process sliding-window limiter
+   (`app/services/rate_limit.py`) -- safe to keep in-process since the
+   backend runs as a single uvicorn worker/container (no Redis needed).
+   10 attempts/5 min per IP on login endpoints, 10/10 min on admin login
+   and password reset, 20/10 min on setup-code claiming.
+
+Verified against a local Postgres: CORS wildcard self-heals to the
+domain-scoped origin even with the old `.env` value; the rate limiter
+blocks the 11th attempt within its window and different endpoints have
+independent budgets.
+
+**Still open** (not fixed, flagged honestly): no independent
+professional security audit has been done on this codebase; the VPS's
+own OS-level hardening (SSH config, firewall, unattended upgrades) was
+never audited as part of this project; there is intentionally no backup
+of vault content (server never retains the VMK, so a lost/corrupted VPS
+disk means permanent data loss -- a deliberate security/durability
+trade-off, not an oversight).
+
 ## 19. Add Device (peer-to-peer pairing)
 
 **Problem:** each role (`husband`/`wife`) can only be claimed once, ever

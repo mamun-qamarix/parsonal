@@ -18,6 +18,7 @@ from app.services.admin_auth import (
     require_admin, get_admin_password_hash, set_admin_password_hash, create_admin_session_token,
 )
 from app.services.security import hash_secret, verify_secret, generate_setup_token, generate_vmk, encrypt_at_rest, decrypt_at_rest
+from app.services.rate_limit import rate_limit
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 settings = get_settings()
@@ -89,7 +90,7 @@ async def first_run(password: str, db: AsyncSession = Depends(get_db)):
     return {"ok": True}
 
 
-@router.post("/api/login")
+@router.post("/api/login", dependencies=[Depends(rate_limit("admin_login", max_attempts=10, window_seconds=600))])
 async def admin_login(password: str, response: Response, db: AsyncSession = Depends(get_db)):
     admin_hash = await get_admin_password_hash(db)
     if admin_hash is None or not verify_secret(password, admin_hash):

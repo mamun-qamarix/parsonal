@@ -38,11 +38,24 @@ class Settings(BaseSettings):
     setup_code_ttl_hours: int = 24
     auto_lock_minutes: int = 5
 
-    cors_origins: str = "*"
+    # Empty by default -- see cors_origin_list. A literal "*" combined with
+    # the admin panel's credentialed (cookie) requests would let ANY
+    # website reflected as an allowed origin ride the admin's session, so
+    # we never default to that; set this explicitly (comma-separated) only
+    # if the admin panel is genuinely accessed from another origin.
+    cors_origins: str = ""
 
     @property
     def cors_origin_list(self) -> list[str]:
-        return [o.strip() for o in self.cors_origins.split(",") if o.strip()]
+        # A bare "*" is treated as "not set" rather than honored -- combined
+        # with allow_credentials=True (needed for the admin panel's cookie
+        # session) it would let any website ride an admin's session. This
+        # also self-heals deployments whose .env still has the old
+        # CORS_ORIGINS=* default from before this was locked down.
+        explicit = [o.strip() for o in self.cors_origins.split(",") if o.strip() and o.strip() != "*"]
+        if explicit:
+            return explicit
+        return [f"https://{self.domain}"]
 
 
 @lru_cache

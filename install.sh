@@ -73,7 +73,11 @@ ADMIN_PANEL_SECRET=$(gen_secret)
 FCM_SERVER_KEY=
 FCM_PROJECT_ID=
 
-CORS_ORIGINS=*
+# Left blank on purpose -- the backend defaults this to the deployment's
+# own https://\$DOMAIN, which is correct for the admin panel's cookie
+# session. Only set this (comma-separated) if you genuinely need the
+# admin panel reachable from another origin.
+CORS_ORIGINS=
 EOF
   echo ".env generated with fresh random secrets."
 fi

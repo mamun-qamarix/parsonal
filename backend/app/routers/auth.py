@@ -32,6 +32,7 @@ from app.services.security import (
 )
 from app.services.face_verify import face_verify_service
 from app.services import totp as totp_service
+from app.services.rate_limit import rate_limit
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 settings = get_settings()
@@ -109,7 +110,7 @@ async def _issue_full_login(
     }
 
 
-@router.post("/setup/claim", response_model=ClaimRoleResponse)
+@router.post("/setup/claim", response_model=ClaimRoleResponse, dependencies=[Depends(rate_limit("setup_claim", max_attempts=20, window_seconds=600))])
 async def claim_role(payload: ClaimRoleRequest, db: AsyncSession = Depends(get_db)):
     if payload.role not in ("husband", "wife"):
         raise HTTPException(status_code=400, detail="role must be 'husband' or 'wife'")
@@ -248,7 +249,7 @@ async def enable_face(spouse: Spouse = Depends(get_current_spouse), db: AsyncSes
     return {"face_verification_enabled": True}
 
 
-@router.post("/login/password", response_model=LoginPasswordResponse)
+@router.post("/login/password", response_model=LoginPasswordResponse, dependencies=[Depends(rate_limit("login_password", max_attempts=10, window_seconds=300))])
 async def login_password(payload: LoginPasswordRequest, db: AsyncSession = Depends(get_db)):
     if payload.role not in ("husband", "wife"):
         raise HTTPException(status_code=400, detail="Invalid role")
@@ -312,7 +313,7 @@ async def _after_totp_verified(db: AsyncSession, spouse: Spouse, device: Device,
     return LoginTotpResponse(requires_face=False, **result_data)
 
 
-@router.post("/login/totp-setup-confirm", response_model=LoginTotpResponse)
+@router.post("/login/totp-setup-confirm", response_model=LoginTotpResponse, dependencies=[Depends(rate_limit("login_totp", max_attempts=10, window_seconds=300))])
 async def login_totp_setup_confirm(payload: LoginTotpRequest, db: AsyncSession = Depends(get_db)):
     """Confirms a NEW device's own authenticator entry mid-login (device
     was paired onto an already-claimed role, or is a fresh install) --
@@ -347,7 +348,7 @@ async def login_totp_setup_confirm(payload: LoginTotpRequest, db: AsyncSession =
     return await _after_totp_verified(db, spouse, device, claims.get("device_name", "device"), claims.get("device_uuid"))
 
 
-@router.post("/login/totp", response_model=LoginTotpResponse)
+@router.post("/login/totp", response_model=LoginTotpResponse, dependencies=[Depends(rate_limit("login_totp", max_attempts=10, window_seconds=300))])
 async def login_totp(payload: LoginTotpRequest, db: AsyncSession = Depends(get_db)):
     try:
         claims = decode_token_safe(payload.challenge_token)
@@ -377,7 +378,7 @@ async def login_totp(payload: LoginTotpRequest, db: AsyncSession = Depends(get_d
     return await _after_totp_verified(db, spouse, device, device_name, device_uuid)
 
 
-@router.post("/login/face", response_model=LoginFaceResponse)
+@router.post("/login/face", response_model=LoginFaceResponse, dependencies=[Depends(rate_limit("login_face", max_attempts=10, window_seconds=300))])
 async def login_face(payload: LoginFaceRequest, db: AsyncSession = Depends(get_db)):
     try:
         claims = decode_token_safe(payload.challenge_token)
@@ -452,7 +453,7 @@ async def set_duress_pin(payload: DuressSetRequest, spouse: Spouse = Depends(get
     return {"ok": True}
 
 
-@router.post("/password-reset/initiate")
+@router.post("/password-reset/initiate", dependencies=[Depends(rate_limit("password_reset", max_attempts=10, window_seconds=600))])
 async def password_reset_initiate(payload: PasswordResetInitiateRequest, db: AsyncSession = Depends(get_db)):
     if payload.role not in ("husband", "wife"):
         raise HTTPException(status_code=400, detail="Invalid role")
@@ -466,7 +467,7 @@ async def password_reset_initiate(payload: PasswordResetInitiateRequest, db: Asy
     return {"reset_token": session.reset_token, "expires_at": session.expires_at}
 
 
-@router.post("/password-reset/verify")
+@router.post("/password-reset/verify", dependencies=[Depends(rate_limit("password_reset", max_attempts=10, window_seconds=600))])
 async def password_reset_verify(payload: PasswordResetVerifyRequest, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(PasswordResetSession).where(PasswordResetSession.reset_token == payload.reset_token))
     session = result.scalar_one_or_none()
