@@ -3,7 +3,6 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
 from app.database import init_models
@@ -36,8 +35,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-app.mount("/admin/static", StaticFiles(directory="admin_panel/static"), name="admin_static")
 
 app.include_router(auth.router)
 app.include_router(admin.router)
