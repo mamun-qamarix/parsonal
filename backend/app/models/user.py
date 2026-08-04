@@ -22,8 +22,19 @@ class Spouse(Base, UUIDPk, TimestampMixin):
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     duress_pin_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
+    # Mandatory second factor: TOTP (Google Authenticator / Authy / etc).
+    # totp_secret is generated at claim time; totp_confirmed only flips to
+    # True once the spouse has proven they actually saved it (entered one
+    # valid code back) -- see DECISIONS.md.
+    totp_secret: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    totp_confirmed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+
+    # Face verification is optional, opt-in from Settings/Profile -- see
+    # DECISIONS.md. face_enrolled: has ever completed CompreFace enrollment.
+    # face_verification_enabled: currently required as an extra login step.
     compreface_subject: Mapped[str | None] = mapped_column(String(64), nullable=True)
     face_enrolled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    face_verification_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 

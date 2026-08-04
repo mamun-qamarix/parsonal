@@ -24,11 +24,16 @@ class ClaimRoleRequest(BaseModel):
 class ClaimRoleResponse(BaseModel):
     spouse_id: uuid.UUID
     role: str
-    face_enrolled: bool
     access_token: str
     refresh_token: str
     vmk_b64: str
     server: str
+    totp_secret: str
+    totp_provisioning_uri: str
+
+
+class TotpSetupConfirmRequest(BaseModel):
+    code: str
 
 
 class LoginPasswordRequest(BaseModel):
@@ -38,7 +43,23 @@ class LoginPasswordRequest(BaseModel):
 
 
 class LoginPasswordResponse(BaseModel):
-    challenge_token: str  # short-lived token proving password step passed; face step required next
+    challenge_token: str  # short-lived token proving password step passed; TOTP step required next
+
+
+class LoginTotpRequest(BaseModel):
+    challenge_token: str
+    code: str
+
+
+class LoginTotpResponse(BaseModel):
+    requires_face: bool
+    # Present when requires_face is True: pass this to /auth/login/face.
+    face_challenge_token: str | None = None
+    # Present when requires_face is False: login is already complete.
+    access_token: str | None = None
+    refresh_token: str | None = None
+    spouse_id: uuid.UUID | None = None
+    role: str | None = None
 
 
 class LoginFaceRequest(BaseModel):
@@ -76,7 +97,7 @@ class PasswordResetInitiateRequest(BaseModel):
 class PasswordResetVerifyRequest(BaseModel):
     reset_token: str
     role: str
-    face_image_b64: str
+    code: str  # TOTP code, not face -- see DECISIONS.md
 
 
 class PasswordResetCompleteRequest(BaseModel):
@@ -88,3 +109,5 @@ class SpouseOut(ORMBase):
     id: uuid.UUID
     role: str
     face_enrolled: bool
+    face_verification_enabled: bool
+    totp_confirmed: bool

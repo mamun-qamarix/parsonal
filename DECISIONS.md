@@ -159,7 +159,33 @@ up from two completely separate physical phones" — implicitly, never via
 OS-level cloning). This is also just a correct default for any app storing
 credentials, independent of the bug it happened to surface.
 
-## 13. Repo layout
+## 13. Auth model changed: password + TOTP mandatory, face optional
+
+**Decision (superseding project.md §6's "password and face verification,
+both required every time"):** based on real device testing, the product
+owner changed the mandatory second factor from face verification to a
+TOTP authenticator code (Google Authenticator / Authy / etc — standard
+`pyotp`-based 6-digit rotating code). Face verification becomes an
+opt-in extra step, toggled on/off from Settings/Profile.
+
+- `Spouse.totp_secret` is generated at claim time; `totp_confirmed` only
+  flips true once the spouse enters one valid code back (proving they
+  actually saved it in an authenticator app) via `/auth/totp/setup-confirm`.
+- Login is now: password → TOTP code → (only if
+  `face_verification_enabled`) face capture → access+refresh tokens.
+- `/auth/face/enroll` enrolls AND enables in one step (first-time setup).
+  `/auth/face/enable` / `/auth/face/disable` toggle it afterward without
+  re-registering (unless never enrolled, which requires enroll again).
+- Password reset's "both spouses must independently verify" step now uses
+  each spouse's TOTP code instead of face (universally available, since
+  face is optional) — `/auth/password-reset/verify` replaces the old
+  `/verify-face` endpoint.
+- This is a breaking schema change (new `Spouse` columns) on top of
+  `Base.metadata.create_all()`-only migrations (§2) — a deployment with
+  an existing `spouses` table must have its database volume reset for the
+  new columns to exist; see README.md.
+
+## 14. Repo layout
 
 **Decision:** Monorepo at the project root:
 - `/backend` — FastAPI backend, admin panel, Docker Compose, install script

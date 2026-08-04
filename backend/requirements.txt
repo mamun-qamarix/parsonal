@@ -16,6 +16,7 @@ minio==7.2.9
 Jinja2==3.1.4
 python-dotenv==1.0.1
 qrcode[pil]==7.4.2
+pyotp==2.9.0
 Pillow==10.4.0
 APScheduler==3.10.4
 firebase-admin==6.5.0
