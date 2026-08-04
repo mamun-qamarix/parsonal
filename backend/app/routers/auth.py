@@ -44,27 +44,44 @@ def _decode_face_image(face_image_b64: str) -> bytes:
         raise HTTPException(status_code=400, detail="Invalid face_image_b64")
 
 
-def _create_challenge_token(spouse_id: str, role: str, device_name: str, token_type: str, minutes: int = 5) -> str:
+def _create_challenge_token(spouse_id: str, role: str, device_name: str, token_type: str, minutes: int = 5, device_uuid: str | None = None) -> str:
     from jose import jwt
     expire = datetime.now(timezone.utc) + timedelta(minutes=minutes)
-    return jwt.encode(
-        {"sub": spouse_id, "role": role, "device_name": device_name, "exp": expire, "type": token_type},
-        settings.jwt_secret, algorithm=settings.jwt_algorithm,
-    )
+    claims = {"sub": spouse_id, "role": role, "device_name": device_name, "exp": expire, "type": token_type}
+    if device_uuid:
+        claims["device_uuid"] = device_uuid
+    return jwt.encode(claims, settings.jwt_secret, algorithm=settings.jwt_algorithm)
 
 
-async def _issue_full_login(db: AsyncSession, spouse: Spouse, device_name: str) -> dict:
-    # The Device row must exist (and have its real id) *before* the refresh
-    # token is minted, since the token embeds that id -- that's what lets
-    # /auth/refresh reject a token whose Device has since been deleted.
-    # See DECISIONS.md #16.
-    device = Device(
-        spouse_id=spouse.id,
-        device_name=device_name,
-        refresh_token_hash="",  # placeholder, replaced below once we know the token
-    )
-    db.add(device)
-    await db.flush()
+async def _issue_full_login(db: AsyncSession, spouse: Spouse, device_name: str, device_uuid: str | None = None) -> dict:
+    # If this physical installation already has a Device row (matched by
+    # its stable device_uuid), reuse it instead of piling up a new row on
+    # every login -- otherwise re-logging in repeatedly (token expiry,
+    # testing, logout/login cycles) fills the Devices screen with
+    # duplicate entries for the same phone. See DECISIONS.md #20.
+    device = None
+    if device_uuid:
+        existing = await db.execute(
+            select(Device).where(Device.spouse_id == spouse.id, Device.device_uuid == device_uuid)
+        )
+        device = existing.scalar_one_or_none()
+
+    if device is not None:
+        device.device_name = device_name
+        device.last_seen_at = datetime.now(timezone.utc)
+    else:
+        # The Device row must exist (and have its real id) *before* the
+        # refresh token is minted, since the token embeds that id -- that's
+        # what lets /auth/refresh reject a token whose Device has since
+        # been deleted. See DECISIONS.md #16.
+        device = Device(
+            spouse_id=spouse.id,
+            device_name=device_name,
+            device_uuid=device_uuid,
+            refresh_token_hash="",  # placeholder, replaced below once we know the token
+        )
+        db.add(device)
+        await db.flush()
 
     refresh_token = create_refresh_token(str(spouse.id), device_id=str(device.id))
     device.refresh_token_hash = hash_secret(refresh_token)
@@ -113,6 +130,7 @@ async def claim_role(payload: ClaimRoleRequest, db: AsyncSession = Depends(get_d
     device = Device(
         spouse_id=spouse.id,
         device_name=payload.device_name,
+        device_uuid=payload.device_uuid,
         refresh_token_hash="",
     )
     db.add(device)
@@ -227,7 +245,7 @@ async def login_password(payload: LoginPasswordRequest, db: AsyncSession = Depen
     if not spouse.totp_confirmed:
         raise HTTPException(status_code=409, detail="Authenticator app not set up yet for this spouse")
 
-    challenge = _create_challenge_token(str(spouse.id), payload.role, payload.device_name, "totp_challenge")
+    challenge = _create_challenge_token(str(spouse.id), payload.role, payload.device_name, "totp_challenge", device_uuid=payload.device_uuid)
     return LoginPasswordResponse(challenge_token=challenge)
 
 
@@ -252,14 +270,15 @@ async def login_totp(payload: LoginTotpRequest, db: AsyncSession = Depends(get_d
         raise HTTPException(status_code=401, detail="Invalid authenticator code")
 
     device_name = claims.get("device_name", "device")
+    device_uuid = claims.get("device_uuid")
 
     if spouse.face_verification_enabled:
-        face_challenge = _create_challenge_token(str(spouse.id), spouse.role.value, device_name, "face_challenge")
+        face_challenge = _create_challenge_token(str(spouse.id), spouse.role.value, device_name, "face_challenge", device_uuid=device_uuid)
         db.add(AuditLogEntry(actor_id=spouse.id, action="auth.totp_verify_ok", target_type="spouse", target_id=spouse.id))
         await db.commit()
         return LoginTotpResponse(requires_face=True, face_challenge_token=face_challenge)
 
-    result_data = await _issue_full_login(db, spouse, device_name)
+    result_data = await _issue_full_login(db, spouse, device_name, device_uuid)
     return LoginTotpResponse(requires_face=False, **result_data)
 
 
@@ -285,7 +304,7 @@ async def login_face(payload: LoginFaceRequest, db: AsyncSession = Depends(get_d
         await db.commit()
         raise HTTPException(status_code=401, detail="Face verification failed")
 
-    result_data = await _issue_full_login(db, spouse, claims.get("device_name", "device"))
+    result_data = await _issue_full_login(db, spouse, claims.get("device_name", "device"), claims.get("device_uuid"))
     return LoginFaceResponse(**result_data)
 
 

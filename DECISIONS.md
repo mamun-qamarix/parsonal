@@ -236,6 +236,45 @@ Necessary and safe -- no data loss, just a re-login.
 - `project.md` — source spec
 - `DECISIONS.md` — this file
 
+## 20. Stable device_uuid so repeated logins don't pile up duplicate devices
+
+**Problem:** found in the field: the Devices screen showed three separate
+"this phone" entries for what was genuinely a single physical phone,
+minutes apart. Root cause: `_issue_full_login` (and `claim_role`)
+unconditionally inserted a brand-new `Device` row on every successful
+login, with nothing tying a login attempt back to a specific physical
+installation -- every password+TOTP(+face) round trip, even from the
+exact same app instance, was treated as an unrelated device. Testing
+flows (like the new Add Device pairing feature) or anything causing a
+re-login (token issues, logout/login cycles) made this worse.
+
+**Decision:** the app now generates a random UUID once per installation
+and keeps it in `SharedPreferences` (`DeviceIdentityService`) --
+deliberately *not* `flutter_secure_storage`, so it survives
+`SecureStorageService.clearAll()` (logout, revoked-device) and still
+identifies "this same phone" across logout/login cycles. It resets only
+on an actual uninstall, same boundary as every other local app datum
+(consistent with #12's `allowBackup=false` decision to never let device
+identity survive an OS-level transfer).
+
+This `device_uuid` rides along on `/auth/setup/claim` and
+`/auth/login/password`, then through the TOTP/face challenge JWTs (so
+it's available wherever `_issue_full_login` finally mints tokens).
+Server-side, `_issue_full_login` now looks up an existing `Device` row
+for `(spouse_id, device_uuid)` first and reuses it (updates
+`device_name`/`last_seen_at`/`refresh_token_hash`, keeps the same id)
+instead of inserting a new one; a genuinely different `device_uuid` (a
+real second phone) still gets its own row as before. Requests with no
+`device_uuid` (old app builds) fall back to the previous always-insert
+behavior unchanged.
+
+Schema: `devices.device_uuid` (nullable) was added via an idempotent
+`ALTER TABLE devices ADD COLUMN IF NOT EXISTS device_uuid VARCHAR(64)`
+run at startup in `init_models()` -- since `Base.metadata.create_all()`
+never alters existing tables (#2), this pattern is how additive schema
+tweaks now ship without requiring a full database reset on every
+release, unlike the breaking change in #13.
+
 ## 19. Add Device (peer-to-peer pairing)
 
 **Problem:** each role (`husband`/`wife`) can only be claimed once, ever

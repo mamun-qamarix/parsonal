@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import '../core/network/api_client.dart';
+import '../core/storage/device_identity_service.dart';
 
 class AuthService {
   final _dio = ApiClient.instance.dio;
@@ -19,6 +20,7 @@ class AuthService {
       'role': role,
       'password': password,
       'device_name': deviceName,
+      'device_uuid': await DeviceIdentityService.getOrCreate(),
     });
     return res.data as Map<String, dynamic>;
   }
@@ -52,7 +54,12 @@ class AuthService {
   }
 
   Future<String> loginPassword({required String role, required String password, required String deviceName}) async {
-    final res = await _dio.post('/auth/login/password', data: {'role': role, 'password': password, 'device_name': deviceName});
+    final res = await _dio.post('/auth/login/password', data: {
+      'role': role,
+      'password': password,
+      'device_name': deviceName,
+      'device_uuid': await DeviceIdentityService.getOrCreate(),
+    });
     return res.data['challenge_token'] as String;
   }
 

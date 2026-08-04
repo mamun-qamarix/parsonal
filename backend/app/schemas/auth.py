@@ -17,6 +17,7 @@ class ClaimRoleRequest(BaseModel):
     role: str  # "husband" | "wife"
     password: str
     device_name: str
+    device_uuid: str | None = None
 
 
 class ClaimRoleResponse(BaseModel):
@@ -39,6 +40,7 @@ class LoginPasswordRequest(BaseModel):
     role: str
     password: str
     device_name: str
+    device_uuid: str | None = None
 
 
 class LoginPasswordResponse(BaseModel):

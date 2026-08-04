@@ -46,6 +46,12 @@ class Device(Base, UUIDPk, TimestampMixin):
 
     spouse_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("spouses.id", ondelete="CASCADE"))
     device_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    # Stable per-installation identifier the app generates once and keeps
+    # (outside the data wiped by logout). Lets repeated logins from the
+    # same physical phone reuse this row instead of piling up duplicates.
+    # Nullable: older app versions never sent one, and rows created before
+    # this column existed have none. See DECISIONS.md.
+    device_uuid: Mapped[str | None] = mapped_column(String(64), nullable=True)
     push_token: Mapped[str | None] = mapped_column(String(255), nullable=True)
     refresh_token_hash: Mapped[str] = mapped_column(String(255), nullable=False)
     last_seen_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow, nullable=False)
