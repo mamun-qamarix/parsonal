@@ -140,7 +140,26 @@ background blur/cover overlay (all platforms) is handled in
 `AppLockGuard` purely with Flutter's `WidgetsBindingObserver`, no plugin
 needed there either.
 
-## 12. Repo layout
+## 12. Disabled Android backup / device-to-device data transfer
+
+**Decision:** `android:allowBackup="false"` plus a `dataExtractionRules`
+XML excluding `sharedpref`/`database`/`file` domains from both cloud
+backup and Android 12+'s "copy your data from old phone" transfer flow.
+
+Found in the field: a spouse setting up a new phone used Android's
+device-transfer feature to copy data from another phone that already had
+this app installed, and it copied over the app's local storage
+(`flutter_secure_storage`-backed session: access/refresh tokens, stored
+role, and the vault master key) — so the new phone opened straight to a
+password-only login screen for the WRONG role, never showing onboarding.
+Since this app's local storage holds real auth material and the vault's
+E2E encryption key, it must never move between physical devices except
+through the explicit setup-code flow (project.md §5's "two spouses can set
+up from two completely separate physical phones" — implicitly, never via
+OS-level cloning). This is also just a correct default for any app storing
+credentials, independent of the bug it happened to surface.
+
+## 13. Repo layout
 
 **Decision:** Monorepo at the project root:
 - `/backend` — FastAPI backend, admin panel, Docker Compose, install script
