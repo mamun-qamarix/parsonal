@@ -28,10 +28,23 @@ else
   read -rp "Domain name for HTTPS (e.g. vault.example.com), or leave blank to use this server's IP with a self-signed cert: " DOMAIN_INPUT
   DOMAIN_VALUE="${DOMAIN_INPUT:-$(curl -fs https://api.ipify.org || echo localhost)}"
 
+  echo
+  read -rp "Does this VPS already run another web server / reverse proxy (nginx, Apache, another Caddy, etc.) on ports 80/443 for other projects? [y/N] " EXISTING_PROXY_INPUT
+  case "${EXISTING_PROXY_INPUT,,}" in
+    y|yes) COMPOSE_PROFILES_VALUE="" ;;
+    *) COMPOSE_PROFILES_VALUE="caddy" ;;
+  esac
+
   gen_secret() { openssl rand -hex 24; }
 
   cat > .env <<EOF
 DOMAIN=${DOMAIN_VALUE}
+
+# "caddy" = this project's own Caddy owns ports 80/443 and gets HTTPS
+# automatically (default, for a VPS dedicated to this project). Leave
+# empty if another reverse proxy already owns 80/443 on this VPS — see
+# README.md "Deploying alongside an existing reverse proxy".
+COMPOSE_PROFILES=${COMPOSE_PROFILES_VALUE}
 
 DB_USER=vault
 DB_PASSWORD=$(gen_secret)
@@ -63,7 +76,30 @@ fi
 # shellcheck disable=SC1091
 set -a; source .env; set +a
 
-if [ -z "${DOMAIN:-}" ] || [ "$DOMAIN" = "localhost" ]; then
+if [ -z "${COMPOSE_PROFILES:-}" ]; then
+  echo
+  echo "Skipping this project's own Caddy — generating an nginx site config"
+  echo "for you to review and enable instead (see README.md for the steps)."
+  mkdir -p deploy/nginx
+  cat > "deploy/nginx/${DOMAIN}.conf" <<EOF
+server {
+    listen 80;
+    server_name ${DOMAIN};
+
+    location / {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade \$http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto \$scheme;
+    }
+}
+EOF
+  echo "Wrote deploy/nginx/${DOMAIN}.conf"
+elif [ -z "${DOMAIN:-}" ] || [ "$DOMAIN" = "localhost" ]; then
   echo "NOTE: no real domain configured — Caddy will not be able to obtain a"
   echo "Let's Encrypt certificate. Edit DOMAIN in .env once you have one, or"
   echo "keep using this for local/self-signed testing only."
@@ -106,12 +142,25 @@ else
   echo "Automatic setup didn't complete — you'll need the one manual step below."
 fi
 
+NGINX_STEP=""
+if [ -z "${COMPOSE_PROFILES:-}" ]; then
+  NGINX_STEP="
+ 0. This project's Caddy was skipped (you have your own reverse proxy).
+    Review deploy/nginx/${DOMAIN}.conf, then, e.g.:
+      sudo cp deploy/nginx/${DOMAIN}.conf /etc/nginx/sites-available/
+      sudo ln -s /etc/nginx/sites-available/${DOMAIN}.conf /etc/nginx/sites-enabled/
+      sudo nginx -t && sudo systemctl reload nginx
+      sudo certbot --nginx -d ${DOMAIN}
+    (adjust to however this VPS actually manages nginx sites/certs.)
+"
+fi
+
 if [ "$COMPREFACE_AUTOSETUP_OK" = "1" ]; then
   cat <<EOF
 
 ================================================================
  Install complete — including face-recognition setup.
-
+${NGINX_STEP}
  1. Open https://${DOMAIN}/admin (or http://<server-ip>/admin if
     you skipped the domain) and set your admin password.
 
@@ -124,7 +173,7 @@ else
 
 ================================================================
  Install complete — one manual step left.
-
+${NGINX_STEP}
  1. Open https://${DOMAIN}/admin (or http://<server-ip>/admin if
     you skipped the domain) and set your admin password.
 

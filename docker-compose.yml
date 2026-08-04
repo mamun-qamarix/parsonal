@@ -124,11 +124,23 @@ services:
       postgres: { condition: service_healthy }
       minio: { condition: service_healthy }
     networks: [vault-internal]
+    # Always published to localhost only. Harmless when Caddy (below) is
+    # used -- Caddy talks to it over the internal docker network anyway --
+    # but this is what lets an *existing* nginx/other reverse proxy on the
+    # host reach the backend when Caddy is disabled. See README.md
+    # "Deploying alongside an existing reverse proxy".
+    ports:
+      - "127.0.0.1:8000:8000"
 
   # ---------- Reverse proxy / automatic HTTPS ----------
+  # Only started when the "caddy" profile is active (COMPOSE_PROFILES=caddy
+  # in .env, which install.sh sets by default). If this VPS already runs
+  # its own nginx/reverse proxy on ports 80/443 for other projects, leave
+  # COMPOSE_PROFILES empty instead -- see README.md.
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
+    profiles: ["caddy"]
     ports:
       - "80:80"
       - "443:443"

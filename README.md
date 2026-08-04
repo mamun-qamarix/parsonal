@@ -62,6 +62,31 @@ it, and copy the generated API key. Paste it into `.env` on the VPS as
 docker compose up -d backend
 ```
 
+### Deploying alongside an existing reverse proxy
+
+If your VPS already runs nginx (or another proxy) for other projects on
+ports 80/443, `install.sh` will ask about this and, if you say yes:
+
+- Skips starting this project's own Caddy (via Docker Compose
+  [profiles](https://docs.docker.com/compose/how-tos/profiles/) —
+  `COMPOSE_PROFILES` is left empty in `.env` instead of `caddy`).
+- Publishes the backend on `127.0.0.1:8000` only (never public directly).
+- Generates `deploy/nginx/<your-domain>.conf` — an nginx server block
+  reverse-proxying (with WebSocket upgrade headers, needed for chat) to
+  that port — for you to review and enable however this VPS actually
+  manages its nginx sites/certs, e.g.:
+
+```bash
+sudo cp deploy/nginx/<your-domain>.conf /etc/nginx/sites-available/
+sudo ln -s /etc/nginx/sites-available/<your-domain>.conf /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
+sudo certbot --nginx -d <your-domain>
+```
+
+If you skipped this question and need to switch later, set
+`COMPOSE_PROFILES=` (empty) in `.env`, run `docker compose up -d` again,
+and follow the same nginx steps.
+
 ### Admin panel
 
 Visit `https://<your-domain>/admin`, set your admin password on first

@@ -1,4 +1,5 @@
 .env
+deploy/nginx/*.conf
 backend/.venv/
 backend/__pycache__/
 backend/**/__pycache__/
