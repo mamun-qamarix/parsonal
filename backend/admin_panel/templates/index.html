@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Couple's Vault — Admin Panel</title>
+<style>
+  :root { --green: #2f9e63; --bg: #0f1512; --card: #17211c; --text: #eaf3ee; --muted: #9db3a8; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background: var(--bg); color: var(--text); display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 24px; }
+  .card { background: var(--card); border-radius: 18px; padding: 32px; width: 100%; max-width: 420px; box-shadow: 0 10px 40px rgba(0,0,0,.4); }
+  h1 { font-size: 1.3rem; margin: 0 0 6px; color: var(--green); }
+  p.sub { color: var(--muted); margin-top: 0; font-size: .9rem; }
+  input[type=password], input[type=text] { width: 100%; padding: 12px 14px; border-radius: 10px; border: 1px solid #2a382f; background: #0f1512; color: var(--text); margin: 8px 0 16px; font-size: 1rem; }
+  button { width: 100%; padding: 12px 14px; border-radius: 10px; border: none; background: var(--green); color: white; font-weight: 600; font-size: 1rem; cursor: pointer; }
+  button:hover { filter: brightness(1.08); }
+  button.secondary { background: transparent; border: 1px solid var(--green); color: var(--green); margin-top: 10px; }
+  .status { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #22302a; font-size: .9rem; }
+  .badge { padding: 2px 10px; border-radius: 999px; font-size: .75rem; font-weight: 600; }
+  .badge.ok { background: rgba(47,158,99,.2); color: var(--green); }
+  .badge.pending { background: rgba(200,160,40,.2); color: #d8b34a; }
+  #qrBox { text-align: center; margin-top: 16px; }
+  #qrBox img { max-width: 220px; border-radius: 12px; background: white; padding: 8px; }
+  code { display: block; word-break: break-all; background: #0f1512; padding: 10px; border-radius: 8px; margin-top: 10px; font-size: .75rem; color: var(--muted); }
+  .hidden { display: none; }
+  .error { color: #e05252; font-size: .85rem; min-height: 1.2em; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Couple's Vault — Admin</h1>
+  <p class="sub">Self-hosted setup panel. Runs only on your own server.</p>
+
+  <div id="firstRunView" class="hidden">
+    <p>Set your admin password (first run only):</p>
+    <input id="firstRunPw" type="password" placeholder="New admin password (min 8 chars)">
+    <button onclick="doFirstRun()">Set Admin Password</button>
+    <div class="error" id="firstRunError"></div>
+  </div>
+
+  <div id="loginView" class="hidden">
+    <input id="loginPw" type="password" placeholder="Admin password">
+    <button onclick="doLogin()">Log In</button>
+    <div class="error" id="loginError"></div>
+  </div>
+
+  <div id="dashboardView" class="hidden">
+    <div class="status"><span>Husband registered</span><span class="badge" id="husbandBadge">—</span></div>
+    <div class="status"><span>Wife registered</span><span class="badge" id="wifeBadge">—</span></div>
+    <button style="margin-top:20px" onclick="generateCode()">Generate Setup Code</button>
+    <div id="qrBox" class="hidden">
+      <img id="qrImg" alt="Setup QR code">
+      <code id="codeText"></code>
+      <p class="sub">Scan this in the app. If you can't scan, paste the text below into "Enter code manually" in the app instead. Expires in 24h.</p>
+      <code id="payloadText"></code>
+    </div>
+  </div>
+</div>
+
+<script>
+async function api(path, opts) {
+  const res = await fetch(path, Object.assign({ credentials: 'include' }, opts));
+  if (!res.ok) { const t = await res.json().catch(() => ({detail: res.statusText})); throw new Error(t.detail || 'Request failed'); }
+  return res.json();
+}
+
+async function init() {
+  const status = await api('/admin/api/status');
+  document.getElementById('husbandBadge').textContent = status.husband_registered ? 'Registered' : 'Waiting';
+  document.getElementById('husbandBadge').className = 'badge ' + (status.husband_registered ? 'ok' : 'pending');
+  document.getElementById('wifeBadge').textContent = status.wife_registered ? 'Registered' : 'Waiting';
+  document.getElementById('wifeBadge').className = 'badge ' + (status.wife_registered ? 'ok' : 'pending');
+
+  if (!status.admin_password_set) {
+    document.getElementById('firstRunView').classList.remove('hidden');
+    return;
+  }
+  try {
+    await api('/admin/api/setup-codes');
+    document.getElementById('dashboardView').classList.remove('hidden');
+  } catch (e) {
+    document.getElementById('loginView').classList.remove('hidden');
+  }
+}
+
+async function doFirstRun() {
+  const pw = document.getElementById('firstRunPw').value;
+  try {
+    await api('/admin/api/first-run?password=' + encodeURIComponent(pw), { method: 'POST' });
+    location.reload();
+  } catch (e) { document.getElementById('firstRunError').textContent = e.message; }
+}
+
+async function doLogin() {
+  const pw = document.getElementById('loginPw').value;
+  try {
+    await api('/admin/api/login?password=' + encodeURIComponent(pw), { method: 'POST' });
+    location.reload();
+  } catch (e) { document.getElementById('loginError').textContent = e.message; }
+}
+
+async function generateCode() {
+  const data = await api('/admin/api/setup-codes', { method: 'POST' });
+  document.getElementById('qrImg').src = 'data:image/png;base64,' + data.qr_png_b64;
+  document.getElementById('codeText').textContent = 'Server: ' + data.server + '\nCode: ' + data.token;
+  document.getElementById('payloadText').textContent = data.qr_payload;
+  document.getElementById('qrBox').classList.remove('hidden');
+}
+
+init();
+</script>
+</body>
+</html>

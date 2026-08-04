@@ -1,0 +1,73 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import 'core/security/app_lock_guard.dart';
+import 'core/theme/app_theme.dart';
+import 'providers/session_provider.dart';
+import 'screens/auth/decoy_home_screen.dart';
+import 'screens/auth/face_enroll_screen.dart';
+import 'screens/auth/face_verify_screen.dart';
+import 'screens/auth/login_screen.dart';
+import 'screens/home/home_shell.dart';
+import 'screens/onboarding/welcome_screen.dart';
+
+void main() {
+  runApp(const CoupleVaultApp());
+}
+
+class CoupleVaultApp extends StatelessWidget {
+  const CoupleVaultApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => SessionProvider()..bootstrap()),
+      ],
+      child: MaterialApp(
+        title: "Couple's Vault",
+        debugShowCheckedModeBanner: false,
+        theme: AppTheme.light(),
+        darkTheme: AppTheme.dark(),
+        themeMode: ThemeMode.system,
+        home: const AppLockGuard(child: AuthGate()),
+      ),
+    );
+  }
+}
+
+class AuthGate extends StatelessWidget {
+  const AuthGate({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final session = context.watch<SessionProvider>();
+    switch (session.state) {
+      case SessionState.unknown:
+        return const _Splash();
+      case SessionState.needsSetup:
+        return const WelcomeScreen();
+      case SessionState.needsFaceEnroll:
+        return const FaceEnrollScreen();
+      case SessionState.locked:
+        return const LoginScreen();
+      case SessionState.needsFaceVerify:
+        return const FaceVerifyScreen();
+      case SessionState.authenticated:
+        return const HomeShell();
+      case SessionState.decoy:
+        return const DecoyHomeScreen();
+    }
+  }
+}
+
+class _Splash extends StatelessWidget {
+  const _Splash();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Scaffold(
+      body: Center(child: Icon(Icons.favorite, size: 56, color: AppColors.halalGreen)),
+    );
+  }
+}

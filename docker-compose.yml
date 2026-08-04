@@ -1,0 +1,142 @@
+version: "3.9"
+
+# Couple's Private Vault — full self-hosted stack.
+# Every service here runs on the user's own VPS. Nothing else is contacted
+# except, optionally, FCM/APNs for generic (content-free) push wake-ups.
+
+networks:
+  vault-internal:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  minio_data:
+  compreface_postgres_data:
+  caddy_data:
+  caddy_config:
+
+services:
+  # ---------- Core app database ----------
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks: [vault-internal]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # ---------- Encrypted media object storage ----------
+  minio:
+    image: minio/minio:latest
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio_data:/data
+    networks: [vault-internal]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+  # ---------- Self-hosted face recognition (CompreFace) ----------
+  compreface-postgres-db:
+    image: postgres:14-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: compreface
+      POSTGRES_PASSWORD: ${COMPREFACE_DB_PASSWORD}
+      POSTGRES_DB: compreface
+    volumes:
+      - compreface_postgres_data:/var/lib/postgresql/data
+    networks: [vault-internal]
+
+  compreface-admin:
+    image: exadel/compreface-admin:latest
+    restart: unless-stopped
+    environment:
+      POSTGRES_URL: jdbc:postgresql://compreface-postgres-db:5432/compreface
+      POSTGRES_USER: compreface
+      POSTGRES_PASSWORD: ${COMPREFACE_DB_PASSWORD}
+      SPRING_PROFILES_ACTIVE: docker
+      ADMIN_EMAIL: ${COMPREFACE_ADMIN_EMAIL}
+      ADMIN_PASSWORD: ${COMPREFACE_ADMIN_PASSWORD}
+    depends_on: [compreface-postgres-db]
+    networks: [vault-internal]
+
+  compreface-api:
+    image: exadel/compreface-api:latest
+    restart: unless-stopped
+    environment:
+      POSTGRES_URL: jdbc:postgresql://compreface-postgres-db:5432/compreface
+      POSTGRES_USER: compreface
+      POSTGRES_PASSWORD: ${COMPREFACE_DB_PASSWORD}
+      SPRING_PROFILES_ACTIVE: docker
+    depends_on: [compreface-postgres-db, compreface-admin]
+    networks: [vault-internal]
+
+  compreface-core:
+    image: exadel/compreface-core:latest
+    restart: unless-stopped
+    environment:
+      ML_PORT: 3000
+    networks: [vault-internal]
+
+  compreface-fe:
+    image: exadel/compreface-fe:latest
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+    depends_on: [compreface-admin, compreface-api]
+    networks: [vault-internal]
+    # Intentionally NOT exposed publicly. Access once, during initial setup,
+    # via an SSH tunnel: `ssh -L 8085:localhost:8085 user@your-vps`
+    # then http://localhost:8085 on your own machine. See README.md.
+    ports:
+      - "127.0.0.1:8085:80"
+
+  # ---------- Application backend ----------
+  backend:
+    build: ./backend
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
+      SYNC_DATABASE_URL: postgresql+psycopg2://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD}
+      COMPREFACE_URL: http://compreface-api:8000
+      COMPREFACE_RECOGNITION_API_KEY: ${COMPREFACE_RECOGNITION_API_KEY}
+      ENVIRONMENT: production
+    depends_on:
+      postgres: { condition: service_healthy }
+      minio: { condition: service_healthy }
+    networks: [vault-internal]
+
+  # ---------- Reverse proxy / automatic HTTPS ----------
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    environment:
+      DOMAIN: ${DOMAIN}
+    depends_on: [backend]
+    networks: [vault-internal]

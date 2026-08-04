@@ -1,0 +1,72 @@
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi.responses import StreamingResponse
+import io
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.config import get_settings
+from app.database import get_db
+from app.deps import get_current_spouse
+from app.models.media import MediaAsset, MediaKindEnum
+from app.models.user import Spouse
+from app.schemas.content import MediaAssetOut
+from app.services import storage
+
+router = APIRouter(prefix="/media", tags=["media"])
+settings = get_settings()
+
+
+@router.post("/upload", response_model=MediaAssetOut)
+async def upload_media(
+    kind: str = Form(...),
+    file: UploadFile = File(...),
+    thumbnail: UploadFile | None = File(default=None),
+    spouse: Spouse = Depends(get_current_spouse),
+    db: AsyncSession = Depends(get_db),
+):
+    if kind not in (k.value for k in MediaKindEnum):
+        raise HTTPException(status_code=400, detail="Invalid media kind")
+
+    data = await file.read()
+    max_bytes = settings.max_upload_mb * 1024 * 1024
+    if len(data) > max_bytes:
+        raise HTTPException(status_code=413, detail=f"File exceeds {settings.max_upload_mb}MB limit")
+
+    object_key = storage.put_object(data, content_type="application/octet-stream")
+
+    thumb_key = None
+    if thumbnail is not None:
+        thumb_data = await thumbnail.read()
+        thumb_key = storage.put_object(thumb_data, content_type="application/octet-stream")
+
+    asset = MediaAsset(kind=MediaKindEnum(kind), object_key=object_key, thumbnail_object_key=thumb_key, size_bytes=len(data))
+    db.add(asset)
+    await db.commit()
+    await db.refresh(asset)
+    return MediaAssetOut(id=asset.id, kind=asset.kind.value, size_bytes=asset.size_bytes, has_thumbnail=thumb_key is not None)
+
+
+async def _stream_object(object_key: str):
+    try:
+        data = storage.get_object(object_key)
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Object not found")
+    return StreamingResponse(io.BytesIO(data), media_type="application/octet-stream")
+
+
+@router.get("/{asset_id}/raw")
+async def get_media_raw(asset_id: str, spouse: Spouse = Depends(get_current_spouse), db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(MediaAsset).where(MediaAsset.id == asset_id))
+    asset = result.scalar_one_or_none()
+    if asset is None:
+        raise HTTPException(status_code=404, detail="Not found")
+    return await _stream_object(asset.object_key)
+
+
+@router.get("/{asset_id}/thumbnail")
+async def get_media_thumbnail(asset_id: str, spouse: Spouse = Depends(get_current_spouse), db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(MediaAsset).where(MediaAsset.id == asset_id))
+    asset = result.scalar_one_or_none()
+    if asset is None or not asset.thumbnail_object_key:
+        raise HTTPException(status_code=404, detail="No thumbnail")
+    return await _stream_object(asset.thumbnail_object_key)
