@@ -98,6 +98,7 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: production
+      CLIENT_MAX_BODY_SIZE: 20M
     depends_on: [compreface-admin, compreface-api]
     networks: [vault-internal]
     # Intentionally NOT exposed publicly. Access once, during initial setup,
