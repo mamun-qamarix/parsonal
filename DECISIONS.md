@@ -454,6 +454,34 @@ would be a much larger change. On a modern phone (4GB+ RAM) a 1GB video
 should be fine; on very low-RAM devices it could still OOM. Not fixed
 here; flagged as a follow-up if it turns out to matter in practice.
 
+## 25. Home feed unified; wishlist de-task-ified with categories
+
+**Decision:** Home replaced its multi-select-per-content-type tabs with a
+single mixed feed (text/photo/video interleaved, newest first) plus a
+multi-select filter bar (content type AND author, any combination,
+always at least one of each group active) -- fetches all entries once
+and filters client-side, so toggling filters is instant. Creating a new
+entry now goes through a bottom sheet asking which type first, since
+there's no longer a "current tab" to infer it from.
+
+Wishlist changed from a checkbox/strikethrough task list to a plain
+list -- no fulfilled-toggle interaction in the UI anymore (the backend
+`is_fulfilled` field and endpoint are untouched, just unused from the
+app; removing an item once you have it is what the existing delete
+button is for). Wishlist items can now optionally have a category,
+create-on-the-fly, reusing the exact same category mechanism vault
+entries already had (`Category.scope` already supported `"wishlist"`
+server-side -- this was already wired up in the API and the Flutter
+service layer, just never exposed in the wishlist UI).
+
+The vault create-entry screen was translated to Bengali (it was the one
+onboarding-adjacent screen still fully in English) while touching it for
+the wishlist-adjacent category work; its category picker already worked
+identically for every content type and either spouse's uploads (no
+role-based restriction existed) -- if "select History vs Husband
+category" meant something more specific than "category selection should
+just work everywhere," flag it and it'll get refined.
+
 ## 19. Add Device (peer-to-peer pairing)
 
 **Problem:** each role (`husband`/`wife`) can only be claimed once, ever

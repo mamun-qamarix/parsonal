@@ -34,11 +34,11 @@ class _CreateEntryScreenState extends State<CreateEntryScreen> {
     final name = await showDialog<String>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('New category'),
-        content: TextField(controller: controller, autofocus: true, decoration: const InputDecoration(hintText: 'e.g. Travel memories')),
+        title: const Text('নতুন ক্যাটাগরি'),
+        content: TextField(controller: controller, autofocus: true, decoration: const InputDecoration(hintText: 'যেমন: ভ্রমণের স্মৃতি')),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, controller.text.trim()), child: const Text('Create')),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('বাতিল')),
+          FilledButton(onPressed: () => Navigator.pop(context, controller.text.trim()), child: const Text('তৈরি করুন')),
         ],
       ),
     );
@@ -61,11 +61,11 @@ class _CreateEntryScreenState extends State<CreateEntryScreen> {
     final session = context.read<SessionProvider>();
     final vmk = session.vmk!;
     if (widget.contentType == 'text' && _textController.text.trim().isEmpty) {
-      setState(() => _error = 'Write something first.');
+      setState(() => _error = 'আগে কিছু লিখুন।');
       return;
     }
     if (widget.contentType != 'text' && _picked == null) {
-      setState(() => _error = 'Pick a file first.');
+      setState(() => _error = 'আগে একটা ফাইল বাছাই করুন।');
       return;
     }
     setState(() {
@@ -103,10 +103,21 @@ class _CreateEntryScreenState extends State<CreateEntryScreen> {
     }
   }
 
+  String get _typeLabel {
+    switch (widget.contentType) {
+      case 'photo':
+        return 'ছবি';
+      case 'video':
+        return 'ভিডিও';
+      default:
+        return 'টেক্সট';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text('New ${widget.contentType}')),
+      appBar: AppBar(title: Text('নতুন $_typeLabel')),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(20),
@@ -114,15 +125,15 @@ class _CreateEntryScreenState extends State<CreateEntryScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (widget.contentType == 'text')
-                TextField(controller: _textController, maxLines: 6, decoration: const InputDecoration(hintText: 'Write something for your spouse...'))
+                TextField(controller: _textController, maxLines: 6, decoration: const InputDecoration(hintText: 'সঙ্গীর জন্য কিছু লিখুন...'))
               else ...[
                 OutlinedButton.icon(
                   icon: const Icon(Icons.attach_file),
                   onPressed: _pickMedia,
-                  label: Text(_picked == null ? 'Choose ${widget.contentType}' : 'Selected: ${_picked!.name}'),
+                  label: Text(_picked == null ? '$_typeLabel বাছাই করুন' : 'বাছাই করা হয়েছে: ${_picked!.name}'),
                 ),
                 const SizedBox(height: 12),
-                TextField(controller: _textController, maxLines: 3, decoration: const InputDecoration(hintText: 'Add a caption (optional)')),
+                TextField(controller: _textController, maxLines: 3, decoration: const InputDecoration(hintText: 'ক্যাপশন লিখুন (ঐচ্ছিক)')),
               ],
               const SizedBox(height: 16),
               Row(
@@ -130,12 +141,12 @@ class _CreateEntryScreenState extends State<CreateEntryScreen> {
                   Expanded(
                     child: DropdownButtonFormField<String>(
                       initialValue: _categoryId,
-                      decoration: const InputDecoration(labelText: 'Category (optional)'),
+                      decoration: const InputDecoration(labelText: 'ক্যাটাগরি (ঐচ্ছিক)'),
                       items: _categories.map((c) => DropdownMenuItem(value: c.id, child: Text(c.decryptedName ?? '...'))).toList(),
                       onChanged: (v) => setState(() => _categoryId = v),
                     ),
                   ),
-                  IconButton(icon: const Icon(Icons.add_circle_outline), onPressed: _addCategory),
+                  IconButton(tooltip: 'নতুন ক্যাটাগরি বানান', icon: const Icon(Icons.add_circle_outline), onPressed: _addCategory),
                 ],
               ),
               const SizedBox(height: 20),
@@ -157,7 +168,7 @@ class _CreateEntryScreenState extends State<CreateEntryScreen> {
                 onPressed: _saving ? null : _submit,
                 child: _saving
                     ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                    : const Text('Save to vault'),
+                    : const Text('ভল্টে সেভ করুন'),
               ),
             ],
           ),

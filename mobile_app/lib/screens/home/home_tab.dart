@@ -15,6 +15,9 @@ import '../vault/consent_requests_screen.dart';
 import '../vault/create_entry_screen.dart';
 import '../vault/entry_detail_screen.dart';
 
+/// One mixed feed -- text/photo/video interleaved by recency, like a
+/// social-media home feed -- with a multi-select filter bar (content
+/// type + author) instead of separate tabs. See DECISIONS.md.
 class HomeTab extends StatefulWidget {
   const HomeTab({super.key});
 
@@ -22,17 +25,67 @@ class HomeTab extends StatefulWidget {
   State<HomeTab> createState() => _HomeTabState();
 }
 
-class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
-  late final TabController _typeTab = TabController(length: 3, vsync: this);
+class _HomeTabState extends State<HomeTab> {
+  final _service = VaultService();
+  List<VaultEntry> _entries = [];
+  List<Category> _categories = [];
+  bool _loading = true;
+  final Set<String> _typeFilter = {'text', 'photo', 'video'};
+  final Set<String> _roleFilter = {'husband', 'wife'};
 
   @override
-  void dispose() {
-    _typeTab.dispose();
-    super.dispose();
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final vmk = context.read<SessionProvider>().vmk!;
+    final results = await Future.wait([
+      _service.listEntries(vmk),
+      _service.listCategories(vmk, 'vault'),
+    ]);
+    if (!mounted) return;
+    setState(() {
+      _entries = results[0] as List<VaultEntry>;
+      _categories = results[1] as List<Category>;
+      _loading = false;
+    });
+  }
+
+  void _toggleFilter(Set<String> group, String value) {
+    setState(() {
+      if (group.contains(value)) {
+        if (group.length > 1) group.remove(value); // always leave at least one on
+      } else {
+        group.add(value);
+      }
+    });
+  }
+
+  Future<void> _createNew() async {
+    final type = await showModalBottomSheet<String>(
+      context: context,
+      builder: (_) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(padding: EdgeInsets.fromLTRB(16, 16, 16, 8), child: Text('কী যোগ করতে চান?', style: TextStyle(fontWeight: FontWeight.w600))),
+            ListTile(leading: const Icon(Icons.notes_outlined), title: const Text('টেক্সট'), onTap: () => Navigator.pop(context, 'text')),
+            ListTile(leading: const Icon(Icons.image_outlined), title: const Text('ছবি'), onTap: () => Navigator.pop(context, 'photo')),
+            ListTile(leading: const Icon(Icons.videocam_outlined), title: const Text('ভিডিও'), onTap: () => Navigator.pop(context, 'video')),
+          ],
+        ),
+      ),
+    );
+    if (type == null || !mounted) return;
+    final created = await Navigator.of(context).push<bool>(MaterialPageRoute(builder: (_) => CreateEntryScreen(contentType: type, categories: _categories)));
+    if (created == true) _load();
   }
 
   @override
   Widget build(BuildContext context) {
+    final list = _entries.where((e) => _typeFilter.contains(e.contentType) && _roleFilter.contains(e.authorRole)).toList();
     return Scaffold(
       appBar: AppBar(
         title: const Text('Our Vault'),
@@ -42,109 +95,23 @@ class _HomeTabState extends State<HomeTab> with SingleTickerProviderStateMixin {
           IconButton(icon: const Icon(Icons.mark_email_unread_outlined), tooltip: 'Approvals', onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ConsentRequestsScreen()))),
           IconButton(icon: const Icon(Icons.settings_outlined), tooltip: 'Settings', onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const SettingsScreen()))),
         ],
-        bottom: TabBar(
-          controller: _typeTab,
-          tabs: const [Tab(text: 'টেক্সট'), Tab(text: 'ছবি'), Tab(text: 'ভিডিও')],
-        ),
       ),
-      body: Column(
-        children: [
-          const Padding(padding: EdgeInsets.fromLTRB(16, 16, 16, 0), child: CountdownCard()),
-          Expanded(
-            child: TabBarView(
-              controller: _typeTab,
-              children: const [
-                _ContentTypeView(contentType: 'text'),
-                _ContentTypeView(contentType: 'photo'),
-                _ContentTypeView(contentType: 'video'),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// One content type (text/photo/video); the husband/wife filter lives
-/// INSIDE this, not as the outer navigation, per the redesign -- both
-/// roles' entries for this content type are loaded up front so switching
-/// the filter is instant, no reload. Defaults to the OTHER spouse's
-/// content, since that's usually what you open the app to check.
-class _ContentTypeView extends StatefulWidget {
-  final String contentType;
-  const _ContentTypeView({required this.contentType});
-
-  @override
-  State<_ContentTypeView> createState() => _ContentTypeViewState();
-}
-
-class _ContentTypeViewState extends State<_ContentTypeView> {
-  final _service = VaultService();
-  Map<String, List<VaultEntry>> _entriesByRole = {};
-  List<Category> _categories = [];
-  bool _loading = true;
-  late String _filterRole;
-
-  @override
-  void initState() {
-    super.initState();
-    final myRole = context.read<SessionProvider>().role ?? 'husband';
-    _filterRole = myRole == 'husband' ? 'wife' : 'husband';
-    _load();
-  }
-
-  Future<void> _load() async {
-    final vmk = context.read<SessionProvider>().vmk!;
-    final results = await Future.wait([
-      _service.listEntries(vmk, authorRole: 'husband', contentType: widget.contentType),
-      _service.listEntries(vmk, authorRole: 'wife', contentType: widget.contentType),
-    ]);
-    final categories = await _service.listCategories(vmk, 'vault');
-    if (!mounted) return;
-    setState(() {
-      _entriesByRole = {'husband': results[0], 'wife': results[1]};
-      _categories = categories;
-      _loading = false;
-    });
-  }
-
-  Future<void> _createNew() async {
-    final created = await Navigator.of(context).push<bool>(MaterialPageRoute(builder: (_) => CreateEntryScreen(contentType: widget.contentType, categories: _categories)));
-    if (created == true) _load();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final list = _entriesByRole[_filterRole] ?? [];
-    return Scaffold(
-      backgroundColor: Colors.transparent,
       floatingActionButton: FloatingActionButton(onPressed: _createNew, child: const Icon(Icons.add)),
       body: Column(
         children: [
+          const Padding(padding: EdgeInsets.fromLTRB(16, 16, 16, 0), child: CountdownCard()),
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
-            child: Row(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
               children: [
-                Expanded(
-                  child: _RoleFilterChip(
-                    label: 'স্বামী',
-                    icon: Icons.man,
-                    color: AppColors.husband,
-                    selected: _filterRole == 'husband',
-                    onTap: () => setState(() => _filterRole = 'husband'),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _RoleFilterChip(
-                    label: 'স্ত্রী',
-                    icon: Icons.woman,
-                    color: AppColors.wife,
-                    selected: _filterRole == 'wife',
-                    onTap: () => setState(() => _filterRole = 'wife'),
-                  ),
-                ),
+                _FilterPill(label: 'টেক্সট', icon: Icons.notes_outlined, color: AppColors.halalGreen, selected: _typeFilter.contains('text'), onTap: () => _toggleFilter(_typeFilter, 'text')),
+                _FilterPill(label: 'ছবি', icon: Icons.image_outlined, color: AppColors.halalGreen, selected: _typeFilter.contains('photo'), onTap: () => _toggleFilter(_typeFilter, 'photo')),
+                _FilterPill(label: 'ভিডিও', icon: Icons.videocam_outlined, color: AppColors.halalGreen, selected: _typeFilter.contains('video'), onTap: () => _toggleFilter(_typeFilter, 'video')),
+                Container(width: 1, height: 28, color: Colors.grey.withValues(alpha: 0.3), margin: const EdgeInsets.symmetric(horizontal: 2)),
+                _FilterPill(label: 'স্বামী', icon: Icons.man, color: AppColors.husband, selected: _roleFilter.contains('husband'), onTap: () => _toggleFilter(_roleFilter, 'husband')),
+                _FilterPill(label: 'স্ত্রী', icon: Icons.woman, color: AppColors.wife, selected: _roleFilter.contains('wife'), onTap: () => _toggleFilter(_roleFilter, 'wife')),
               ],
             ),
           ),
@@ -177,14 +144,14 @@ class _ContentTypeViewState extends State<_ContentTypeView> {
   }
 }
 
-class _RoleFilterChip extends StatelessWidget {
+class _FilterPill extends StatelessWidget {
   final String label;
   final IconData icon;
   final Color color;
   final bool selected;
   final VoidCallback onTap;
 
-  const _RoleFilterChip({required this.label, required this.icon, required this.color, required this.selected, required this.onTap});
+  const _FilterPill({required this.label, required this.icon, required this.color, required this.selected, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -193,18 +160,18 @@ class _RoleFilterChip extends StatelessWidget {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
           color: selected ? color.withValues(alpha: 0.16) : Colors.transparent,
           borderRadius: BorderRadius.circular(999),
           border: Border.all(color: selected ? color : Colors.grey.withValues(alpha: 0.35), width: selected ? 1.5 : 1),
         ),
         child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 18, color: selected ? color : Colors.grey),
-            const SizedBox(width: 6),
-            Text(label, style: TextStyle(fontWeight: FontWeight.w600, color: selected ? color : Colors.grey, fontSize: 13)),
+            Icon(icon, size: 16, color: selected ? color : Colors.grey),
+            const SizedBox(width: 5),
+            Text(label, style: TextStyle(fontWeight: FontWeight.w600, color: selected ? color : Colors.grey, fontSize: 12)),
           ],
         ),
       ),
