@@ -482,6 +482,25 @@ role-based restriction existed) -- if "select History vs Husband
 category" meant something more specific than "category selection should
 just work everywhere," flag it and it'll get refined.
 
+## 26. "Favorite Lines" discoverability
+
+**Problem:** the user built (with me) a feature for writing intimate
+lines to each other with separate husband→wife / wife→husband tabs and
+a 5-star rating from each spouse -- this already existed
+(`phrases_screen.dart`, backed by `PhraseModel`/`phrase_service.dart`,
+per project.md and DECISIONS.md #5's "Favorite Lines" toggle) but was
+only reachable via a small unlabeled heart icon among three crowded
+icons in the Profile app bar. The user searched for it and couldn't
+find it, despite it being fully built and working.
+
+**Decision:** added a prominent, labeled card ("আমাদের প্রিয় লাইন") in
+the Profile screen body, right where Wishlist already gets similar
+visual weight, so the feature is findable by scrolling rather than only
+by noticing a bare icon. Also translated the whole screen to Bengali
+(it was the last major screen still fully in English) -- title, tabs,
+add-line dialog, empty state, sort tooltip. No functional changes; the
+tabs + per-spouse rating already worked exactly as originally requested.
+
 ## 19. Add Device (peer-to-peer pairing)
 
 **Problem:** each role (`husband`/`wife`) can only be claimed once, ever

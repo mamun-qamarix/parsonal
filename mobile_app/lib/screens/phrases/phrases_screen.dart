@@ -31,11 +31,11 @@ class _PhrasesScreenState extends State<PhrasesScreen> with SingleTickerProvider
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Favorite Lines'),
+        title: const Text('আমাদের প্রিয় লাইন'),
         actions: [
-          IconButton(icon: Icon(_sortByRating ? Icons.star : Icons.star_border), tooltip: 'Sort by rating', onPressed: () => setState(() => _sortByRating = !_sortByRating)),
+          IconButton(icon: Icon(_sortByRating ? Icons.star : Icons.star_border), tooltip: 'রেটিং অনুযায়ী সাজান', onPressed: () => setState(() => _sortByRating = !_sortByRating)),
         ],
-        bottom: TabBar(controller: _tab, tabs: const [Tab(text: 'Husband → Wife'), Tab(text: 'Wife → Husband')]),
+        bottom: TabBar(controller: _tab, tabs: const [Tab(text: 'স্বামী → স্ত্রী'), Tab(text: 'স্ত্রী → স্বামী')]),
       ),
       body: TabBarView(
         controller: _tab,
@@ -60,11 +60,11 @@ class _PhrasesScreenState extends State<PhrasesScreen> with SingleTickerProvider
     final text = await showDialog<String>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Add a line'),
+        title: const Text('একটা লাইন যোগ করুন'),
         content: TextField(controller: controller, autofocus: true, maxLines: 3),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, controller.text.trim()), child: const Text('Save')),
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('বাতিল')),
+          FilledButton(onPressed: () => Navigator.pop(context, controller.text.trim()), child: const Text('সংরক্ষণ')),
         ],
       ),
     );
@@ -116,7 +116,7 @@ class _PhraseListState extends State<_PhraseList> {
   Widget build(BuildContext context) {
     final myRole = context.watch<SessionProvider>().role;
     if (_loading) return const ShimmerTileList();
-    if (_phrases.isEmpty) return const Center(child: Text('No lines yet'));
+    if (_phrases.isEmpty) return const Center(child: Text('এখনো কিছু নেই'));
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView.builder(

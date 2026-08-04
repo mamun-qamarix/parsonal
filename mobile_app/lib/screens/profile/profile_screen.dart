@@ -202,7 +202,17 @@ class _ProfileViewState extends State<_ProfileView> {
                 TextButton.icon(onPressed: () => setState(() => _editing = true), icon: const Icon(Icons.edit, size: 16), label: const Text('এডিট করুন')),
             ],
           ),
-        const SizedBox(height: 24),
+        const SizedBox(height: 20),
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.favorite, color: AppColors.rejected),
+            title: const Text('আমাদের প্রিয় লাইন', style: TextStyle(fontWeight: FontWeight.w600)),
+            subtitle: const Text('একে অপরকে লেখা বিশেষ লাইনগুলো — রেটিং দিয়ে জানান কোনটা সবচেয়ে ভালো লাগলো', style: TextStyle(fontSize: 12)),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PhrasesScreen())),
+          ),
+        ),
+        const SizedBox(height: 16),
         const Divider(),
         const SizedBox(height: 12),
         WishlistSection(ownerRole: widget.role),
