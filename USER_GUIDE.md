@@ -59,7 +59,7 @@
 
 সরাসরি এখান থেকে APK ফাইলটা দুই ফোনেই ডাউনলোড করুন, আলাদা করে বানানোর দরকার নেই:
 
-**[⬇️ couple-vault-v1.0.0.apk ডাউনলোড করুন](https://github.com/mamun-qamarix/parsonal/releases/download/apk-v1.0.0/couple-vault-v1.0.0.apk)**
+**[⬇️ couple-vault-v1.0.1.apk ডাউনলোড করুন](https://github.com/mamun-qamarix/parsonal/releases/download/apk-v1.0.1/couple-vault-v1.0.1.apk)**
 
 (ফোনের ব্রাউজার দিয়ে লিংকে গিয়ে সরাসরি ডাউনলোড করা যাবে, অথবা কম্পিউটারে ডাউনলোড করে WhatsApp/USB দিয়ে ফোনে পাঠানো যাবে।)
 
