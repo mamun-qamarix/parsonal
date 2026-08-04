@@ -87,9 +87,9 @@ class _LoginTotpSetupScreenState extends State<LoginTotpSetupScreen> {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 20),
-              const Text('১. আপনার ফোনে Google Authenticator বা Authy অ্যাপ না থাকলে আগে সেটা ইনস্টল করুন।', style: TextStyle(fontWeight: FontWeight.w600)),
+              const Text('১. আপনার ফোনে Google Authenticator বা Authy অ্যাপ না থাকলে আগে সেটা ইনস্টল করুন।', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.w600)),
               const SizedBox(height: 4),
-              const Text('২. সেই অ্যাপ দিয়ে নিচের QR কোডটা স্ক্যান করুন:', style: TextStyle(fontWeight: FontWeight.w600)),
+              const Text('২. সেই অ্যাপ দিয়ে নিচের QR কোডটা স্ক্যান করুন:', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.w600)),
               const SizedBox(height: 16),
               if (uri != null)
                 Center(
@@ -109,7 +109,7 @@ class _LoginTotpSetupScreenState extends State<LoginTotpSetupScreen> {
               if (_showSecret && secret != null)
                 SelectableText(secret, textAlign: TextAlign.center, style: const TextStyle(fontFamily: 'monospace', fontSize: 16, letterSpacing: 2)),
               const SizedBox(height: 20),
-              const Text('৩. অথেন্টিকেটর অ্যাপে এখন যে ৬ সংখ্যার কোডটা দেখাচ্ছে, সেটা এখানে লিখুন:', style: TextStyle(fontWeight: FontWeight.w600)),
+              const Text('৩. অথেন্টিকেটর অ্যাপে এখন যে ৬ সংখ্যার কোডটা দেখাচ্ছে, সেটা এখানে লিখুন:', textAlign: TextAlign.center, style: TextStyle(fontWeight: FontWeight.w600)),
               const SizedBox(height: 8),
               TextField(
                 controller: _codeController,

@@ -12,16 +12,52 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.database import get_db
-from app.models.setup import SetupCode
+from app.models.setup import SetupCode, VaultKey
 from app.models.user import Spouse
 from app.services.admin_auth import (
     require_admin, get_admin_password_hash, set_admin_password_hash, create_admin_session_token,
 )
-from app.services.security import hash_secret, verify_secret, generate_setup_token, generate_vmk, encrypt_at_rest
+from app.services.security import hash_secret, verify_secret, generate_setup_token, generate_vmk, encrypt_at_rest, decrypt_at_rest
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 settings = get_settings()
 templates = Jinja2Templates(directory="admin_panel/templates")
+
+
+async def _get_or_create_vmk(db: AsyncSession) -> bytes:
+    """The deployment's Vault Master Key is generated exactly once and
+    never changes again -- every setup code (however many times it's
+    regenerated) must hand out this SAME key, or devices that claimed
+    under different codes couldn't decrypt each other's content. See
+    DECISIONS.md."""
+    result = await db.execute(select(VaultKey))
+    key = result.scalar_one_or_none()
+    if key is not None:
+        return decrypt_at_rest(key.vmk_encrypted)
+    vmk = generate_vmk()
+    db.add(VaultKey(vmk_encrypted=encrypt_at_rest(vmk)))
+    await db.commit()
+    return vmk
+
+
+def _code_payload(code: SetupCode, vmk: bytes) -> dict:
+    payload = {
+        "server": f"https://{settings.domain}",
+        "code": code.token,
+        "vmk": base64.b64encode(vmk).decode(),
+    }
+    qr_payload = base64.b64encode(json.dumps(payload).encode()).decode()
+    img = qrcode.make(qr_payload)
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    return {
+        "exists": True,
+        "token": code.token,
+        "server": payload["server"],
+        "qr_payload": qr_payload,
+        "qr_png_b64": base64.b64encode(buf.getvalue()).decode(),
+        "created_at": code.created_at,
+    }
 
 
 @router.get("", response_class=HTMLResponse)
@@ -67,49 +103,49 @@ async def admin_login(password: str, response: Response, db: AsyncSession = Depe
     return {"ok": True}
 
 
+@router.get("/api/setup-codes/current", dependencies=[Depends(require_admin)])
+async def get_current_setup_code(db: AsyncSession = Depends(get_db)):
+    """Setup codes are persistent now (see DECISIONS.md) -- this lets the
+    admin panel re-display the same QR/text on every page load instead of
+    it only ever being shown once at creation time."""
+    result = await db.execute(select(SetupCode).order_by(SetupCode.created_at.desc()))
+    code = result.scalars().first()
+    if code is None:
+        return {"exists": False}
+    vmk = await _get_or_create_vmk(db)
+    return _code_payload(code, vmk)
+
+
 @router.post("/api/setup-codes", dependencies=[Depends(require_admin)])
 async def create_setup_code(db: AsyncSession = Depends(get_db)):
-    token = generate_setup_token()
-    vmk = generate_vmk()
-    code = SetupCode(
-        token=token,
-        vmk_encrypted=encrypt_at_rest(vmk),
-        expires_at=datetime.now(timezone.utc) + timedelta(hours=settings.setup_code_ttl_hours),
-    )
-    db.add(code)
+    """Idempotent: if a code already exists, just returns it rather than
+    creating a redundant second one -- use DELETE first to actually
+    rotate the shareable token. The Vault Master Key always comes from
+    the persistent singleton, so regenerating the token never changes it."""
+    existing = await db.execute(select(SetupCode).order_by(SetupCode.created_at.desc()))
+    code = existing.scalars().first()
+    vmk = await _get_or_create_vmk(db)
+    if code is None:
+        code = SetupCode(
+            token=generate_setup_token(),
+            vmk_encrypted=encrypt_at_rest(vmk),
+            expires_at=datetime.now(timezone.utc) + timedelta(days=3650),
+        )
+        db.add(code)
+        await db.commit()
+    return _code_payload(code, vmk)
+
+
+@router.delete("/api/setup-codes/{token}", dependencies=[Depends(require_admin)])
+async def delete_setup_code(token: str, db: AsyncSession = Depends(get_db)):
+    """Invalidates this shareable token (e.g. it leaked, or you just want a
+    fresh one) -- devices that already claimed a role are completely
+    unaffected, since the Vault Master Key lives independently and a new
+    code will still hand out the same one."""
+    result = await db.execute(select(SetupCode).where(SetupCode.token == token))
+    code = result.scalar_one_or_none()
+    if code is None:
+        raise HTTPException(status_code=404, detail="Setup code not found")
+    await db.delete(code)
     await db.commit()
-
-    payload = {
-        "server": f"https://{settings.domain}",
-        "code": token,
-        "vmk": base64.b64encode(vmk).decode(),
-    }
-    qr_payload = base64.b64encode(json.dumps(payload).encode()).decode()
-
-    img = qrcode.make(qr_payload)
-    buf = io.BytesIO()
-    img.save(buf, format="PNG")
-    qr_png_b64 = base64.b64encode(buf.getvalue()).decode()
-
-    return {
-        "token": token,
-        "server": payload["server"],
-        "qr_payload": qr_payload,
-        "qr_png_b64": qr_png_b64,
-        "expires_at": code.expires_at,
-    }
-
-
-@router.get("/api/setup-codes", dependencies=[Depends(require_admin)])
-async def list_setup_codes(db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(SetupCode))
-    codes = result.scalars().all()
-    return [
-        {
-            "token": c.token,
-            "claimed_husband": c.claimed_husband,
-            "claimed_wife": c.claimed_wife,
-            "expires_at": c.expires_at,
-        }
-        for c in codes
-    ]
+    return {"ok": True}

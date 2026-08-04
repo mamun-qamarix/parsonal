@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name_real">Couple\'s Vault</string>
+    <string name="app_name_real">পার্সোনাল</string>
     <string name="app_name_notes">Notes</string>
     <string name="app_name_calculator">Calculator</string>
 </resources>

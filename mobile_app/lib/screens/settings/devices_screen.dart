@@ -95,6 +95,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
                     child: Text(
                       'আপনাদের দুজনের সব ডিভাইস এখানে দেখা যাচ্ছে। ফোন হারালে বা বদলালে এখান থেকে সেটা সরিয়ে দিন।',
+                      textAlign: TextAlign.center,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
                     ),
                   ),

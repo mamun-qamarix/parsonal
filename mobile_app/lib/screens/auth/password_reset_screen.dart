@@ -95,7 +95,7 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text('$roleText পাসওয়ার্ড রিসেট করতে দুজনকেই নিজের অথেন্টিকেটর কোড দিয়ে যাচাই করতে হবে।', style: Theme.of(context).textTheme.bodyMedium),
+              Text('$roleText পাসওয়ার্ড রিসেট করতে দুজনকেই নিজের অথেন্টিকেটর কোড দিয়ে যাচাই করতে হবে।', textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodyMedium),
               const SizedBox(height: 20),
               OutlinedButton(onPressed: _loading ? null : _start, child: const Text('রিসেট শুরু করুন / কোড নিন')),
               const SizedBox(height: 12),
@@ -111,6 +111,7 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
               ElevatedButton(onPressed: _loading ? null : _verifyMe, child: const Text('আমাকে যাচাই করুন')),
               const SizedBox(height: 16),
               Row(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Icon(Icons.man, color: _husbandVerified ? AppColors.halalGreen : Colors.grey),
                   const SizedBox(width: 4),

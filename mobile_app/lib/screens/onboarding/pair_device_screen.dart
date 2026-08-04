@@ -56,7 +56,7 @@ class _PairDeviceScreenState extends State<PairDeviceScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text('অন্য ফোনের সেটিংস থেকে "নতুন ডিভাইস যোগ করুন" স্ক্রিনে দেখানো পুরো টেক্সটটা এখানে পেস্ট করুন:'),
+                const Text('অন্য ফোনের সেটিংস থেকে "নতুন ডিভাইস যোগ করুন" স্ক্রিনে দেখানো পুরো টেক্সটটা এখানে পেস্ট করুন:', textAlign: TextAlign.center),
                 const SizedBox(height: 12),
                 TextField(controller: _payloadController, maxLines: 4, decoration: const InputDecoration(hintText: 'পেস্ট করা কোড টেক্সট')),
                 const SizedBox(height: 12),

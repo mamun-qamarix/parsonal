@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import 'core/app_globals.dart';
 import 'core/security/app_lock_guard.dart';
 import 'core/theme/app_theme.dart';
 import 'providers/session_provider.dart';
@@ -27,7 +28,8 @@ class CoupleVaultApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => SessionProvider()..bootstrap()),
       ],
       child: MaterialApp(
-        title: "Couple's Vault",
+        title: "পার্সোনাল",
+        scaffoldMessengerKey: scaffoldMessengerKey,
         debugShowCheckedModeBanner: false,
         theme: AppTheme.light(),
         darkTheme: AppTheme.dark(),

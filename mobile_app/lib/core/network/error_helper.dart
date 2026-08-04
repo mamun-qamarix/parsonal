@@ -13,8 +13,6 @@ const Map<String, String> _knownBackendErrors = {
   'Invalid or expired token': 'সেশনের মেয়াদ শেষ হয়ে গেছে — আবার লগইন করুন।',
   'Spouse not found': 'এই ব্যবহারকারীকে খুঁজে পাওয়া যায়নি।',
   'Setup code not found': 'এই সেটআপ কোডটি খুঁজে পাওয়া যায়নি — বানান ঠিক আছে কিনা দেখুন।',
-  'Setup code expired': 'এই সেটআপ কোডের মেয়াদ শেষ হয়ে গেছে — অ্যাডমিন প্যানেল থেকে নতুন কোড নিন।',
-  "This role has already been claimed with this code": 'এই রোলটি এই কোড দিয়ে আগেই সেটআপ করা হয়ে গেছে।',
   'Admin login required': 'অ্যাডমিন লগইন করা লাগবে।',
   'Invalid admin password': 'অ্যাডমিন পাসওয়ার্ড সঠিক নয়।',
   'Reset session not found or expired': 'রিসেট কোডটি খুঁজে পাওয়া যায়নি বা মেয়াদ শেষ হয়ে গেছে।',

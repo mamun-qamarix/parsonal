@@ -8,7 +8,7 @@ class IconDisguiseService {
   static const _channel = MethodChannel('couple_vault/icon_disguise');
 
   static const options = {
-    'real': 'Couple\'s Vault (real name)',
+    'real': 'পার্সোনাল (আসল নাম)',
     'notes': 'Notes',
     'calculator': 'Calculator',
   };

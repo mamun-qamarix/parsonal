@@ -65,7 +65,25 @@ class AppTheme {
         backgroundColor: isDark ? const Color(0xFF17211C) : Colors.white,
         indicatorColor: AppColors.halalGreen.withValues(alpha: 0.18),
         labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        elevation: 0,
       ),
+      dialogTheme: DialogThemeData(
+        elevation: 0,
+        backgroundColor: isDark ? const Color(0xFF17211C) : Colors.white,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+      ),
+      bottomSheetTheme: BottomSheetThemeData(
+        elevation: 0,
+        modalElevation: 0,
+        backgroundColor: isDark ? const Color(0xFF17211C) : Colors.white,
+        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      ),
+      snackBarTheme: const SnackBarThemeData(elevation: 0),
+      popupMenuTheme: PopupMenuThemeData(
+        elevation: 0,
+        color: isDark ? const Color(0xFF17211C) : Colors.white,
+      ),
+      floatingActionButtonTheme: const FloatingActionButtonThemeData(elevation: 0, focusElevation: 0, hoverElevation: 0, highlightElevation: 0),
       textTheme: Typography.material2021(platform: TargetPlatform.android).black.apply(
             bodyColor: scheme.onSurface,
             displayColor: scheme.onSurface,

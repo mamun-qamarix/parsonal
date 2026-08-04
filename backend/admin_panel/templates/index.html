@@ -47,12 +47,19 @@
   <div id="dashboardView" class="hidden">
     <div class="status"><span>Husband registered</span><span class="badge" id="husbandBadge">—</span></div>
     <div class="status"><span>Wife registered</span><span class="badge" id="wifeBadge">—</span></div>
-    <button style="margin-top:20px" onclick="generateCode()">Generate Setup Code</button>
+
+    <div id="reinstallWarning" class="hidden" style="margin-top:16px; padding:12px; border-radius:10px; background:rgba(216,92,92,.12); border:1px solid rgba(216,92,92,.4); font-size:.82rem; color:#e8a3a3;">
+      Both roles are already registered. A NEW code generated now will get a NEW encryption key that won't match content on the phones already set up. To add or reinstall a device for an already-registered role, use "নতুন ডিভাইস যোগ করুন" (Add Device) inside the app on a phone that's already logged in -- not this panel.
+    </div>
+
+    <button id="generateBtn" style="margin-top:16px" onclick="generateCode()">Generate Setup Code</button>
+
     <div id="qrBox" class="hidden">
       <img id="qrImg" alt="Setup QR code">
       <code id="codeText"></code>
-      <p class="sub">Scan this in the app. If you can't scan, paste the text below into "Enter code manually" in the app instead. Expires in 24h.</p>
+      <p class="sub">This code doesn't expire and stays the same until you delete it -- scan or paste it any time, on any device, as many times as you need.</p>
       <code id="payloadText"></code>
+      <button class="secondary" style="margin-top:14px" onclick="regenerateCode()">Delete &amp; Create New Code</button>
     </div>
   </div>
 </div>
@@ -76,11 +83,25 @@ async function init() {
     return;
   }
   try {
-    await api('/admin/api/setup-codes');
+    const current = await api('/admin/api/setup-codes/current');
     document.getElementById('dashboardView').classList.remove('hidden');
+    if (current.exists) {
+      renderCode(current);
+    } else {
+      document.getElementById('reinstallWarning').classList.toggle('hidden', !(status.husband_registered && status.wife_registered));
+    }
   } catch (e) {
     document.getElementById('loginView').classList.remove('hidden');
   }
+}
+
+function renderCode(data) {
+  document.getElementById('qrImg').src = 'data:image/png;base64,' + data.qr_png_b64;
+  document.getElementById('codeText').textContent = 'Server: ' + data.server + '\nCode: ' + data.token;
+  document.getElementById('payloadText').textContent = data.qr_payload;
+  document.getElementById('qrBox').classList.remove('hidden');
+  document.getElementById('generateBtn').classList.add('hidden');
+  document.getElementById('reinstallWarning').classList.add('hidden');
 }
 
 async function doFirstRun() {
@@ -101,10 +122,19 @@ async function doLogin() {
 
 async function generateCode() {
   const data = await api('/admin/api/setup-codes', { method: 'POST' });
-  document.getElementById('qrImg').src = 'data:image/png;base64,' + data.qr_png_b64;
-  document.getElementById('codeText').textContent = 'Server: ' + data.server + '\nCode: ' + data.token;
-  document.getElementById('payloadText').textContent = data.qr_payload;
-  document.getElementById('qrBox').classList.remove('hidden');
+  renderCode(data);
+}
+
+async function regenerateCode() {
+  if (!confirm('Delete the current code and create a fresh one? Already-registered devices are not affected -- only the shareable code/QR changes.')) return;
+  const current = await api('/admin/api/setup-codes/current');
+  if (current.exists) {
+    await api('/admin/api/setup-codes/' + encodeURIComponent(current.token), { method: 'DELETE' });
+  }
+  document.getElementById('qrBox').classList.add('hidden');
+  document.getElementById('generateBtn').classList.remove('hidden');
+  const data = await api('/admin/api/setup-codes', { method: 'POST' });
+  renderCode(data);
 }
 
 init();

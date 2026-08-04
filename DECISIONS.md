@@ -321,6 +321,52 @@ being forced to redo TOTP setup after this update. Verified both the
 backfill and the new-device "setup vs verify" branching against a local
 Postgres.
 
+## 22. Persistent, reusable admin setup code
+
+**Request:** the admin panel's setup code was single-use per role and got
+auto-deleted once both roles claimed -- generate it, and if you didn't
+immediately use/save it, it was gone. The product owner asked for it to
+be persistent (securely stored, reusable any time, for any device),
+deletable/regeneratable on demand, and to make reinstalling the app on
+the same device and setting up again with the same code "just work."
+
+**Decision:** `SetupCode` is no longer single-use or auto-deleted --
+`claim_role` dropped its `expires_at`/`claimed_husband`/`claimed_wife`
+gating entirely; the only real gate left is "does this role already have
+a Spouse row" (unchanged, and correctly so -- claiming can never silently
+reset an existing password). `GET /admin/api/setup-codes/current` lets
+the admin panel re-display the same QR/text on every page load;
+`POST /admin/api/setup-codes` is idempotent (returns the existing code
+instead of creating a duplicate); `DELETE .../setup-codes/{token}` lets
+the admin rotate the shareable token on demand.
+
+**Critical subtlety:** the Vault Master Key must NEVER change once
+devices have claimed with it (they all need the SAME key to decrypt each
+other's content) -- but the old design generated a fresh random VMK on
+*every* code creation. Fixed by moving the VMK into its own singleton
+`VaultKey` table, generated exactly once and always reused by every
+SetupCode row from then on, so regenerating/rotating the shareable token
+never touches the actual encryption key. A migration in `init_models()`
+backfills `VaultKey` from any still-live `SetupCode.vmk_encrypted` (for a
+deployment mid-setup, one role claimed) -- but a deployment that already
+had BOTH roles claimed *before* this update has no recoverable key here,
+since the old code was already hard-deleted; the admin panel shows an
+explicit warning in that case (both roles registered, no current code)
+that generating a fresh code now would produce a key incompatible with
+already-claimed devices, and to use the in-app "Add Device" (#19)
+pairing instead, which correctly carries the real in-memory VMK from an
+already-authenticated device.
+
+The app itself pivots gracefully when a code is used for an
+already-claimed role: `ClaimRoleScreen` catches the 409
+"already registered" response and calls `SessionProvider.beginPairing`
+with the role+VMK it already has, landing on a normal login screen
+instead of a dead-end error -- so reinstalling the same phone (or
+sharing the one persistent code with a phone that already has that role)
+"just works," per the request. Verified against a local Postgres:
+idempotent creation, non-consumption on claim, matching VMK across
+husband/wife claims and across token regeneration.
+
 ## 19. Add Device (peer-to-peer pairing)
 
 **Problem:** each role (`husband`/`wife`) can only be claimed once, ever

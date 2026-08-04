@@ -114,16 +114,15 @@ async def claim_role(payload: ClaimRoleRequest, db: AsyncSession = Depends(get_d
     if payload.role not in ("husband", "wife"):
         raise HTTPException(status_code=400, detail="role must be 'husband' or 'wife'")
 
+    # Setup codes are persistent/reusable now, not single-use (see
+    # DECISIONS.md) -- the only real gate on claiming is whether this role
+    # already has a Spouse row, checked right below. A device using this
+    # code for an already-claimed role gets a clean 409 here that the app
+    # turns into a normal login instead of a dead end.
     result = await db.execute(select(SetupCode).where(SetupCode.token == payload.token))
     code = result.scalar_one_or_none()
     if code is None:
         raise HTTPException(status_code=404, detail="Setup code not found")
-    if code.expires_at < datetime.now(timezone.utc):
-        raise HTTPException(status_code=410, detail="Setup code expired")
-
-    already_claimed = code.claimed_husband if payload.role == "husband" else code.claimed_wife
-    if already_claimed:
-        raise HTTPException(status_code=409, detail="This role has already been claimed with this code")
 
     existing = await db.execute(select(Spouse).where(Spouse.role == RoleEnum(payload.role)))
     if existing.scalar_one_or_none() is not None:
@@ -152,17 +151,7 @@ async def claim_role(payload: ClaimRoleRequest, db: AsyncSession = Depends(get_d
     refresh_token = create_refresh_token(str(spouse.id), device_id=str(device.id))
     device.refresh_token_hash = hash_secret(refresh_token)
 
-    if payload.role == "husband":
-        code.claimed_husband = True
-    else:
-        code.claimed_wife = True
-
     db.add(AuditLogEntry(actor_id=spouse.id, action="auth.claim_role", target_type="spouse", target_id=spouse.id, detail=payload.role))
-
-    fully_claimed = code.claimed_husband and code.claimed_wife
-    if fully_claimed:
-        await db.delete(code)
-
     await db.commit()
 
     access_token = create_access_token(str(spouse.id), payload.role, device_id=str(device.id))

@@ -1,6 +1,8 @@
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/app_globals.dart';
 import '../../core/network/error_helper.dart';
 import '../../providers/session_provider.dart';
 import '../../services/auth_service.dart';
@@ -59,10 +61,31 @@ class _ClaimRoleScreenState extends State<ClaimRoleScreen> {
             totpProvisioningUri: result['totp_provisioning_uri'],
           );
     } catch (e) {
+      if (_isAlreadyRegistered(e)) {
+        // This role was already claimed (e.g. reinstalling this same phone,
+        // or adding another device with the same admin-issued code) --
+        // instead of a dead-end error, fall back to a normal login with
+        // the role+VMK we already have from this code. See DECISIONS.md.
+        await context.read<SessionProvider>().beginPairing(server: widget.server, role: _role, spouseId: '', vmkB64: widget.vmkB64);
+        if (!mounted) return;
+        final roleLabel = _role == 'husband' ? 'স্বামী' : 'স্ত্রী';
+        scaffoldMessengerKey.currentState?.showSnackBar(
+          SnackBar(content: Text('"$roleLabel" রোলটা আগে থেকেই সেটআপ করা আছে — এখন সেই পাসওয়ার্ড দিয়ে লগইন করুন।'), duration: const Duration(seconds: 4)),
+        );
+        Navigator.of(context).popUntil((route) => route.isFirst);
+        return;
+      }
       setState(() => _error = describeApiError(e));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
+  }
+
+  bool _isAlreadyRegistered(Object e) {
+    if (e is! DioException) return false;
+    final data = e.response?.data;
+    final detail = data is Map ? data['detail']?.toString() : null;
+    return e.response?.statusCode == 409 && (detail?.contains('already registered') ?? false);
   }
 
   @override
@@ -77,16 +100,19 @@ class _ClaimRoleScreenState extends State<ClaimRoleScreen> {
             children: [
               const Text(
                 'আপনাদের মধ্যে কে এই ফোনটা সেটআপ করছেন? এটাই ঠিক করবে অ্যাপে আপনি কার তথ্য হিসেবে চিহ্নিত হবেন।',
+                textAlign: TextAlign.center,
                 style: TextStyle(fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 8),
-              SegmentedButton<String>(
-                segments: const [
-                  ButtonSegment(value: 'husband', label: Text('স্বামী'), icon: Icon(Icons.man)),
-                  ButtonSegment(value: 'wife', label: Text('স্ত্রী'), icon: Icon(Icons.woman)),
-                ],
-                selected: {_role},
-                onSelectionChanged: (s) => setState(() => _role = s.first),
+              Center(
+                child: SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(value: 'husband', label: Text('স্বামী'), icon: Icon(Icons.man)),
+                    ButtonSegment(value: 'wife', label: Text('স্ত্রী'), icon: Icon(Icons.woman)),
+                  ],
+                  selected: {_role},
+                  onSelectionChanged: (s) => setState(() => _role = s.first),
+                ),
               ),
               const SizedBox(height: 20),
               TextField(controller: _deviceName, decoration: const InputDecoration(labelText: 'ডিভাইসের নাম', helperText: 'শুধু চেনার জন্য, যেমন "আমার ফোন"')),
@@ -97,6 +123,7 @@ class _ClaimRoleScreenState extends State<ClaimRoleScreen> {
               const SizedBox(height: 8),
               const Text(
                 'এই পাসওয়ার্ড আর একটা অথেন্টিকেটর কোড — দুটোই লাগবে প্রতিবার অ্যাপ খুলতে (পরের ধাপে সেটআপ করবেন)। মনে রাখার মতো একটা পাসওয়ার্ড দিন।',
+                textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.grey, fontSize: 12),
               ),
               const SizedBox(height: 20),
