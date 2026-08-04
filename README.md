@@ -1,6 +1,12 @@
 # Couple's Private Vault
 
 A private, self-hosted, end-to-end encrypted vault app for a married couple.
+
+> 📱 **Not a developer? Start with [USER_GUIDE.md](USER_GUIDE.md)** — a
+> plain-language walkthrough (in Bengali) for setting up and using the app,
+> written for the two people who'll actually use it day to day, not for
+> engineers.
+
 See [project.md](project.md) for the full specification and
 [DECISIONS.md](DECISIONS.md) for implementation choices made where the spec
 was ambiguous.
