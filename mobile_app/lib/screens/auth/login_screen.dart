@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/network/error_helper.dart';
 import '../../core/security/duress_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../providers/session_provider.dart';
@@ -39,7 +40,7 @@ class _LoginScreenState extends State<LoginScreen> {
       final challenge = await AuthService().loginPassword(role: role, password: _password.text, deviceName: 'this phone');
       session.setPendingChallenge(challenge);
     } catch (e) {
-      setState(() => _error = 'পাসওয়ার্ড ভুল হয়েছে, অথবা সার্ভারে সংযোগ করা যাচ্ছে না।');
+      setState(() => _error = describeApiError(e));
     } finally {
       if (mounted) setState(() => _loading = false);
     }

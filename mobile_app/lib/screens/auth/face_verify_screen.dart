@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/network/error_helper.dart';
 import '../../core/theme/app_theme.dart';
 import '../../providers/session_provider.dart';
 import '../../services/auth_service.dart';
@@ -43,7 +44,7 @@ class _FaceVerifyScreenState extends State<FaceVerifyScreen> {
         spouseId: result['spouse_id'],
       );
     } catch (e) {
-      setState(() => _error = 'মুখ মেলেনি। আবার চেষ্টা করুন।');
+      setState(() => _error = describeApiError(e));
     } finally {
       if (mounted) setState(() => _loading = false);
     }

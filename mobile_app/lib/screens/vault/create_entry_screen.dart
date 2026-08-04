@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/network/error_helper.dart';
 import '../../models/models.dart';
 import '../../providers/session_provider.dart';
 import '../../services/media_service.dart';
@@ -85,7 +86,7 @@ class _CreateEntryScreenState extends State<CreateEntryScreen> {
       );
       if (mounted) Navigator.of(context).pop(true);
     } catch (e) {
-      setState(() => _error = 'Could not save. Check your connection and try again.');
+      setState(() => _error = describeApiError(e));
     } finally {
       if (mounted) setState(() => _saving = false);
     }

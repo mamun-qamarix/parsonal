@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/network/error_helper.dart';
 import '../../models/models.dart';
 import '../../providers/session_provider.dart';
 import '../../services/vault_service.dart';
@@ -36,7 +37,7 @@ class _ConsentRequestsScreenState extends State<ConsentRequestsScreen> {
       await _service.decideConsentRequest(req.id, approve);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(approve ? 'Could not approve — did you request this yourself?' : 'Could not update the request.')));
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(describeApiError(e))));
       }
     }
     _load();

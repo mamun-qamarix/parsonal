@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/network/error_helper.dart';
 import '../../core/theme/app_theme.dart';
 import '../../providers/session_provider.dart';
 import '../../services/auth_service.dart';
@@ -34,7 +35,7 @@ class _FaceEnrollScreenState extends State<FaceEnrollScreen> {
       if (!mounted) return;
       context.read<SessionProvider>().markFaceEnrolled();
     } catch (e) {
-      setState(() => _error = 'মুখ রেজিস্ট্রেশন ব্যর্থ হয়েছে। ব্যাকএন্ড ও ফেস-ভেরিফিকেশন সার্ভিস চালু আছে কিনা দেখে আবার চেষ্টা করুন।');
+      setState(() => _error = describeApiError(e));
     } finally {
       if (mounted) setState(() => _loading = false);
     }

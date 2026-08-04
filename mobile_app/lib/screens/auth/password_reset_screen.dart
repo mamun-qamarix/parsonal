@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/network/error_helper.dart';
 import '../../core/theme/app_theme.dart';
 import '../../providers/session_provider.dart';
 import '../../services/auth_service.dart';
@@ -33,8 +34,8 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
       final result = await AuthService().passwordResetInitiate(widget.role);
       _tokenController.text = result['reset_token'];
       setState(() => _message = 'এই কোডটা আপনার সঙ্গীকে দিন, যাতে তিনিও নিজের ফোন থেকে যাচাই করতে পারেন।');
-    } catch (_) {
-      setState(() => _message = 'রিসেট শুরু করা যায়নি।');
+    } catch (e) {
+      setState(() => _message = describeApiError(e));
     } finally {
       setState(() => _loading = false);
     }
@@ -56,8 +57,8 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
         _wifeVerified = result['wife_verified'] == true;
         _message = 'যাচাই সম্পন্ন হয়েছে।';
       });
-    } catch (_) {
-      setState(() => _message = 'মুখ যাচাই ব্যর্থ হয়েছে।');
+    } catch (e) {
+      setState(() => _message = describeApiError(e));
     } finally {
       setState(() => _loading = false);
     }
@@ -73,8 +74,8 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
       await AuthService().passwordResetComplete(resetToken: _tokenController.text.trim(), newPassword: _newPassword.text);
       if (!mounted) return;
       setState(() => _message = 'পাসওয়ার্ড বদলানো হয়েছে। এখন ফিরে গিয়ে নতুন পাসওয়ার্ড দিয়ে লগইন করুন।');
-    } catch (_) {
-      setState(() => _message = 'রিসেট সম্পন্ন করা যায়নি — নিশ্চিত করুন দুজনেই যাচাই করেছেন।');
+    } catch (e) {
+      setState(() => _message = describeApiError(e));
     } finally {
       setState(() => _loading = false);
     }

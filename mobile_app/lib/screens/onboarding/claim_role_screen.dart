@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/network/error_helper.dart';
 import '../../providers/session_provider.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/password_field.dart';
@@ -54,7 +55,7 @@ class _ClaimRoleScreenState extends State<ClaimRoleScreen> {
             vmkB64: result['vmk_b64'],
           );
     } catch (e) {
-      setState(() => _error = 'এই ডিভাইসটা সেটআপ করা যায়নি। কোডটা ও ইন্টারনেট সংযোগ ঠিক আছে কিনা দেখে আবার চেষ্টা করুন।');
+      setState(() => _error = describeApiError(e));
     } finally {
       if (mounted) setState(() => _loading = false);
     }
