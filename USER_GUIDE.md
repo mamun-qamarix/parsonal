@@ -53,20 +53,28 @@
 
 ## ধাপ ২: ফোনে অ্যাপ ইনস্টল করা (দুজনের জন্যই)
 
-যেহেতু এটা Play Store-এ নেই, তাই "APK" ফাইল হিসেবে ইনস্টল করতে হয়।
+যেহেতু এটা Play Store-এ নেই, তাই "APK" ফাইল হিসেবে ইনস্টল করতে হয়। দুটো উপায় আছে:
 
-1. অ্যাপের APK ফাইল বানাতে (যিনি সেটআপ করেছেন তিনি এই ধাপটা করবেন):
+### সহজ উপায় — রেডি APK ডাউনলোড করা
 
-   ```bash
-   cd couple-vault/mobile_app
-   flutter build apk --release
-   ```
+সরাসরি এখান থেকে APK ফাইলটা দুই ফোনেই ডাউনলোড করুন, আলাদা করে বানানোর দরকার নেই:
 
-   এর ফলে একটা ফাইল তৈরি হবে: `build/app/outputs/flutter-apk/app-release.apk`
+**[⬇️ couple-vault-v1.0.0.apk ডাউনলোড করুন](https://github.com/mamun-qamarix/parsonal/releases/download/apk-v1.0.0/couple-vault-v1.0.0.apk)**
 
-2. এই APK ফাইলটা দুই ফোনেই পাঠান (WhatsApp, Google Drive, USB — যেভাবে সুবিধা)।
+(ফোনের ব্রাউজার দিয়ে লিংকে গিয়ে সরাসরি ডাউনলোড করা যাবে, অথবা কম্পিউটারে ডাউনলোড করে WhatsApp/USB দিয়ে ফোনে পাঠানো যাবে।)
 
-3. ফোনে ফাইলটাতে ট্যাপ করে ইনস্টল করুন। প্রথমবার Android একটা সতর্কবার্তা দেখাতে পারে ("Install from unknown source") — এটা স্বাভাবিক, যেহেতু Play Store থেকে না। "Install anyway" চাপুন।
+ফোনে ফাইলটাতে ট্যাপ করে ইনস্টল করুন। প্রথমবার Android একটা সতর্কবার্তা দেখাতে পারে ("Install from unknown source") — এটা স্বাভাবিক, যেহেতু Play Store থেকে না। "Install anyway" চাপুন।
+
+> কোডে কোনো পরিবর্তন করলে (যেমন অ্যাপের নাম বদলানো), তখন নতুন করে APK বানাতে হবে — নিচের "ডেভেলপারদের জন্য" অংশ দেখুন।
+
+### ডেভেলপারদের জন্য — নিজে APK বানানো
+
+```bash
+cd couple-vault/mobile_app
+flutter build apk --release
+```
+
+এর ফলে একটা ফাইল তৈরি হবে: `build/app/outputs/flutter-apk/app-release.apk` — এটা দুই ফোনেই পাঠান আগের মতোই।
 
 ---
 
