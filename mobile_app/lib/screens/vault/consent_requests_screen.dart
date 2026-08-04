@@ -6,6 +6,7 @@ import '../../core/network/error_helper.dart';
 import '../../models/models.dart';
 import '../../providers/session_provider.dart';
 import '../../services/vault_service.dart';
+import '../../widgets/error_message_box.dart';
 import 'entry_detail_screen.dart';
 
 class ConsentRequestsScreen extends StatefulWidget {
@@ -37,7 +38,7 @@ class _ConsentRequestsScreenState extends State<ConsentRequestsScreen> {
       await _service.decideConsentRequest(req.id, approve);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(describeApiError(e))));
+        showCopyableErrorSnackBar(context, describeApiError(e));
       }
     }
     _load();

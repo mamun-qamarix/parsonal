@@ -6,6 +6,7 @@ import '../../core/security/duress_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../providers/session_provider.dart';
 import '../../services/auth_service.dart';
+import '../../widgets/error_message_box.dart';
 import '../../widgets/password_field.dart';
 import 'password_reset_screen.dart';
 
@@ -74,7 +75,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 onSubmitted: (_) => _submit(),
               ),
               const SizedBox(height: 16),
-              if (_error != null) Padding(padding: const EdgeInsets.only(bottom: 12), child: Text(_error!, style: const TextStyle(color: Colors.red))),
+              if (_error != null) Padding(padding: const EdgeInsets.only(bottom: 12), child: ErrorMessageBox(_error!, textAlign: TextAlign.center)),
               ElevatedButton(
                 onPressed: _loading ? null : _submit,
                 child: _loading ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('পরবর্তী'),

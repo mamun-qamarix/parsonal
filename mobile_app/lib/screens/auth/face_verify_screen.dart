@@ -5,6 +5,7 @@ import '../../core/network/error_helper.dart';
 import '../../core/theme/app_theme.dart';
 import '../../providers/session_provider.dart';
 import '../../services/auth_service.dart';
+import '../../widgets/error_message_box.dart';
 import 'face_capture_screen.dart';
 
 class FaceVerifyScreen extends StatefulWidget {
@@ -65,7 +66,7 @@ class _FaceVerifyScreenState extends State<FaceVerifyScreen> {
               const SizedBox(height: 16),
               const Text('এবার নিশ্চিত করুন সত্যিই আপনি এসেছেন।', textAlign: TextAlign.center),
               const SizedBox(height: 24),
-              if (_error != null) Padding(padding: const EdgeInsets.only(bottom: 12), child: Text(_error!, style: const TextStyle(color: Colors.red), textAlign: TextAlign.center)),
+              if (_error != null) Padding(padding: const EdgeInsets.only(bottom: 12), child: ErrorMessageBox(_error!, textAlign: TextAlign.center)),
               ElevatedButton.icon(
                 icon: const Icon(Icons.camera_alt),
                 onPressed: _loading ? null : _start,

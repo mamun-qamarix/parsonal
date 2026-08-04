@@ -9,6 +9,7 @@ import '../../models/models.dart';
 import '../../providers/session_provider.dart';
 import '../../services/media_service.dart';
 import '../../services/vault_service.dart';
+import '../../widgets/error_message_box.dart';
 
 class CreateEntryScreen extends StatefulWidget {
   final String contentType; // text | photo | video
@@ -128,7 +129,7 @@ class _CreateEntryScreenState extends State<CreateEntryScreen> {
                 ],
               ),
               const SizedBox(height: 20),
-              if (_error != null) Padding(padding: const EdgeInsets.only(bottom: 12), child: Text(_error!, style: const TextStyle(color: Colors.red))),
+              if (_error != null) Padding(padding: const EdgeInsets.only(bottom: 12), child: ErrorMessageBox(_error!)),
               ElevatedButton(
                 onPressed: _saving ? null : _submit,
                 child: _saving ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Save to vault'),

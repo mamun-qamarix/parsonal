@@ -5,6 +5,7 @@ import '../../core/network/error_helper.dart';
 import '../../core/theme/app_theme.dart';
 import '../../providers/session_provider.dart';
 import '../../services/auth_service.dart';
+import '../../widgets/error_message_box.dart';
 
 /// Second mandatory login step: enter the current code from the
 /// authenticator app. If face verification is also enabled for this
@@ -78,7 +79,7 @@ class _TotpVerifyScreenState extends State<TotpVerifyScreen> {
                 decoration: const InputDecoration(counterText: ''),
                 onSubmitted: (_) => _submit(),
               ),
-              if (_error != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(_error!, style: const TextStyle(color: Colors.red), textAlign: TextAlign.center)),
+              if (_error != null) Padding(padding: const EdgeInsets.only(top: 8), child: ErrorMessageBox(_error!, textAlign: TextAlign.center)),
               const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: _loading ? null : _submit,

@@ -6,6 +6,7 @@ import '../../core/network/error_helper.dart';
 import '../../core/theme/app_theme.dart';
 import '../../providers/session_provider.dart';
 import '../../services/auth_service.dart';
+import '../../widgets/error_message_box.dart';
 
 /// Mandatory one-time step after claiming a role: scan the TOTP secret into
 /// an authenticator app (Google Authenticator, Authy, etc) and prove it by
@@ -97,7 +98,7 @@ class _TotpSetupScreenState extends State<TotpSetupScreen> {
                 decoration: const InputDecoration(counterText: ''),
                 onSubmitted: (_) => _confirm(),
               ),
-              if (_error != null) Padding(padding: const EdgeInsets.only(top: 8), child: Text(_error!, style: const TextStyle(color: Colors.red), textAlign: TextAlign.center)),
+              if (_error != null) Padding(padding: const EdgeInsets.only(top: 8), child: ErrorMessageBox(_error!, textAlign: TextAlign.center)),
               const SizedBox(height: 12),
               ElevatedButton(
                 onPressed: _loading ? null : _confirm,

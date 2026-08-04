@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 
 import '../../core/theme/app_theme.dart';
+import '../../widgets/error_message_box.dart';
 import 'claim_role_screen.dart';
 import 'scan_setup_screen.dart';
 
@@ -101,7 +102,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
               ],
               if (_error != null) ...[
                 const SizedBox(height: 12),
-                Text(_error!, style: const TextStyle(color: AppColors.rejected)),
+                ErrorMessageBox(_error!),
               ],
             ],
           ),

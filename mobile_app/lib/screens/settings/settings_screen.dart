@@ -8,6 +8,7 @@ import '../../core/theme/app_theme.dart';
 import '../../providers/session_provider.dart';
 import '../../services/auth_service.dart';
 import '../../services/profile_service.dart';
+import '../../widgets/error_message_box.dart';
 import '../../widgets/password_field.dart';
 import '../auth/face_capture_screen.dart';
 import '../onboarding/welcome_screen.dart';
@@ -80,7 +81,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       }
       if (mounted) setState(() => _faceVerificationEnabled = value);
     } catch (e) {
-      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(describeApiError(e))));
+      if (mounted) showCopyableErrorSnackBar(context, describeApiError(e));
     } finally {
       if (mounted) setState(() => _faceToggleBusy = false);
     }

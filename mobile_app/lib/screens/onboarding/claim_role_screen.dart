@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../core/network/error_helper.dart';
 import '../../providers/session_provider.dart';
 import '../../services/auth_service.dart';
+import '../../widgets/error_message_box.dart';
 import '../../widgets/password_field.dart';
 
 class ClaimRoleScreen extends StatefulWidget {
@@ -98,7 +99,7 @@ class _ClaimRoleScreenState extends State<ClaimRoleScreen> {
                 style: TextStyle(color: Colors.grey, fontSize: 12),
               ),
               const SizedBox(height: 20),
-              if (_error != null) Padding(padding: const EdgeInsets.only(bottom: 12), child: Text(_error!, style: const TextStyle(color: Colors.red))),
+              if (_error != null) Padding(padding: const EdgeInsets.only(bottom: 12), child: ErrorMessageBox(_error!)),
               ElevatedButton(
                 onPressed: _loading ? null : _submit,
                 child: _loading ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('পরবর্তী ধাপ'),
