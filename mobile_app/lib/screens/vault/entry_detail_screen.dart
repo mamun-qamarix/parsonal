@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/media/video_clip_helper.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/models.dart';
 import '../../providers/session_provider.dart';
@@ -11,6 +12,7 @@ import '../../widgets/comment_section.dart';
 import '../../widgets/decrypted_media.dart';
 import '../../widgets/match_celebration_overlay.dart';
 import '../../widgets/reaction_bar.dart';
+import 'package:iconsax_flutter/iconsax_flutter.dart';
 
 class EntryDetailScreen extends StatefulWidget {
   final String entryId;
@@ -39,7 +41,10 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
       _entry = entry;
       _loading = false;
     });
-    final show = await SocialService().checkMatchCelebration('vault_entry', widget.entryId);
+    final show = await SocialService().checkMatchCelebration(
+      'vault_entry',
+      widget.entryId,
+    );
     if (show && mounted) showMatchCelebration(context);
   }
 
@@ -47,9 +52,28 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
     final isFav = await _vaultService.toggleFavorite(widget.entryId);
     setState(() => _entry = _entry);
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(isFav ? 'Added to favorites' : 'Removed from favorites'), duration: const Duration(seconds: 1)));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            isFav ? 'Added to favorites' : 'Removed from favorites',
+          ),
+          duration: const Duration(seconds: 1),
+        ),
+      );
       _load();
     }
+  }
+
+  Future<void> _handleTrimRequested(String localVideoPath) async {
+    final entry = _entry;
+    if (entry == null) return;
+    final vmk = context.read<SessionProvider>().vmk!;
+    await handleVideoTrimRequested(
+      context,
+      localVideoPath: localVideoPath,
+      vmk: vmk,
+      categoryId: entry.categoryId,
+    );
   }
 
   Future<void> _requestEdit() async {
@@ -58,18 +82,38 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Request an edit'),
-        content: TextField(controller: controller, maxLines: 5, autofocus: true),
+        content: TextField(
+          controller: controller,
+          maxLines: 5,
+          autofocus: true,
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Send for approval')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Send for approval'),
+          ),
         ],
       ),
     );
     if (result != true) return;
     final vmk = context.read<SessionProvider>().vmk!;
-    await _vaultService.requestEdit(vmk, widget.entryId, controller.text.trim());
+    await _vaultService.requestEdit(
+      vmk,
+      widget.entryId,
+      controller.text.trim(),
+    );
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Edit request sent — waiting for your spouse\'s approval.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Edit request sent — waiting for your spouse\'s approval.',
+          ),
+        ),
+      );
     }
   }
 
@@ -78,17 +122,31 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('Request deletion'),
-        content: const Text('This will ask your spouse to approve deleting this entry. It stays until they do.'),
+        content: const Text(
+          'This will ask your spouse to approve deleting this entry. It stays until they do.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(context, true), child: const Text('Request delete')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Request delete'),
+          ),
         ],
       ),
     );
     if (confirm != true) return;
     await _vaultService.requestDelete(widget.entryId);
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Delete request sent — waiting for your spouse\'s approval.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Delete request sent — waiting for your spouse\'s approval.',
+          ),
+        ),
+      );
     }
   }
 
@@ -102,7 +160,10 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
       appBar: AppBar(
         actions: [
           IconButton(
-            icon: Icon(entry.isFavoriteMine ? Icons.favorite : Icons.favorite_border, color: entry.isFavoriteMine ? Colors.redAccent : null),
+            icon: Icon(
+              entry.isFavoriteMine ? Iconsax.heart_copy : Iconsax.heart,
+              color: entry.isFavoriteMine ? Colors.redAccent : null,
+            ),
             onPressed: _toggleFavorite,
           ),
           PopupMenuButton<String>(
@@ -124,13 +185,23 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
             Row(
               children: [
                 CircleAvatar(
-                  backgroundColor: entry.authorRole == 'husband' ? AppColors.husband : AppColors.wife,
-                  child: Icon(entry.authorRole == 'husband' ? Icons.man : Icons.woman, color: Colors.white),
+                  backgroundColor: entry.authorRole == 'husband'
+                      ? AppColors.husband
+                      : AppColors.wife,
+                  child: Icon(
+                    entry.authorRole == 'husband' ? Iconsax.man : Iconsax.woman,
+                    color: Colors.white,
+                  ),
                 ),
                 const SizedBox(width: 10),
-                Text(DateFormat.yMMMd().add_jm().format(entry.createdAt.toLocal())),
+                Text(
+                  DateFormat.yMMMd().add_jm().format(entry.createdAt.toLocal()),
+                ),
                 const Spacer(),
-                Text('${entry.viewCount} views', style: const TextStyle(color: Colors.grey)),
+                Text(
+                  '${entry.viewCount} views',
+                  style: const TextStyle(color: Colors.grey),
+                ),
               ],
             ),
             const SizedBox(height: 16),
@@ -138,10 +209,20 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
               ClipRRect(
                 borderRadius: BorderRadius.circular(16),
                 child: entry.contentType == 'video'
-                    ? DecryptedVideoPlayer(assetId: entry.mediaAssets.first.id)
-                    : SizedBox(height: 320, width: double.infinity, child: DecryptedFullImage(assetId: entry.mediaAssets.first.id)),
+                    ? DecryptedVideoPlayer(
+                        assetId: entry.mediaAssets.first.id,
+                        onTrimRequested: _handleTrimRequested,
+                      )
+                    : SizedBox(
+                        height: 320,
+                        width: double.infinity,
+                        child: DecryptedFullImage(
+                          assetId: entry.mediaAssets.first.id,
+                        ),
+                      ),
               ),
-            if (entry.decryptedText != null && entry.decryptedText!.isNotEmpty) ...[
+            if (entry.decryptedText != null &&
+                entry.decryptedText!.isNotEmpty) ...[
               const SizedBox(height: 16),
               Text(entry.decryptedText!, style: const TextStyle(fontSize: 16)),
             ],

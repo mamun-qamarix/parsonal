@@ -7,6 +7,7 @@ import '../../widgets/error_message_box.dart';
 import 'claim_role_screen.dart';
 import 'pair_device_screen.dart';
 import 'scan_setup_screen.dart';
+import 'package:iconsax_flutter/iconsax_flutter.dart';
 
 class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({super.key});
@@ -33,12 +34,23 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
   void _submitPayload() {
     try {
-      final decoded = jsonDecode(utf8.decode(base64Decode(_payloadController.text.trim()))) as Map<String, dynamic>;
-      Navigator.of(context).push(MaterialPageRoute(
-        builder: (_) => ClaimRoleScreen(server: decoded['server'], token: decoded['code'], vmkB64: decoded['vmk']),
-      ));
+      final decoded =
+          jsonDecode(utf8.decode(base64Decode(_payloadController.text.trim())))
+              as Map<String, dynamic>;
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => ClaimRoleScreen(
+            server: decoded['server'],
+            token: decoded['code'],
+            vmkB64: decoded['vmk'],
+          ),
+        ),
+      );
     } catch (_) {
-      setState(() => _error = 'কোডটা পড়া যায়নি। পুরো টেক্সট ঠিকভাবে পেস্ট করেছেন কিনা আবার দেখুন।');
+      setState(
+        () => _error =
+            'কোডটা পড়া যায়নি। পুরো টেক্সট ঠিকভাবে পেস্ট করেছেন কিনা আবার দেখুন।',
+      );
     }
   }
 
@@ -52,9 +64,19 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const SizedBox(height: 40),
-              const Icon(Icons.favorite, size: 56, color: AppColors.halalGreen),
+              const Icon(
+                Iconsax.heart_copy,
+                size: 56,
+                color: AppColors.halalGreen,
+              ),
               const SizedBox(height: 16),
-              Text('পার্সোনাল', textAlign: TextAlign.center, style: Theme.of(context).textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.bold)),
+              Text(
+                'পার্সোনাল',
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
               const SizedBox(height: 8),
               const Text(
                 'আপনাদের দুজনের একান্ত প্রাইভেট জায়গা। নিজেদের সার্ভারে হোস্ট করা — আর কেউ এটা দেখতে পারবে না।',
@@ -69,21 +91,30 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
               const SizedBox(height: 32),
               TextField(
                 controller: _payloadController,
-                decoration: const InputDecoration(hintText: 'সেটআপ কোড লিখুন বা পেস্ট করুন', border: OutlineInputBorder()),
+                decoration: const InputDecoration(
+                  hintText: 'সেটআপ কোড লিখুন বা পেস্ট করুন',
+                  border: OutlineInputBorder(),
+                ),
                 onSubmitted: (_) {
-                  if (_payloadController.text.trim().isNotEmpty) _submitPayload();
+                  if (_payloadController.text.trim().isNotEmpty)
+                    _submitPayload();
                 },
               ),
               if (_payloadController.text.trim().isNotEmpty) ...[
                 const SizedBox(height: 12),
-                ElevatedButton(onPressed: _submitPayload, child: const Text('পরবর্তী')),
+                ElevatedButton(
+                  onPressed: _submitPayload,
+                  child: const Text('পরবর্তী'),
+                ),
               ],
               const SizedBox(height: 16),
               ElevatedButton.icon(
-                icon: const Icon(Icons.qr_code_scanner),
+                icon: const Icon(Iconsax.scan_barcode),
                 label: const Text('সেটআপ কোড স্ক্যান করুন'),
                 onPressed: () async {
-                  await Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ScanSetupScreen()));
+                  await Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const ScanSetupScreen()),
+                  );
                 },
               ),
               const SizedBox(height: 24),
@@ -96,9 +127,13 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
               ),
               const SizedBox(height: 8),
               TextButton.icon(
-                icon: const Icon(Icons.qr_code_2),
-                label: const Text('ইতিমধ্যে অ্যাকাউন্ট আছে? এই ডিভাইসটা যোগ করুন'),
-                onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PairDeviceScreen())),
+                icon: const Icon(Iconsax.scan_barcode),
+                label: const Text(
+                  'ইতিমধ্যে অ্যাকাউন্ট আছে? এই ডিভাইসটা যোগ করুন',
+                ),
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const PairDeviceScreen()),
+                ),
               ),
               if (_error != null) ...[
                 const SizedBox(height: 12),

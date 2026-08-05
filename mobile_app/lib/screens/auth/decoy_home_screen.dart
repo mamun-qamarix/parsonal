@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:iconsax_flutter/iconsax_flutter.dart';
 
 /// Shown when a duress/panic PIN is entered instead of the real password.
 /// No real vault content is ever loaded into memory on this path.
@@ -29,7 +30,11 @@ class _DecoyNote extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Card(
-      child: ListTile(title: Text(title), subtitle: Text(subtitle), leading: const Icon(Icons.note_outlined)),
+      child: ListTile(
+        title: Text(title),
+        subtitle: Text(subtitle),
+        leading: const Icon(Iconsax.note),
+      ),
     );
   }
 }

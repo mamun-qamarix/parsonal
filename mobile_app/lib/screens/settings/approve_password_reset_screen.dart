@@ -4,6 +4,7 @@ import '../../core/network/error_helper.dart';
 import '../../core/theme/app_theme.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/error_message_box.dart';
+import 'package:iconsax_flutter/iconsax_flutter.dart';
 
 /// Run from an ALREADY-AUTHENTICATED device to approve a password reset
 /// someone started on a locked device (their own other phone, or their
@@ -13,10 +14,12 @@ class ApprovePasswordResetScreen extends StatefulWidget {
   const ApprovePasswordResetScreen({super.key});
 
   @override
-  State<ApprovePasswordResetScreen> createState() => _ApprovePasswordResetScreenState();
+  State<ApprovePasswordResetScreen> createState() =>
+      _ApprovePasswordResetScreenState();
 }
 
-class _ApprovePasswordResetScreenState extends State<ApprovePasswordResetScreen> {
+class _ApprovePasswordResetScreenState
+    extends State<ApprovePasswordResetScreen> {
   final _tokenController = TextEditingController();
   bool _loading = false;
   String? _message;
@@ -36,7 +39,8 @@ class _ApprovePasswordResetScreenState extends State<ApprovePasswordResetScreen>
       await AuthService().passwordResetApprove(token);
       setState(() {
         _success = true;
-        _message = 'অনুমোদন হয়েছে। এখন সেই ডিভাইসে গিয়ে নতুন পাসওয়ার্ড সেট করা যাবে।';
+        _message =
+            'অনুমোদন হয়েছে। এখন সেই ডিভাইসে গিয়ে নতুন পাসওয়ার্ড সেট করা যাবে।';
       });
     } catch (e) {
       setState(() => _message = describeApiError(e));
@@ -55,7 +59,11 @@ class _ApprovePasswordResetScreenState extends State<ApprovePasswordResetScreen>
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Icon(Icons.verified_user_outlined, size: 48, color: AppColors.halalGreen),
+              const Icon(
+                Iconsax.shield_tick,
+                size: 48,
+                color: AppColors.halalGreen,
+              ),
               const SizedBox(height: 12),
               const Text(
                 'অন্য ডিভাইসে পাসওয়ার্ড রিসেট শুরু করলে সেখানে যে কোডটা দেখানো হয়েছে, সেটা এখানে দিন। এটা নিশ্চিত করে যে অনুরোধটা সত্যিই আপনাদের কারো কাছ থেকে এসেছে।',
@@ -63,13 +71,30 @@ class _ApprovePasswordResetScreenState extends State<ApprovePasswordResetScreen>
                 style: TextStyle(color: Colors.grey, fontSize: 13),
               ),
               const SizedBox(height: 20),
-              TextField(controller: _tokenController, decoration: const InputDecoration(labelText: 'রিসেট কোড'), enabled: !_success),
+              TextField(
+                controller: _tokenController,
+                decoration: const InputDecoration(labelText: 'রিসেট কোড'),
+                enabled: !_success,
+              ),
               const SizedBox(height: 12),
-              if (_message != null) Padding(padding: const EdgeInsets.only(bottom: 12), child: ErrorMessageBox(_message!, textAlign: TextAlign.center)),
+              if (_message != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: ErrorMessageBox(
+                    _message!,
+                    textAlign: TextAlign.center,
+                  ),
+                ),
               if (!_success)
                 ElevatedButton(
                   onPressed: _loading ? null : _approve,
-                  child: _loading ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('অনুমোদন করুন'),
+                  child: _loading
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('অনুমোদন করুন'),
                 ),
             ],
           ),

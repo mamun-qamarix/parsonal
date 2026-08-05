@@ -66,13 +66,17 @@ dependencies:
   qr_flutter: ^4.1.0
 
   # Misc
-  intl: ^0.19.0
+  intl: ^0.20.2
   uuid: ^4.5.1
   path_provider: ^2.1.5
   permission_handler: ^11.3.1
   shimmer: ^3.0.0
   device_info_plus: ^12.4.0
   local_auth: ^3.0.2
+  iconsax_flutter: ^1.0.1
+  video_trimmer: ^5.0.0
+  get_thumbnail_video: ^0.7.3
+  scrollable_positioned_list: ^0.3.8
 
 dev_dependencies:
   flutter_test:
@@ -99,6 +103,18 @@ flutter:
   assets:
     - assets/sounds/sent.wav
     - assets/sounds/received.wav
+
+  fonts:
+    - family: Kohinoor
+      fonts:
+        - asset: assets/fonts/Kohinoor-Light.otf
+          weight: 300
+        - asset: assets/fonts/Kohinoor-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/Kohinoor-Medium.otf
+          weight: 500
+        - asset: assets/fonts/Kohinoor-Bold.otf
+          weight: 700
 
   # To add assets to your application, add an assets section, like this:
   # assets:

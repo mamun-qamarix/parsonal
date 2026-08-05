@@ -7,7 +7,10 @@ class DeviceService {
 
   Future<List<DeviceModel>> list() async {
     final currentId = await SecureStorageService.instance.deviceId;
-    final res = await _dio.get('/devices', queryParameters: {if (currentId != null) 'current_device_id': currentId});
+    final res = await _dio.get(
+      '/devices',
+      queryParameters: {if (currentId != null) 'current_device_id': currentId},
+    );
     return (res.data as List).map((e) => DeviceModel.fromJson(e)).toList();
   }
 

@@ -10,6 +10,7 @@ import '../../services/auth_service.dart';
 import '../../widgets/error_message_box.dart';
 import '../../widgets/password_field.dart';
 import 'password_reset_screen.dart';
+import 'package:iconsax_flutter/iconsax_flutter.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -40,7 +41,11 @@ class _LoginScreenState extends State<LoginScreen> {
         return;
       }
       final deviceName = await DeviceNameService.detect();
-      final result = await AuthService().loginPassword(role: role, password: _password.text, deviceName: deviceName);
+      final result = await AuthService().loginPassword(
+        role: role,
+        password: _password.text,
+        deviceName: deviceName,
+      );
       if (result['requires_face'] == true) {
         session.setPendingFaceChallenge(result['face_challenge_token']);
       } else {
@@ -70,15 +75,25 @@ class _LoginScreenState extends State<LoginScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Icon(role == 'husband' ? Icons.man : Icons.woman, size: 56, color: AppColors.halalGreen),
+              Icon(
+                role == 'husband' ? Iconsax.man : Iconsax.woman,
+                size: 56,
+                color: AppColors.halalGreen,
+              ),
               const SizedBox(height: 8),
               Text(
-                role == 'husband' ? 'ফিরে আসার জন্য স্বাগতম' : 'ফিরে আসার জন্য স্বাগতম',
+                role == 'husband'
+                    ? 'ফিরে আসার জন্য স্বাগতম'
+                    : 'ফিরে আসার জন্য স্বাগতম',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 4),
-              const Text('আপনার পাসওয়ার্ড দিন', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
+              const Text(
+                'আপনার পাসওয়ার্ড দিন',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey),
+              ),
               const SizedBox(height: 24),
               PasswordField(
                 controller: _password,
@@ -87,14 +102,28 @@ class _LoginScreenState extends State<LoginScreen> {
                 onSubmitted: (_) => _submit(),
               ),
               const SizedBox(height: 16),
-              if (_error != null) Padding(padding: const EdgeInsets.only(bottom: 12), child: ErrorMessageBox(_error!, textAlign: TextAlign.center)),
+              if (_error != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: ErrorMessageBox(_error!, textAlign: TextAlign.center),
+                ),
               ElevatedButton(
                 onPressed: _loading ? null : _submit,
-                child: _loading ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('পরবর্তী'),
+                child: _loading
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('পরবর্তী'),
               ),
               const SizedBox(height: 12),
               TextButton(
-                onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => PasswordResetScreen(role: role))),
+                onPressed: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => PasswordResetScreen(role: role),
+                  ),
+                ),
                 child: const Text('পাসওয়ার্ড ভুলে গেছেন?'),
               ),
             ],

@@ -4,14 +4,19 @@ class MediaAsset {
   final int sizeBytes;
   final bool hasThumbnail;
 
-  MediaAsset({required this.id, required this.kind, required this.sizeBytes, required this.hasThumbnail});
+  MediaAsset({
+    required this.id,
+    required this.kind,
+    required this.sizeBytes,
+    required this.hasThumbnail,
+  });
 
   factory MediaAsset.fromJson(Map<String, dynamic> json) => MediaAsset(
-        id: json['id'],
-        kind: json['kind'],
-        sizeBytes: json['size_bytes'] ?? 0,
-        hasThumbnail: json['has_thumbnail'] ?? false,
-      );
+    id: json['id'],
+    kind: json['kind'],
+    sizeBytes: json['size_bytes'] ?? 0,
+    hasThumbnail: json['has_thumbnail'] ?? false,
+  );
 }
 
 class Category {
@@ -22,15 +27,21 @@ class Category {
   final DateTime createdAt;
   String? decryptedName;
 
-  Category({required this.id, required this.scope, required this.encName, required this.createdBy, required this.createdAt});
+  Category({
+    required this.id,
+    required this.scope,
+    required this.encName,
+    required this.createdBy,
+    required this.createdAt,
+  });
 
   factory Category.fromJson(Map<String, dynamic> json) => Category(
-        id: json['id'],
-        scope: json['scope'],
-        encName: json['enc_name'],
-        createdBy: json['created_by'],
-        createdAt: DateTime.parse(json['created_at']),
-      );
+    id: json['id'],
+    scope: json['scope'],
+    encName: json['enc_name'],
+    createdBy: json['created_by'],
+    createdAt: DateTime.parse(json['created_at']),
+  );
 }
 
 class VaultEntry {
@@ -62,18 +73,20 @@ class VaultEntry {
   });
 
   factory VaultEntry.fromJson(Map<String, dynamic> json) => VaultEntry(
-        id: json['id'],
-        contentType: json['content_type'],
-        categoryId: json['category_id'],
-        authorId: json['author_id'],
-        authorRole: json['author_role'],
-        encPayload: json['enc_payload'],
-        createdAt: DateTime.parse(json['created_at']),
-        updatedAt: DateTime.parse(json['updated_at']),
-        isFavoriteMine: json['is_favorite_mine'] ?? false,
-        viewCount: json['view_count'] ?? 0,
-        mediaAssets: (json['media_assets'] as List<dynamic>? ?? []).map((e) => MediaAsset.fromJson(e)).toList(),
-      );
+    id: json['id'],
+    contentType: json['content_type'],
+    categoryId: json['category_id'],
+    authorId: json['author_id'],
+    authorRole: json['author_role'],
+    encPayload: json['enc_payload'],
+    createdAt: DateTime.parse(json['created_at']),
+    updatedAt: DateTime.parse(json['updated_at']),
+    isFavoriteMine: json['is_favorite_mine'] ?? false,
+    viewCount: json['view_count'] ?? 0,
+    mediaAssets: (json['media_assets'] as List<dynamic>? ?? [])
+        .map((e) => MediaAsset.fromJson(e))
+        .toList(),
+  );
 }
 
 class ConsentRequestModel {
@@ -84,9 +97,17 @@ class ConsentRequestModel {
   final String status;
   final DateTime createdAt;
 
-  ConsentRequestModel({required this.id, required this.entryId, required this.action, required this.requestedBy, required this.status, required this.createdAt});
+  ConsentRequestModel({
+    required this.id,
+    required this.entryId,
+    required this.action,
+    required this.requestedBy,
+    required this.status,
+    required this.createdAt,
+  });
 
-  factory ConsentRequestModel.fromJson(Map<String, dynamic> json) => ConsentRequestModel(
+  factory ConsentRequestModel.fromJson(Map<String, dynamic> json) =>
+      ConsentRequestModel(
         id: json['id'],
         entryId: json['entry_id'],
         action: json['action'],
@@ -102,9 +123,15 @@ class ReactionBreakdown {
   final int wifeCount;
   final bool reactedByMe;
 
-  ReactionBreakdown({required this.emoji, required this.husbandCount, required this.wifeCount, required this.reactedByMe});
+  ReactionBreakdown({
+    required this.emoji,
+    required this.husbandCount,
+    required this.wifeCount,
+    required this.reactedByMe,
+  });
 
-  factory ReactionBreakdown.fromJson(Map<String, dynamic> json) => ReactionBreakdown(
+  factory ReactionBreakdown.fromJson(Map<String, dynamic> json) =>
+      ReactionBreakdown(
         emoji: json['emoji'],
         husbandCount: json['husband_count'],
         wifeCount: json['wife_count'],
@@ -137,16 +164,16 @@ class CommentModel {
   });
 
   factory CommentModel.fromJson(Map<String, dynamic> json) => CommentModel(
-        id: json['id'],
-        targetType: json['target_type'],
-        targetId: json['target_id'],
-        authorId: json['author_id'],
-        authorRole: json['author_role'],
-        encPayload: json['enc_payload'],
-        createdAt: DateTime.parse(json['created_at']),
-        heartCount: json['heart_count'] ?? 0,
-        heartedByMe: json['hearted_by_me'] ?? false,
-      );
+    id: json['id'],
+    targetType: json['target_type'],
+    targetId: json['target_id'],
+    authorId: json['author_id'],
+    authorRole: json['author_role'],
+    encPayload: json['enc_payload'],
+    createdAt: DateTime.parse(json['created_at']),
+    heartCount: json['heart_count'] ?? 0,
+    heartedByMe: json['hearted_by_me'] ?? false,
+  );
 }
 
 class ChatMessageModel {
@@ -159,6 +186,7 @@ class ChatMessageModel {
   DateTime? deliveredAt;
   DateTime? readAt;
   final String? mediaAssetId;
+  final bool mediaHasThumbnail;
   String? decryptedText;
 
   ChatMessageModel({
@@ -171,18 +199,25 @@ class ChatMessageModel {
     required this.deliveredAt,
     required this.readAt,
     required this.mediaAssetId,
+    this.mediaHasThumbnail = false,
   });
 
-  factory ChatMessageModel.fromJson(Map<String, dynamic> json) => ChatMessageModel(
+  factory ChatMessageModel.fromJson(Map<String, dynamic> json) =>
+      ChatMessageModel(
         id: json['id'],
         senderId: json['sender_id'],
         senderRole: json['sender_role'],
         contentType: json['content_type'],
         encPayload: json['enc_payload'],
         createdAt: DateTime.parse(json['created_at']),
-        deliveredAt: json['delivered_at'] != null ? DateTime.parse(json['delivered_at']) : null,
-        readAt: json['read_at'] != null ? DateTime.parse(json['read_at']) : null,
+        deliveredAt: json['delivered_at'] != null
+            ? DateTime.parse(json['delivered_at'])
+            : null,
+        readAt: json['read_at'] != null
+            ? DateTime.parse(json['read_at'])
+            : null,
         mediaAssetId: json['media_asset_id'],
+        mediaHasThumbnail: json['media_has_thumbnail'] ?? false,
       );
 }
 
@@ -195,9 +230,17 @@ class WishlistItemModel {
   final DateTime createdAt;
   String? decryptedText;
 
-  WishlistItemModel({required this.id, required this.ownerId, required this.categoryId, required this.encPayload, required this.isFulfilled, required this.createdAt});
+  WishlistItemModel({
+    required this.id,
+    required this.ownerId,
+    required this.categoryId,
+    required this.encPayload,
+    required this.isFulfilled,
+    required this.createdAt,
+  });
 
-  factory WishlistItemModel.fromJson(Map<String, dynamic> json) => WishlistItemModel(
+  factory WishlistItemModel.fromJson(Map<String, dynamic> json) =>
+      WishlistItemModel(
         id: json['id'],
         ownerId: json['owner_id'],
         categoryId: json['category_id'],
@@ -228,14 +271,14 @@ class PhraseModel {
   });
 
   factory PhraseModel.fromJson(Map<String, dynamic> json) => PhraseModel(
-        id: json['id'],
-        direction: json['direction'],
-        authorId: json['author_id'],
-        encPayload: json['enc_payload'],
-        ratingHusband: json['rating_husband'],
-        ratingWife: json['rating_wife'],
-        createdAt: DateTime.parse(json['created_at']),
-      );
+    id: json['id'],
+    direction: json['direction'],
+    authorId: json['author_id'],
+    encPayload: json['enc_payload'],
+    ratingHusband: json['rating_husband'],
+    ratingWife: json['rating_wife'],
+    createdAt: DateTime.parse(json['created_at']),
+  );
 }
 
 class ProfileModel {
@@ -248,16 +291,23 @@ class ProfileModel {
   String? decryptedName;
   String? decryptedBio;
 
-  ProfileModel({required this.spouseId, required this.role, this.encDisplayName, this.encBio, this.encAnniversaryDates, this.profilePhotoAssetId});
+  ProfileModel({
+    required this.spouseId,
+    required this.role,
+    this.encDisplayName,
+    this.encBio,
+    this.encAnniversaryDates,
+    this.profilePhotoAssetId,
+  });
 
   factory ProfileModel.fromJson(Map<String, dynamic> json) => ProfileModel(
-        spouseId: json['spouse_id'],
-        role: json['role'],
-        encDisplayName: json['enc_display_name'],
-        encBio: json['enc_bio'],
-        encAnniversaryDates: json['enc_anniversary_dates'],
-        profilePhotoAssetId: json['profile_photo_asset_id'],
-      );
+    spouseId: json['spouse_id'],
+    role: json['role'],
+    encDisplayName: json['enc_display_name'],
+    encBio: json['enc_bio'],
+    encAnniversaryDates: json['enc_anniversary_dates'],
+    profilePhotoAssetId: json['profile_photo_asset_id'],
+  );
 }
 
 class AuditLogEntryModel {
@@ -269,9 +319,18 @@ class AuditLogEntryModel {
   final String? detail;
   final DateTime createdAt;
 
-  AuditLogEntryModel({required this.id, this.actorId, required this.action, this.targetType, this.targetId, this.detail, required this.createdAt});
+  AuditLogEntryModel({
+    required this.id,
+    this.actorId,
+    required this.action,
+    this.targetType,
+    this.targetId,
+    this.detail,
+    required this.createdAt,
+  });
 
-  factory AuditLogEntryModel.fromJson(Map<String, dynamic> json) => AuditLogEntryModel(
+  factory AuditLogEntryModel.fromJson(Map<String, dynamic> json) =>
+      AuditLogEntryModel(
         id: json['id'],
         actorId: json['actor_id'],
         action: json['action'],
@@ -300,11 +359,11 @@ class DeviceModel {
   });
 
   factory DeviceModel.fromJson(Map<String, dynamic> json) => DeviceModel(
-        id: json['id'],
-        deviceName: json['device_name'],
-        role: json['role'],
-        isThisDevice: json['is_this_device'] ?? false,
-        createdAt: DateTime.parse(json['created_at']),
-        lastSeenAt: DateTime.parse(json['last_seen_at']),
-      );
+    id: json['id'],
+    deviceName: json['device_name'],
+    role: json['role'],
+    isThisDevice: json['is_this_device'] ?? false,
+    createdAt: DateTime.parse(json['created_at']),
+    lastSeenAt: DateTime.parse(json['last_seen_at']),
+  );
 }

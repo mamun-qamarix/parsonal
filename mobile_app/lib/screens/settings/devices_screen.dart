@@ -10,6 +10,7 @@ import '../../services/device_service.dart';
 import '../../widgets/error_message_box.dart';
 import '../../widgets/shimmer_loading.dart';
 import '../onboarding/welcome_screen.dart';
+import 'package:iconsax_flutter/iconsax_flutter.dart';
 
 class DevicesScreen extends StatefulWidget {
   const DevicesScreen({super.key});
@@ -37,9 +38,17 @@ class _DevicesScreenState extends State<DevicesScreen> {
     });
     try {
       final devices = await _service.list();
-      if (mounted) setState(() { _devices = devices; _loading = false; });
+      if (mounted)
+        setState(() {
+          _devices = devices;
+          _loading = false;
+        });
     } catch (e) {
-      if (mounted) setState(() { _error = describeApiError(e); _loading = false; });
+      if (mounted)
+        setState(() {
+          _error = describeApiError(e);
+          _loading = false;
+        });
     }
   }
 
@@ -54,7 +63,10 @@ class _DevicesScreenState extends State<DevicesScreen> {
               : '"${device.deviceName}" ডিভাইসটা আর অ্যাপে ঢুকতে পারবে না, যতক্ষণ না আবার নতুন করে সেটআপ কোড দিয়ে যুক্ত করা হয়।',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('বাতিল')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('বাতিল'),
+          ),
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: AppColors.rejected),
             onPressed: () => Navigator.pop(context, true),
@@ -70,7 +82,10 @@ class _DevicesScreenState extends State<DevicesScreen> {
         if (!mounted) return;
         await context.read<SessionProvider>().logoutAndForget();
         if (mounted) {
-          Navigator.of(context).pushAndRemoveUntil(MaterialPageRoute(builder: (_) => const WelcomeScreen()), (route) => false);
+          Navigator.of(context).pushAndRemoveUntil(
+            MaterialPageRoute(builder: (_) => const WelcomeScreen()),
+            (route) => false,
+          );
         }
         return;
       }
@@ -90,13 +105,19 @@ class _DevicesScreenState extends State<DevicesScreen> {
               onRefresh: _load,
               child: Column(
                 children: [
-                  if (_error != null) Padding(padding: const EdgeInsets.all(16), child: ErrorMessageBox(_error!)),
+                  if (_error != null)
+                    Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: ErrorMessageBox(_error!),
+                    ),
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
                     child: Text(
                       'আপনাদের দুজনের সব ডিভাইস এখানে দেখা যাচ্ছে। ফোন হারালে বা বদলালে এখান থেকে সেটা সরিয়ে দিন।',
                       textAlign: TextAlign.center,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: Colors.grey),
                     ),
                   ),
                   Expanded(
@@ -107,22 +128,50 @@ class _DevicesScreenState extends State<DevicesScreen> {
                             itemCount: _devices.length,
                             itemBuilder: (context, i) {
                               final d = _devices[i];
-                              final accent = d.role == 'husband' ? AppColors.husband : AppColors.wife;
+                              final accent = d.role == 'husband'
+                                  ? AppColors.husband
+                                  : AppColors.wife;
                               return Card(
                                 child: ListTile(
                                   leading: CircleAvatar(
                                     backgroundColor: accent,
-                                    child: Icon(d.role == 'husband' ? Icons.man : Icons.woman, color: Colors.white),
+                                    child: Icon(
+                                      d.role == 'husband'
+                                          ? Iconsax.man
+                                          : Iconsax.woman,
+                                      color: Colors.white,
+                                    ),
                                   ),
                                   title: Row(
                                     children: [
-                                      Flexible(child: Text(d.deviceName, overflow: TextOverflow.ellipsis)),
+                                      Flexible(
+                                        child: Text(
+                                          d.deviceName,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
                                       if (d.isThisDevice) ...[
                                         const SizedBox(width: 6),
                                         Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                          decoration: BoxDecoration(color: AppColors.halalGreen.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(999)),
-                                          child: const Text('এই ডিভাইস', style: TextStyle(color: AppColors.halalGreen, fontSize: 11, fontWeight: FontWeight.w600)),
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                            vertical: 2,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: AppColors.halalGreen
+                                                .withValues(alpha: 0.15),
+                                            borderRadius: BorderRadius.circular(
+                                              999,
+                                            ),
+                                          ),
+                                          child: const Text(
+                                            'এই ডিভাইস',
+                                            style: TextStyle(
+                                              color: AppColors.halalGreen,
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
                                         ),
                                       ],
                                     ],
@@ -132,7 +181,10 @@ class _DevicesScreenState extends State<DevicesScreen> {
                                     style: const TextStyle(fontSize: 12),
                                   ),
                                   trailing: IconButton(
-                                    icon: const Icon(Icons.delete_outline, color: AppColors.rejected),
+                                    icon: const Icon(
+                                      Iconsax.trash,
+                                      color: AppColors.rejected,
+                                    ),
                                     onPressed: () => _confirmDelete(d),
                                   ),
                                 ),

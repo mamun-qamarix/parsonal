@@ -8,7 +8,11 @@ import '../../widgets/decrypted_media.dart';
 class MediaViewerScreen extends StatelessWidget {
   final String assetId;
   final String contentType; // photo | video
-  const MediaViewerScreen({super.key, required this.assetId, required this.contentType});
+  const MediaViewerScreen({
+    super.key,
+    required this.assetId,
+    required this.contentType,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -22,7 +26,11 @@ class MediaViewerScreen extends StatelessWidget {
       body: Center(
         child: contentType == 'video'
             ? DecryptedVideoPlayer(assetId: assetId)
-            : DecryptedFullImage(assetId: assetId, fit: BoxFit.contain, zoomable: true),
+            : DecryptedFullImage(
+                assetId: assetId,
+                fit: BoxFit.contain,
+                zoomable: true,
+              ),
       ),
     );
   }

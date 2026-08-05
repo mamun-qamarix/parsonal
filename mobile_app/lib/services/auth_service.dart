@@ -15,13 +15,16 @@ class AuthService {
     required String deviceName,
   }) async {
     await ApiClient.instance.configureBaseUrl(server);
-    final res = await _dio.post('/auth/setup/claim', data: {
-      'token': token,
-      'role': role,
-      'password': password,
-      'device_name': deviceName,
-      'device_uuid': await DeviceIdentityService.getOrCreate(),
-    });
+    final res = await _dio.post(
+      '/auth/setup/claim',
+      data: {
+        'token': token,
+        'role': role,
+        'password': password,
+        'device_name': deviceName,
+        'device_uuid': await DeviceIdentityService.getOrCreate(),
+      },
+    );
     return res.data as Map<String, dynamic>;
   }
 
@@ -31,9 +34,10 @@ class AuthService {
   }
 
   Future<void> enrollFace(Uint8List jpegBytes) async {
-    await _dio.post('/auth/face/enroll', data: {
-      'face_image_b64': base64Encode(jpegBytes),
-    });
+    await _dio.post(
+      '/auth/face/enroll',
+      data: {'face_image_b64': base64Encode(jpegBytes)},
+    );
   }
 
   Future<void> enableFace() async {
@@ -49,21 +53,34 @@ class AuthService {
   /// device_id} directly, or {requires_face: true, face_challenge_token}
   /// for spouses who opted into the extra face-verification step. See
   /// DECISIONS.md #27.
-  Future<Map<String, dynamic>> loginPassword({required String role, required String password, required String deviceName}) async {
-    final res = await _dio.post('/auth/login/password', data: {
-      'role': role,
-      'password': password,
-      'device_name': deviceName,
-      'device_uuid': await DeviceIdentityService.getOrCreate(),
-    });
+  Future<Map<String, dynamic>> loginPassword({
+    required String role,
+    required String password,
+    required String deviceName,
+  }) async {
+    final res = await _dio.post(
+      '/auth/login/password',
+      data: {
+        'role': role,
+        'password': password,
+        'device_name': deviceName,
+        'device_uuid': await DeviceIdentityService.getOrCreate(),
+      },
+    );
     return res.data as Map<String, dynamic>;
   }
 
-  Future<Map<String, dynamic>> loginFace({required String challengeToken, required Uint8List jpegBytes}) async {
-    final res = await _dio.post('/auth/login/face', data: {
-      'challenge_token': challengeToken,
-      'face_image_b64': base64Encode(jpegBytes),
-    });
+  Future<Map<String, dynamic>> loginFace({
+    required String challengeToken,
+    required Uint8List jpegBytes,
+  }) async {
+    final res = await _dio.post(
+      '/auth/login/face',
+      data: {
+        'challenge_token': challengeToken,
+        'face_image_b64': base64Encode(jpegBytes),
+      },
+    );
     return res.data as Map<String, dynamic>;
   }
 
@@ -72,20 +89,35 @@ class AuthService {
   }
 
   Future<Map<String, dynamic>> passwordResetInitiate(String role) async {
-    final res = await _dio.post('/auth/password-reset/initiate', data: {'role': role});
+    final res = await _dio.post(
+      '/auth/password-reset/initiate',
+      data: {'role': role},
+    );
     return res.data as Map<String, dynamic>;
   }
 
   Future<void> passwordResetApprove(String resetToken) async {
-    await _dio.post('/auth/password-reset/approve', data: {'reset_token': resetToken});
+    await _dio.post(
+      '/auth/password-reset/approve',
+      data: {'reset_token': resetToken},
+    );
   }
 
   Future<bool> passwordResetStatus(String resetToken) async {
-    final res = await _dio.post('/auth/password-reset/status', data: {'reset_token': resetToken});
+    final res = await _dio.post(
+      '/auth/password-reset/status',
+      data: {'reset_token': resetToken},
+    );
     return res.data['approved'] as bool;
   }
 
-  Future<void> passwordResetComplete({required String resetToken, required String newPassword}) async {
-    await _dio.post('/auth/password-reset/complete', data: {'reset_token': resetToken, 'new_password': newPassword});
+  Future<void> passwordResetComplete({
+    required String resetToken,
+    required String newPassword,
+  }) async {
+    await _dio.post(
+      '/auth/password-reset/complete',
+      data: {'reset_token': resetToken, 'new_password': newPassword},
+    );
   }
 }

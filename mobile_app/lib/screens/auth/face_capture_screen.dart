@@ -21,7 +21,12 @@ enum _LivenessStage { waitingOpenEyes, waitingBlink, done }
 class FaceCaptureScreen extends StatefulWidget {
   final String title;
   final String instructions;
-  const FaceCaptureScreen({super.key, this.title = 'মুখ যাচাই', this.instructions = 'ক্যামেরার দিকে সরাসরি তাকান, তারপর স্বাভাবিকভাবে চোখের পলক ফেলুন'});
+  const FaceCaptureScreen({
+    super.key,
+    this.title = 'মুখ যাচাই',
+    this.instructions =
+        'ক্যামেরার দিকে সরাসরি তাকান, তারপর স্বাভাবিকভাবে চোখের পলক ফেলুন',
+  });
 
   @override
   State<FaceCaptureScreen> createState() => _FaceCaptureScreenState();
@@ -41,7 +46,10 @@ class _FaceCaptureScreenState extends State<FaceCaptureScreen> {
   void initState() {
     super.initState();
     _detector = FaceDetector(
-      options: FaceDetectorOptions(enableClassification: true, performanceMode: FaceDetectorMode.accurate),
+      options: FaceDetectorOptions(
+        enableClassification: true,
+        performanceMode: FaceDetectorMode.accurate,
+      ),
     );
     _init();
   }
@@ -66,7 +74,10 @@ class _FaceCaptureScreenState extends State<FaceCaptureScreen> {
       _controller = controller;
       _hint = 'আপনার মুখ ফ্রেমের মাঝখানে রাখুন';
     });
-    _pollTimer = Timer.periodic(const Duration(milliseconds: 900), (_) => _checkOnce());
+    _pollTimer = Timer.periodic(
+      const Duration(milliseconds: 900),
+      (_) => _checkOnce(),
+    );
     _timeoutTimer = Timer(const Duration(seconds: 60), () {
       if (mounted && !_done) {
         Navigator.of(context).pop(null);
@@ -75,7 +86,11 @@ class _FaceCaptureScreenState extends State<FaceCaptureScreen> {
   }
 
   Future<void> _checkOnce() async {
-    if (_checking || _done || _controller == null || !_controller!.value.isInitialized) return;
+    if (_checking ||
+        _done ||
+        _controller == null ||
+        !_controller!.value.isInitialized)
+      return;
     _checking = true;
     XFile? file;
     try {
@@ -84,7 +99,10 @@ class _FaceCaptureScreenState extends State<FaceCaptureScreen> {
       final faces = await _detector.processImage(inputImage);
 
       if (faces.isEmpty) {
-        if (mounted) setState(() => _hint = 'কোনো মুখ দেখা যাচ্ছে না — ক্যামেরার দিকে তাকান');
+        if (mounted)
+          setState(
+            () => _hint = 'কোনো মুখ দেখা যাচ্ছে না — ক্যামেরার দিকে তাকান',
+          );
         return;
       }
       final face = faces.first;
@@ -99,7 +117,8 @@ class _FaceCaptureScreenState extends State<FaceCaptureScreen> {
       if (_stage == _LivenessStage.waitingOpenEyes) {
         if (avgOpen > 0.6) {
           _stage = _LivenessStage.waitingBlink;
-          if (mounted) setState(() => _hint = 'ভালো — এবার একবার চোখের পলক ফেলুন');
+          if (mounted)
+            setState(() => _hint = 'ভালো — এবার একবার চোখের পলক ফেলুন');
         } else {
           if (mounted) setState(() => _hint = 'চোখ খুলে ক্যামেরার দিকে তাকান');
         }
@@ -143,7 +162,11 @@ class _FaceCaptureScreenState extends State<FaceCaptureScreen> {
     final controller = _controller;
     return Scaffold(
       backgroundColor: Colors.black,
-      appBar: AppBar(title: Text(widget.title), backgroundColor: Colors.black, foregroundColor: Colors.white),
+      appBar: AppBar(
+        title: Text(widget.title),
+        backgroundColor: Colors.black,
+        foregroundColor: Colors.white,
+      ),
       body: Stack(
         alignment: Alignment.center,
         children: [
@@ -172,15 +195,26 @@ class _FaceCaptureScreenState extends State<FaceCaptureScreen> {
             right: 24,
             child: Container(
               padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(14)),
+              decoration: BoxDecoration(
+                color: Colors.black54,
+                borderRadius: BorderRadius.circular(14),
+              ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(widget.instructions, style: const TextStyle(color: Colors.white70), textAlign: TextAlign.center),
+                  Text(
+                    widget.instructions,
+                    style: const TextStyle(color: Colors.white70),
+                    textAlign: TextAlign.center,
+                  ),
                   const SizedBox(height: 8),
                   Text(
                     _hint,
-                    style: TextStyle(color: _done ? AppColors.halalGreenDark : Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                    style: TextStyle(
+                      color: _done ? AppColors.halalGreenDark : Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
                     textAlign: TextAlign.center,
                   ),
                 ],

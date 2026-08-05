@@ -5,11 +5,16 @@ import '../core/theme/app_theme.dart';
 import '../models/models.dart';
 import '../providers/session_provider.dart';
 import '../services/social_service.dart';
+import 'package:iconsax_flutter/iconsax_flutter.dart';
 
 class CommentSection extends StatefulWidget {
   final String targetType;
   final String targetId;
-  const CommentSection({super.key, required this.targetType, required this.targetId});
+  const CommentSection({
+    super.key,
+    required this.targetType,
+    required this.targetId,
+  });
 
   @override
   State<CommentSection> createState() => _CommentSectionState();
@@ -29,8 +34,16 @@ class _CommentSectionState extends State<CommentSection> {
 
   Future<void> _load() async {
     final vmk = context.read<SessionProvider>().vmk!;
-    final comments = await _service.listComments(vmk, widget.targetType, widget.targetId);
-    if (mounted) setState(() { _comments = comments; _loading = false; });
+    final comments = await _service.listComments(
+      vmk,
+      widget.targetType,
+      widget.targetId,
+    );
+    if (mounted)
+      setState(() {
+        _comments = comments;
+        _loading = false;
+      });
   }
 
   Future<void> _send() async {
@@ -44,47 +57,76 @@ class _CommentSectionState extends State<CommentSection> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Padding(padding: EdgeInsets.all(12), child: LinearProgressIndicator());
+    if (_loading)
+      return const Padding(
+        padding: EdgeInsets.all(12),
+        child: LinearProgressIndicator(),
+      );
     final myRole = context.watch<SessionProvider>().role;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const Text('Comments', style: TextStyle(fontWeight: FontWeight.w600)),
         const SizedBox(height: 8),
-        ..._comments.map((c) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 6),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  CircleAvatar(
-                    radius: 14,
-                    backgroundColor: c.authorRole == 'husband' ? AppColors.husband : AppColors.wife,
-                    child: Icon(c.authorRole == 'husband' ? Icons.man : Icons.woman, size: 16, color: Colors.white),
+        ..._comments.map(
+          (c) => Padding(
+            padding: const EdgeInsets.symmetric(vertical: 6),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                CircleAvatar(
+                  radius: 14,
+                  backgroundColor: c.authorRole == 'husband'
+                      ? AppColors.husband
+                      : AppColors.wife,
+                  child: Icon(
+                    c.authorRole == 'husband' ? Iconsax.man : Iconsax.woman,
+                    size: 16,
+                    color: Colors.white,
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      decoration: BoxDecoration(color: Colors.grey.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(12)),
-                      child: Text(c.decryptedText ?? ''),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
                     ),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.withValues(alpha: 0.08),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(c.decryptedText ?? ''),
                   ),
-                  const SizedBox(width: 4),
-                  Icon(Icons.favorite, size: 14, color: c.heartedByMe ? Colors.red : Colors.grey),
-                  Text('${c.heartCount}', style: const TextStyle(fontSize: 11)),
-                ],
-              ),
-            )),
+                ),
+                const SizedBox(width: 4),
+                Icon(
+                  Iconsax.heart_copy,
+                  size: 14,
+                  color: c.heartedByMe ? Colors.red : Colors.grey,
+                ),
+                Text('${c.heartCount}', style: const TextStyle(fontSize: 11)),
+              ],
+            ),
+          ),
+        ),
         Row(
           children: [
             Expanded(
               child: TextField(
                 controller: _controller,
-                decoration: InputDecoration(hintText: myRole == null ? 'Add a comment' : 'Comment as $myRole...'),
+                decoration: InputDecoration(
+                  hintText: myRole == null
+                      ? 'Add a comment'
+                      : 'Comment as $myRole...',
+                ),
                 onSubmitted: (_) => _send(),
               ),
             ),
-            IconButton(icon: const Icon(Icons.send, color: AppColors.halalGreen), onPressed: _send),
+            IconButton(
+              icon: const Icon(Iconsax.send, color: AppColors.halalGreen),
+              onPressed: _send,
+            ),
           ],
         ),
       ],

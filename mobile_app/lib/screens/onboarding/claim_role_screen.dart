@@ -10,12 +10,18 @@ import '../../providers/session_provider.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/error_message_box.dart';
 import '../../widgets/password_field.dart';
+import 'package:iconsax_flutter/iconsax_flutter.dart';
 
 class ClaimRoleScreen extends StatefulWidget {
   final String server;
   final String token;
   final String vmkB64;
-  const ClaimRoleScreen({super.key, required this.server, required this.token, required this.vmkB64});
+  const ClaimRoleScreen({
+    super.key,
+    required this.server,
+    required this.token,
+    required this.vmkB64,
+  });
 
   @override
   State<ClaimRoleScreen> createState() => _ClaimRoleScreenState();
@@ -60,25 +66,35 @@ class _ClaimRoleScreenState extends State<ClaimRoleScreen> {
       );
       if (!mounted) return;
       await context.read<SessionProvider>().completeClaim(
-            server: widget.server,
-            role: result['role'],
-            spouseId: result['spouse_id'],
-            deviceId: result['device_id'],
-            accessToken: result['access_token'],
-            refreshToken: result['refresh_token'],
-            vmkB64: result['vmk_b64'],
-          );
+        server: widget.server,
+        role: result['role'],
+        spouseId: result['spouse_id'],
+        deviceId: result['device_id'],
+        accessToken: result['access_token'],
+        refreshToken: result['refresh_token'],
+        vmkB64: result['vmk_b64'],
+      );
     } catch (e) {
       if (_isAlreadyRegistered(e)) {
         // This role was already claimed (e.g. reinstalling this same phone,
         // or adding another device with the same admin-issued code) --
         // instead of a dead-end error, fall back to a normal login with
         // the role+VMK we already have from this code. See DECISIONS.md.
-        await context.read<SessionProvider>().beginPairing(server: widget.server, role: _role, spouseId: '', vmkB64: widget.vmkB64);
+        await context.read<SessionProvider>().beginPairing(
+          server: widget.server,
+          role: _role,
+          spouseId: '',
+          vmkB64: widget.vmkB64,
+        );
         if (!mounted) return;
         final roleLabel = _role == 'husband' ? 'স্বামী' : 'স্ত্রী';
         scaffoldMessengerKey.currentState?.showSnackBar(
-          SnackBar(content: Text('"$roleLabel" রোলটা আগে থেকেই সেটআপ করা আছে — এখন সেই পাসওয়ার্ড দিয়ে লগইন করুন।'), duration: const Duration(seconds: 4)),
+          SnackBar(
+            content: Text(
+              '"$roleLabel" রোলটা আগে থেকেই সেটআপ করা আছে — এখন সেই পাসওয়ার্ড দিয়ে লগইন করুন।',
+            ),
+            duration: const Duration(seconds: 4),
+          ),
         );
         Navigator.of(context).popUntil((route) => route.isFirst);
         return;
@@ -93,7 +109,8 @@ class _ClaimRoleScreenState extends State<ClaimRoleScreen> {
     if (e is! DioException) return false;
     final data = e.response?.data;
     final detail = data is Map ? data['detail']?.toString() : null;
-    return e.response?.statusCode == 409 && (detail?.contains('already registered') ?? false);
+    return e.response?.statusCode == 409 &&
+        (detail?.contains('already registered') ?? false);
   }
 
   @override
@@ -106,7 +123,11 @@ class _ClaimRoleScreenState extends State<ClaimRoleScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Icon(Icons.person_add_alt_1_outlined, size: 48, color: AppColors.halalGreen),
+              const Icon(
+                Iconsax.profile_add,
+                size: 48,
+                color: AppColors.halalGreen,
+              ),
               const SizedBox(height: 12),
               const Text(
                 'আপনাদের মধ্যে কে এই ফোনটা সেটআপ করছেন?',
@@ -125,7 +146,7 @@ class _ClaimRoleScreenState extends State<ClaimRoleScreen> {
                   Expanded(
                     child: _RoleCard(
                       label: 'স্বামী',
-                      icon: Icons.man,
+                      icon: Iconsax.man,
                       color: AppColors.husband,
                       selected: _role == 'husband',
                       onTap: () => setState(() => _role = 'husband'),
@@ -135,7 +156,7 @@ class _ClaimRoleScreenState extends State<ClaimRoleScreen> {
                   Expanded(
                     child: _RoleCard(
                       label: 'স্ত্রী',
-                      icon: Icons.woman,
+                      icon: Iconsax.woman,
                       color: AppColors.wife,
                       selected: _role == 'wife',
                       onTap: () => setState(() => _role = 'wife'),
@@ -154,14 +175,23 @@ class _ClaimRoleScreenState extends State<ClaimRoleScreen> {
                         controller: _deviceName,
                         decoration: const InputDecoration(
                           labelText: 'ডিভাইসের নাম',
-                          helperText: 'ফোনের মডেল থেকে স্বয়ংক্রিয়ভাবে বসানো হয়েছে, চাইলে বদলে দিন',
-                          prefixIcon: Icon(Icons.smartphone_outlined),
+                          helperText:
+                              'ফোনের মডেল থেকে স্বয়ংক্রিয়ভাবে বসানো হয়েছে, চাইলে বদলে দিন',
+                          prefixIcon: Icon(Iconsax.mobile),
                         ),
                       ),
                       const SizedBox(height: 14),
-                      PasswordField(controller: _password, labelText: 'একটা পাসওয়ার্ড দিন', hintText: 'কমপক্ষে ৮ অক্ষর'),
+                      PasswordField(
+                        controller: _password,
+                        labelText: 'একটা পাসওয়ার্ড দিন',
+                        hintText: 'কমপক্ষে ৮ অক্ষর',
+                      ),
                       const SizedBox(height: 14),
-                      PasswordField(controller: _confirm, labelText: 'পাসওয়ার্ড আবার লিখুন', onSubmitted: (_) => _submit()),
+                      PasswordField(
+                        controller: _confirm,
+                        labelText: 'পাসওয়ার্ড আবার লিখুন',
+                        onSubmitted: (_) => _submit(),
+                      ),
                     ],
                   ),
                 ),
@@ -173,10 +203,20 @@ class _ClaimRoleScreenState extends State<ClaimRoleScreen> {
                 style: TextStyle(color: Colors.grey, fontSize: 12),
               ),
               const SizedBox(height: 20),
-              if (_error != null) Padding(padding: const EdgeInsets.only(bottom: 12), child: ErrorMessageBox(_error!)),
+              if (_error != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: ErrorMessageBox(_error!),
+                ),
               ElevatedButton(
                 onPressed: _loading ? null : _submit,
-                child: _loading ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('ভল্টে প্রবেশ করুন'),
+                child: _loading
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('ভল্টে প্রবেশ করুন'),
               ),
             ],
           ),
@@ -193,7 +233,13 @@ class _RoleCard extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
 
-  const _RoleCard({required this.label, required this.icon, required this.color, required this.selected, required this.onTap});
+  const _RoleCard({
+    required this.label,
+    required this.icon,
+    required this.color,
+    required this.selected,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -204,16 +250,27 @@ class _RoleCard extends StatelessWidget {
         duration: const Duration(milliseconds: 150),
         padding: const EdgeInsets.symmetric(vertical: 18),
         decoration: BoxDecoration(
-          color: selected ? color.withValues(alpha: 0.14) : Theme.of(context).cardColor,
+          color: selected
+              ? color.withValues(alpha: 0.14)
+              : Theme.of(context).cardColor,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: selected ? color : Colors.grey.withValues(alpha: 0.3), width: selected ? 2 : 1),
+          border: Border.all(
+            color: selected ? color : Colors.grey.withValues(alpha: 0.3),
+            width: selected ? 2 : 1,
+          ),
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(icon, size: 32, color: selected ? color : Colors.grey),
             const SizedBox(height: 8),
-            Text(label, style: TextStyle(fontWeight: FontWeight.w600, color: selected ? color : null)),
+            Text(
+              label,
+              style: TextStyle(
+                fontWeight: FontWeight.w600,
+                color: selected ? color : null,
+              ),
+            ),
           ],
         ),
       ),

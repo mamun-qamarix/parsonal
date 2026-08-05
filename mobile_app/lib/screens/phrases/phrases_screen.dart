@@ -8,6 +8,7 @@ import '../../services/phrase_service.dart';
 import '../../widgets/comment_section.dart';
 import '../../widgets/reaction_bar.dart';
 import '../../widgets/shimmer_loading.dart';
+import 'package:iconsax_flutter/iconsax_flutter.dart';
 
 class PhrasesScreen extends StatefulWidget {
   const PhrasesScreen({super.key});
@@ -16,7 +17,8 @@ class PhrasesScreen extends StatefulWidget {
   State<PhrasesScreen> createState() => _PhrasesScreenState();
 }
 
-class _PhrasesScreenState extends State<PhrasesScreen> with SingleTickerProviderStateMixin {
+class _PhrasesScreenState extends State<PhrasesScreen>
+    with SingleTickerProviderStateMixin {
   late final TabController _tab = TabController(length: 2, vsync: this);
   final _service = PhraseService();
   bool _sortByRating = false;
@@ -33,24 +35,42 @@ class _PhrasesScreenState extends State<PhrasesScreen> with SingleTickerProvider
       appBar: AppBar(
         title: const Text('আমাদের প্রিয় লাইন'),
         actions: [
-          IconButton(icon: Icon(_sortByRating ? Icons.star : Icons.star_border), tooltip: 'রেটিং অনুযায়ী সাজান', onPressed: () => setState(() => _sortByRating = !_sortByRating)),
+          IconButton(
+            icon: Icon(_sortByRating ? Iconsax.star_copy : Iconsax.star),
+            tooltip: 'রেটিং অনুযায়ী সাজান',
+            onPressed: () => setState(() => _sortByRating = !_sortByRating),
+          ),
         ],
-        bottom: TabBar(controller: _tab, tabs: const [Tab(text: 'স্বামী → স্ত্রী'), Tab(text: 'স্ত্রী → স্বামী')]),
+        bottom: TabBar(
+          controller: _tab,
+          tabs: const [
+            Tab(text: 'স্বামী → স্ত্রী'),
+            Tab(text: 'স্ত্রী → স্বামী'),
+          ],
+        ),
       ),
       body: TabBarView(
         controller: _tab,
         children: [
-          _PhraseList(direction: 'husband_to_wife', sortByRating: _sortByRating),
-          _PhraseList(direction: 'wife_to_husband', sortByRating: _sortByRating),
+          _PhraseList(
+            direction: 'husband_to_wife',
+            sortByRating: _sortByRating,
+          ),
+          _PhraseList(
+            direction: 'wife_to_husband',
+            sortByRating: _sortByRating,
+          ),
         ],
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
-          final direction = _tab.index == 0 ? 'husband_to_wife' : 'wife_to_husband';
+          final direction = _tab.index == 0
+              ? 'husband_to_wife'
+              : 'wife_to_husband';
           await _addPhrase(context, direction);
           setState(() {});
         },
-        child: const Icon(Icons.add),
+        child: const Icon(Iconsax.add),
       ),
     );
   }
@@ -61,10 +81,20 @@ class _PhrasesScreenState extends State<PhrasesScreen> with SingleTickerProvider
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('একটা লাইন যোগ করুন'),
-        content: TextField(controller: controller, autofocus: true, maxLines: 3),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLines: 3,
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('বাতিল')),
-          FilledButton(onPressed: () => Navigator.pop(context, controller.text.trim()), child: const Text('সংরক্ষণ')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('বাতিল'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('সংরক্ষণ'),
+          ),
         ],
       ),
     );
@@ -103,8 +133,16 @@ class _PhraseListState extends State<_PhraseList> {
   Future<void> _load() async {
     setState(() => _loading = true);
     final vmk = context.read<SessionProvider>().vmk!;
-    final phrases = await _service.list(vmk, direction: widget.direction, sortByRating: widget.sortByRating);
-    if (mounted) setState(() { _phrases = phrases; _loading = false; });
+    final phrases = await _service.list(
+      vmk,
+      direction: widget.direction,
+      sortByRating: widget.sortByRating,
+    );
+    if (mounted)
+      setState(() {
+        _phrases = phrases;
+        _loading = false;
+      });
   }
 
   Future<void> _rate(PhraseModel p, int rating) async {
@@ -131,22 +169,45 @@ class _PhraseListState extends State<_PhraseList> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(p.decryptedText ?? '', style: const TextStyle(fontSize: 15)),
+                  Text(
+                    p.decryptedText ?? '',
+                    style: const TextStyle(fontSize: 15),
+                  ),
                   const SizedBox(height: 8),
                   Row(
                     children: [
-                      Icon(Icons.man, size: 16, color: p.ratingHusband != null ? AppColors.husband : Colors.grey),
+                      Icon(
+                        Iconsax.man,
+                        size: 16,
+                        color: p.ratingHusband != null
+                            ? AppColors.husband
+                            : Colors.grey,
+                      ),
                       Text(' ${p.ratingHusband ?? '-'}  '),
-                      Icon(Icons.woman, size: 16, color: p.ratingWife != null ? AppColors.wife : Colors.grey),
+                      Icon(
+                        Iconsax.woman,
+                        size: 16,
+                        color: p.ratingWife != null
+                            ? AppColors.wife
+                            : Colors.grey,
+                      ),
                       Text(' ${p.ratingWife ?? '-'}'),
                       const Spacer(),
-                      ...List.generate(5, (idx) => IconButton(
-                            padding: EdgeInsets.zero,
-                            constraints: const BoxConstraints(),
-                            iconSize: 18,
-                            icon: Icon(idx < (myRating ?? 0) ? Icons.star : Icons.star_border, color: Colors.amber),
-                            onPressed: () => _rate(p, idx + 1),
-                          )),
+                      ...List.generate(
+                        5,
+                        (idx) => IconButton(
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          iconSize: 18,
+                          icon: Icon(
+                            idx < (myRating ?? 0)
+                                ? Iconsax.star_copy
+                                : Iconsax.star,
+                            color: Colors.amber,
+                          ),
+                          onPressed: () => _rate(p, idx + 1),
+                        ),
+                      ),
                     ],
                   ),
                   const Divider(),

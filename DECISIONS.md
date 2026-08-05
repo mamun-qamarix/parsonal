@@ -713,6 +713,90 @@ physical device could not be verified in this environment (no real device
 token available here) -- that's confirmed by the user field-testing the
 shipped APK.
 
+## 31. Iconsax icons, Kohinoor font, real video thumbnails/trim/controls, chat pagination+search
+
+**Icons -- `iconsax` -> `iconsax_flutter`:** the user asked for the whole
+app's icon set to switch to "iconsax". The actual `iconsax` package on
+pub.dev is 5 years stale and its identifiers are exactly mirrored by
+`iconsax_flutter` (1.0.1, `Iconsax.xxx` naming, actively published more
+recently), so that's what got used -- same visual icon set, a build that
+won't silently rot. All 64 unique `Icons.*` identifiers used across
+`lib/` were mapped one-for-one to `Iconsax` equivalents (verified against
+the package's actual generated icon-name list, not guessed) and replaced
+mechanically across every file; `flutter analyze` stayed clean throughout.
+A few icons have no exact Iconsax equivalent (`Icons.face` for the face-
+verification screen, `Icons.done_all` for the double read-receipt tick) --
+mapped to the closest semantic match (`scan`, `tick_circle_copy`) rather
+than left as Material icons, so the icon set is now fully consistent.
+
+**Font -- Kohinoor:** copied from the path the user gave
+(`aybay-user/assets/fonts/`) into `mobile_app/assets/fonts/`, registered
+as a 4-weight family in `pubspec.yaml`, and set as `ThemeData.fontFamily`
++ applied across the base `TextTheme` in `app_theme.dart`. Kohinoor is
+Apple's Bengali system typeface, which fits well since virtually all of
+this app's UI text is Bengali.
+
+**Video thumbnails actually generate now:** previously nothing ever
+called the backend's already-supported optional `thumbnail` upload field
+for videos, so every video in the vault feed/Reel/chat rendered as an
+identical blank placeholder with a play icon -- impossible to tell which
+video was which without opening each one (this was open code-review
+finding #3). `video_thumbnail` (the obvious pub.dev package) turned out
+to ship an Android Gradle config that still calls the long-removed
+`jcenter()` repository and fails outright under this project's AGP 9
+toolchain; swapped for `get_thumbnail_video`, which exposes the identical
+`VideoThumbnail.thumbnailData()` API and builds cleanly (also happens to
+already be a transitive dependency of `video_trimmer` below). A thumbnail
+is now generated client-side on every video upload (vault entries, chat)
+and uploaded alongside the video; chat bubbles previously hard-coded
+`hasThumbnail: false` even when one existed, so `ChatMessageOut` gained a
+`media_has_thumbnail` field to fix that too.
+
+**Video player: real controls + trim/clip:** `DecryptedVideoPlayer` had
+only a bare play/pause toggle; added a scrub bar (position/duration) and
+±10s skip buttons -- standard playback controls, matching what the user
+asked for. For "clip a video," added an optional scissor button that
+opens a new `VideoTrimScreen` built on `video_trimmer` 5.x, which trims
+natively on-device (no FFmpeg -- `ffmpeg_kit_flutter`, which most older
+trim tutorials rely on, was pulled from pub.dev entirely in 2025 when the
+FFmpegKit project was archived). Trimming is **non-destructive**: the
+picked range is exported, re-encrypted, and uploaded as a **brand-new**
+video entry; the original is never touched, so a bad trim never risks
+losing the source clip. Wired into both the vault entry detail screen and
+Reel (both browse the same video entries) via a shared
+`handleVideoTrimRequested()` helper.
+
+**Chat: real pagination + date dividers.** `GET /chat/messages` accepted
+a `before` query param but the query never actually applied it -- every
+"next page" silently re-fetched the same newest 50 messages. Fixed to
+filter by the anchor message's `created_at`. Client-side, replaced the
+plain `ListView.builder`/`ScrollController` with
+`ScrollablePositionedList` (`ItemScrollController` +
+`ItemPositionsListener`) specifically because it supports jumping to an
+arbitrary item index in a lazily-built list without needing every item
+between built first -- needed both for (a) keeping the visual scroll
+position stable when older messages are prepended above what's on screen
+(jump to `index: addedCount` right after prepending) and (b) jumping
+straight to an arbitrary search result somewhere in a long, mostly-
+unloaded history (below). A centered date-pill divider (আজ / গতকাল / the
+date) is inserted wherever two consecutive messages fall on different
+local days.
+
+**Chat: search.** Since chat content is E2E encrypted, the server never
+sees plaintext and genuinely cannot search it -- this has to happen
+entirely on-device against already-decrypted messages. Typing a query and
+submitting first checks whatever's currently loaded; if nothing matches
+and more history exists, it keeps auto-paging further back (100 messages
+at a time, capped at 40 pages as a sane worst-case backstop) until either
+a match turns up or the very start of the conversation is reached,
+merging each page into the same message list the main view scrolls
+through. Tapping a result jumps the chat view straight to that message
+via `ItemScrollController.scrollTo(index:)`.
+
+**Verified:** `flutter analyze` clean throughout every step above, and a
+release APK built successfully with `video_trimmer`'s native trim plugin,
+the Iconsax font, and Kohinoor all packaged in.
+
 ## 19. Add Device (peer-to-peer pairing)
 
 **Problem:** each role (`husband`/`wife`) can only be claimed once, ever

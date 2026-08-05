@@ -33,7 +33,9 @@ class AppTheme {
     return ThemeData(
       useMaterial3: true,
       colorScheme: scheme,
-      scaffoldBackgroundColor: isDark ? const Color(0xFF0F1512) : const Color(0xFFF6FAF7),
+      scaffoldBackgroundColor: isDark
+          ? const Color(0xFF0F1512)
+          : const Color(0xFFF6FAF7),
       appBarTheme: AppBarTheme(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -49,15 +51,23 @@ class AppTheme {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: isDark ? const Color(0xFF17211C) : const Color(0xFFEFF5F1),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(14), borderSide: BorderSide.none),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide.none,
+        ),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.halalGreen,
           foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
           textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
         ),
       ),
@@ -76,18 +86,27 @@ class AppTheme {
         elevation: 0,
         modalElevation: 0,
         backgroundColor: isDark ? const Color(0xFF17211C) : Colors.white,
-        shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+        shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        ),
       ),
       snackBarTheme: const SnackBarThemeData(elevation: 0),
       popupMenuTheme: PopupMenuThemeData(
         elevation: 0,
         color: isDark ? const Color(0xFF17211C) : Colors.white,
       ),
-      floatingActionButtonTheme: const FloatingActionButtonThemeData(elevation: 0, focusElevation: 0, hoverElevation: 0, highlightElevation: 0),
-      textTheme: Typography.material2021(platform: TargetPlatform.android).black.apply(
-            bodyColor: scheme.onSurface,
-            displayColor: scheme.onSurface,
-          ),
+      floatingActionButtonTheme: const FloatingActionButtonThemeData(
+        elevation: 0,
+        focusElevation: 0,
+        hoverElevation: 0,
+        highlightElevation: 0,
+      ),
+      // Kohinoor -- Apple's Bengali system typeface -- everywhere, since the
+      // whole app's UI is in Bengali; Latin text (numbers, English words in
+      // e.g. logs) falls back to it too since it also covers Latin glyphs.
+      fontFamily: 'Kohinoor',
+      textTheme: Typography.material2021(platform: TargetPlatform.android).black
+          .apply(fontFamily: 'Kohinoor', bodyColor: scheme.onSurface, displayColor: scheme.onSurface),
     );
   }
 

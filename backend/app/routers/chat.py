@@ -26,13 +26,17 @@ def _role_of(spouse: Spouse) -> str:
 async def _msg_to_out(db: AsyncSession, msg: ChatMessage) -> ChatMessageOut:
     sender_result = await db.execute(select(Spouse).where(Spouse.id == msg.sender_id))
     sender = sender_result.scalar_one()
-    media_result = await db.execute(select(MediaAsset.id).where(MediaAsset.chat_message_id == msg.id))
-    media_id = media_result.scalar_one_or_none()
+    media_result = await db.execute(
+        select(MediaAsset.id, MediaAsset.thumbnail_object_key).where(MediaAsset.chat_message_id == msg.id)
+    )
+    media_row = media_result.first()
+    media_id = media_row[0] if media_row else None
+    has_thumbnail = bool(media_row[1]) if media_row else False
     from app.schemas.common import bytes_to_b64
     return ChatMessageOut(
         id=msg.id, sender_id=msg.sender_id, sender_role=sender.role.value, content_type=msg.content_type.value,
         enc_payload=bytes_to_b64(msg.enc_payload), created_at=msg.created_at, delivered_at=msg.delivered_at,
-        read_at=msg.read_at, media_asset_id=media_id,
+        read_at=msg.read_at, media_asset_id=media_id, media_has_thumbnail=has_thumbnail,
     )
 
 
@@ -84,7 +88,19 @@ async def send_message_rest(payload: ChatMessageCreate, spouse: Spouse = Depends
 
 @router.get("/chat/messages", response_model=list[ChatMessageOut])
 async def get_message_history(before: uuid.UUID | None = None, limit: int = 50, spouse: Spouse = Depends(get_current_spouse), db: AsyncSession = Depends(get_db)):
-    query = select(ChatMessage).order_by(ChatMessage.created_at.desc()).limit(limit)
+    """Newest-first page of up to `limit` messages, then returned oldest-
+    first for the client to prepend. `before` (a message id, not a
+    timestamp -- clients never need to know server clock format) pages
+    further back in history for infinite-scroll; it used to be accepted
+    but silently ignored, so every "page" was just the newest 50 messages
+    again. See DECISIONS.md."""
+    query = select(ChatMessage).order_by(ChatMessage.created_at.desc())
+    if before is not None:
+        anchor_result = await db.execute(select(ChatMessage.created_at).where(ChatMessage.id == before))
+        anchor_created_at = anchor_result.scalar_one_or_none()
+        if anchor_created_at is not None:
+            query = query.where(ChatMessage.created_at < anchor_created_at)
+    query = query.limit(limit)
     result = await db.execute(query)
     messages = list(reversed(result.scalars().all()))
     return [await _msg_to_out(db, m) for m in messages]

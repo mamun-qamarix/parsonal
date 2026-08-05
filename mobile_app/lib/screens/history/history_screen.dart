@@ -29,7 +29,11 @@ class _HistoryScreenState extends State<HistoryScreen> {
     final vmk = context.read<SessionProvider>().vmk!;
     final entries = await VaultService().listEntries(vmk);
     entries.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-    if (mounted) setState(() { _entries = entries; _loading = false; });
+    if (mounted)
+      setState(() {
+        _entries = entries;
+        _loading = false;
+      });
   }
 
   @override
@@ -50,7 +54,12 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         child: VaultEntryCard(
                           entry: _entries[i],
                           onTap: () async {
-                            await Navigator.of(context).push(MaterialPageRoute(builder: (_) => EntryDetailScreen(entryId: _entries[i].id)));
+                            await Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    EntryDetailScreen(entryId: _entries[i].id),
+                              ),
+                            );
                             _load();
                           },
                         ),

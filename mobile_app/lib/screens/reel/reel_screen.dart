@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/media/video_clip_helper.dart';
 import '../../core/theme/app_theme.dart';
 import '../../providers/session_provider.dart';
 import '../../services/reel_service.dart';
@@ -8,6 +9,7 @@ import '../../widgets/comment_section.dart';
 import '../../widgets/decrypted_media.dart';
 import '../../widgets/match_celebration_overlay.dart';
 import '../../widgets/reaction_bar.dart';
+import 'package:iconsax_flutter/iconsax_flutter.dart';
 
 class ReelScreen extends StatefulWidget {
   const ReelScreen({super.key});
@@ -33,14 +35,20 @@ class _ReelScreenState extends State<ReelScreen> {
     setState(() => _loading = true);
     final vmk = context.read<SessionProvider>().vmk!;
     final items = await _service.getFeed(vmk, favoritesOnly: _favoritesOnly);
-    if (mounted) setState(() { _items = items; _loading = false; });
+    if (mounted)
+      setState(() {
+        _items = items;
+        _loading = false;
+      });
   }
 
   void _maybeShowMatch(int index) {
     if (_celebrated.contains(index)) return;
     if (_items[index].isMatch) {
       _celebrated.add(index);
-      WidgetsBinding.instance.addPostFrameCallback((_) => showMatchCelebration(context));
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => showMatchCelebration(context),
+      );
     }
   }
 
@@ -50,15 +58,22 @@ class _ReelScreenState extends State<ReelScreen> {
       backgroundColor: Colors.black,
       body: SafeArea(
         child: _loading
-            ? const Center(child: CircularProgressIndicator(color: AppColors.halalGreen))
+            ? const Center(
+                child: CircularProgressIndicator(color: AppColors.halalGreen),
+              )
             : _items.isEmpty
-                ? const Center(child: Text('No photos or videos yet', style: TextStyle(color: Colors.white)))
-                : PageView.builder(
-                    scrollDirection: Axis.vertical,
-                    itemCount: _items.length,
-                    onPageChanged: _maybeShowMatch,
-                    itemBuilder: (context, i) => _ReelPage(item: _items[i]),
-                  ),
+            ? const Center(
+                child: Text(
+                  'No photos or videos yet',
+                  style: TextStyle(color: Colors.white),
+                ),
+              )
+            : PageView.builder(
+                scrollDirection: Axis.vertical,
+                itemCount: _items.length,
+                onPageChanged: _maybeShowMatch,
+                itemBuilder: (context, i) => _ReelPage(item: _items[i]),
+              ),
       ),
       floatingActionButton: FloatingActionButton.small(
         backgroundColor: _favoritesOnly ? Colors.redAccent : Colors.white24,
@@ -66,7 +81,7 @@ class _ReelScreenState extends State<ReelScreen> {
           setState(() => _favoritesOnly = !_favoritesOnly);
           _load();
         },
-        child: const Icon(Icons.favorite, color: Colors.white),
+        child: const Icon(Iconsax.heart_copy, color: Colors.white),
       ),
     );
   }
@@ -93,8 +108,25 @@ class _ReelPage extends StatelessWidget {
         const ColoredBox(color: Colors.black),
         if (asset != null)
           entry.contentType == 'video'
-              ? Center(child: SizedBox(width: MediaQuery.sizeOf(context).width, child: DecryptedVideoPlayer(assetId: asset.id)))
-              : DecryptedFullImage(assetId: asset.id, fit: BoxFit.fitWidth, zoomable: false),
+              ? Center(
+                  child: SizedBox(
+                    width: MediaQuery.sizeOf(context).width,
+                    child: DecryptedVideoPlayer(
+                      assetId: asset.id,
+                      onTrimRequested: (localPath) => handleVideoTrimRequested(
+                        context,
+                        localVideoPath: localPath,
+                        vmk: context.read<SessionProvider>().vmk!,
+                        categoryId: entry.categoryId,
+                      ),
+                    ),
+                  ),
+                )
+              : DecryptedFullImage(
+                  assetId: asset.id,
+                  fit: BoxFit.fitWidth,
+                  zoomable: false,
+                ),
         Positioned(
           left: 16,
           right: 16,
@@ -107,35 +139,78 @@ class _ReelPage extends StatelessWidget {
                 children: [
                   CircleAvatar(
                     radius: 12,
-                    backgroundColor: entry.authorRole == 'husband' ? AppColors.husband : AppColors.wife,
-                    child: Icon(entry.authorRole == 'husband' ? Icons.man : Icons.woman, size: 14, color: Colors.white),
+                    backgroundColor: entry.authorRole == 'husband'
+                        ? AppColors.husband
+                        : AppColors.wife,
+                    child: Icon(
+                      entry.authorRole == 'husband'
+                          ? Iconsax.man
+                          : Iconsax.woman,
+                      size: 14,
+                      color: Colors.white,
+                    ),
                   ),
                   const SizedBox(width: 8),
-                  Text(entry.authorRole, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                  if (item.isMatch) ...[const SizedBox(width: 8), const Text('💚 match', style: TextStyle(color: AppColors.halalGreenDark))],
+                  Text(
+                    entry.authorRole,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  if (item.isMatch) ...[
+                    const SizedBox(width: 8),
+                    const Text(
+                      '💚 match',
+                      style: TextStyle(color: AppColors.halalGreenDark),
+                    ),
+                  ],
                 ],
               ),
               if ((entry.decryptedText ?? '').isNotEmpty) ...[
                 const SizedBox(height: 6),
-                Text(entry.decryptedText!, style: const TextStyle(color: Colors.white)),
+                Text(
+                  entry.decryptedText!,
+                  style: const TextStyle(color: Colors.white),
+                ),
               ],
               const SizedBox(height: 10),
               Row(
                 children: [
                   Expanded(
                     child: Theme(
-                      data: Theme.of(context).copyWith(textTheme: Theme.of(context).textTheme.apply(bodyColor: Colors.white)),
-                      child: ReactionBar(targetType: 'vault_entry', targetId: entry.id),
+                      data: Theme.of(context).copyWith(
+                        textTheme: Theme.of(
+                          context,
+                        ).textTheme.apply(bodyColor: Colors.white),
+                      ),
+                      child: ReactionBar(
+                        targetType: 'vault_entry',
+                        targetId: entry.id,
+                      ),
                     ),
                   ),
                   IconButton(
-                    icon: const Icon(Icons.mode_comment_outlined, color: Colors.white),
+                    icon: const Icon(Iconsax.message_2, color: Colors.white),
                     onPressed: () => showModalBottomSheet(
                       context: context,
                       isScrollControlled: true,
                       builder: (_) => Padding(
-                        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, left: 16, right: 16, top: 16),
-                        child: SizedBox(height: 400, child: SingleChildScrollView(child: CommentSection(targetType: 'vault_entry', targetId: entry.id))),
+                        padding: EdgeInsets.only(
+                          bottom: MediaQuery.of(context).viewInsets.bottom,
+                          left: 16,
+                          right: 16,
+                          top: 16,
+                        ),
+                        child: SizedBox(
+                          height: 400,
+                          child: SingleChildScrollView(
+                            child: CommentSection(
+                              targetType: 'vault_entry',
+                              targetId: entry.id,
+                            ),
+                          ),
+                        ),
                       ),
                     ),
                   ),

@@ -34,12 +34,24 @@ class VaultCrypto {
 
   /// Encrypts [plaintext] and returns the raw packed bytes ready to be
   /// base64-encoded for the `enc_payload` field sent to the server.
-  static Future<Uint8List> encryptBytes(Uint8List vmk, Uint8List plaintext) async {
+  static Future<Uint8List> encryptBytes(
+    Uint8List vmk,
+    Uint8List plaintext,
+  ) async {
     final salt = _randomBytes(16);
     final key = await _deriveItemKey(vmk, salt);
     final nonce = _randomBytes(12);
-    final box = await _algorithm.encrypt(plaintext, secretKey: key, nonce: nonce);
-    return Uint8List.fromList([...salt, ...nonce, ...box.cipherText, ...box.mac.bytes]);
+    final box = await _algorithm.encrypt(
+      plaintext,
+      secretKey: key,
+      nonce: nonce,
+    );
+    return Uint8List.fromList([
+      ...salt,
+      ...nonce,
+      ...box.cipherText,
+      ...box.mac.bytes,
+    ]);
   }
 
   static Future<Uint8List> decryptBytes(Uint8List vmk, Uint8List packed) async {
@@ -54,7 +66,10 @@ class VaultCrypto {
   }
 
   static Future<String> encryptText(Uint8List vmk, String text) async {
-    final packed = await encryptBytes(vmk, Uint8List.fromList(utf8.encode(text)));
+    final packed = await encryptBytes(
+      vmk,
+      Uint8List.fromList(utf8.encode(text)),
+    );
     return base64Encode(packed);
   }
 

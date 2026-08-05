@@ -41,7 +41,8 @@ class SecureStorageService {
     ]);
   }
 
-  Future<void> saveAccessToken(String token) => _storage.write(key: _kAccessToken, value: token);
+  Future<void> saveAccessToken(String token) =>
+      _storage.write(key: _kAccessToken, value: token);
 
   Future<String?> get server => _storage.read(key: _kServer);
   Future<String?> get accessToken => _storage.read(key: _kAccessToken);
@@ -51,23 +52,28 @@ class SecureStorageService {
   Future<String?> get spouseId => _storage.read(key: _kSpouseId);
   Future<String?> get deviceId => _storage.read(key: _kDeviceId);
 
-  Future<void> setFaceEnrolled(bool value) => _storage.write(key: _kFaceEnrolled, value: value.toString());
-  Future<bool> get faceEnrolled async => (await _storage.read(key: _kFaceEnrolled)) == 'true';
+  Future<void> setFaceEnrolled(bool value) =>
+      _storage.write(key: _kFaceEnrolled, value: value.toString());
+  Future<bool> get faceEnrolled async =>
+      (await _storage.read(key: _kFaceEnrolled)) == 'true';
 
-  Future<void> setDuressPinHash(String hash) => _storage.write(key: _kDuressPin, value: hash);
+  Future<void> setDuressPinHash(String hash) =>
+      _storage.write(key: _kDuressPin, value: hash);
   Future<String?> get duressPinHash => _storage.read(key: _kDuressPin);
 
   /// Timestamp of the last successful PASSWORD login (not biometric
   /// unlock) -- drives the "password once an hour, biometric in between"
   /// policy. See DECISIONS.md #27.
-  Future<void> setLastPasswordAuthAt(DateTime value) => _storage.write(key: _kLastPasswordAuthAt, value: value.toIso8601String());
+  Future<void> setLastPasswordAuthAt(DateTime value) =>
+      _storage.write(key: _kLastPasswordAuthAt, value: value.toIso8601String());
   Future<DateTime?> get lastPasswordAuthAt async {
     final raw = await _storage.read(key: _kLastPasswordAuthAt);
     if (raw == null) return null;
     return DateTime.tryParse(raw);
   }
 
-  Future<bool> get hasSession async => (await accessToken) != null && (await vmkB64) != null;
+  Future<bool> get hasSession async =>
+      (await accessToken) != null && (await vmkB64) != null;
 
   Future<void> clearAll() => _storage.deleteAll();
 }

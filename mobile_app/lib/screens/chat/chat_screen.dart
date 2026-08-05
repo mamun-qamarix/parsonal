@@ -7,9 +7,11 @@ import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:record/record.dart';
+import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 import '../../core/audio/chat_sound_service.dart';
 import '../../core/crypto/vault_crypto.dart';
+import '../../core/media/video_thumbnail_helper.dart';
 import '../../core/network/ws_client.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/models.dart';
@@ -19,6 +21,7 @@ import '../../services/media_service.dart';
 import '../../widgets/decrypted_media.dart';
 import '../../widgets/shimmer_loading.dart';
 import 'media_viewer_screen.dart';
+import 'package:iconsax_flutter/iconsax_flutter.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -31,12 +34,32 @@ class _ChatScreenState extends State<ChatScreen> {
   final _chatService = ChatService();
   final _mediaService = MediaService();
   final _textController = TextEditingController();
-  final _scrollController = ScrollController();
+  final _itemScrollController = ItemScrollController();
+  final _itemPositionsListener = ItemPositionsListener.create();
   final _recorder = AudioRecorder();
   List<ChatMessageModel> _messages = [];
   StreamSubscription? _wsSub;
   bool _loading = true;
   bool _sending = false;
+
+  // Infinite-scroll pagination: loads further back in history as the user
+  // scrolls up, all the way to the very first message ever exchanged.
+  // Previously the backend's `before` param was silently ignored, so
+  // "loading more" always re-fetched the same newest 50 messages -- see
+  // DECISIONS.md.
+  static const _pageSize = 50;
+  bool _hasMoreHistory = true;
+  bool _loadingMoreHistory = false;
+
+  // Search: since messages are E2E encrypted, the server can't search
+  // them -- matching happens entirely on-device against decrypted text,
+  // auto-paginating further back through history as needed until a match
+  // is found or the very start of the conversation is reached.
+  bool _searching = false;
+  final _searchController = TextEditingController();
+  List<ChatMessageModel> _searchResults = [];
+  bool _searchLoading = false;
+  String? _searchStatus;
 
   // Privacy mask: purely local UI state, per DECISIONS.md -- toggling this
   // only affects what THIS device renders, never synced or visible to the
@@ -57,14 +80,54 @@ class _ChatScreenState extends State<ChatScreen> {
     WsClient.instance.connect();
     _load();
     _wsSub = WsClient.instance.events.listen(_onWsEvent);
+    _itemPositionsListener.itemPositions.addListener(_onScrollPositionsChanged);
   }
 
   Future<void> _load() async {
     final vmk = context.read<SessionProvider>().vmk!;
-    final messages = await _chatService.getHistory(vmk);
-    if (mounted) setState(() { _messages = messages; _loading = false; });
+    final messages = await _chatService.getHistory(vmk, limit: _pageSize);
+    if (mounted) {
+      setState(() {
+        _messages = messages;
+        _loading = false;
+        _hasMoreHistory = messages.length >= _pageSize;
+      });
+    }
     _scrollToBottom();
     _markVisibleAsRead();
+  }
+
+  /// Triggers loading older history once the top of the currently-loaded
+  /// window scrolls into view -- the natural "pull up for more" gesture.
+  void _onScrollPositionsChanged() {
+    final positions = _itemPositionsListener.itemPositions.value;
+    if (positions.isEmpty) return;
+    final topIndex = positions.map((p) => p.index).reduce((a, b) => a < b ? a : b);
+    if (topIndex <= 2) _loadMoreHistory();
+  }
+
+  Future<void> _loadMoreHistory() async {
+    if (_loadingMoreHistory || !_hasMoreHistory || _messages.isEmpty) return;
+    setState(() => _loadingMoreHistory = true);
+    final vmk = context.read<SessionProvider>().vmk!;
+    final older = await _chatService.getHistory(
+      vmk,
+      before: _messages.first.id,
+      limit: _pageSize,
+    );
+    if (!mounted) return;
+    final addedCount = older.length;
+    setState(() {
+      if (addedCount > 0) _messages = [...older, ..._messages];
+      _hasMoreHistory = addedCount >= _pageSize;
+      _loadingMoreHistory = false;
+    });
+    // Everything that was on screen just shifted down by `addedCount`
+    // slots -- jump straight back to the equivalent index so the view
+    // doesn't visibly jump when the older messages are prepended.
+    if (addedCount > 0 && _itemScrollController.isAttached) {
+      _itemScrollController.jumpTo(index: addedCount);
+    }
   }
 
   /// Any message from the OTHER spouse that isn't marked read yet gets
@@ -86,7 +149,10 @@ class _ChatScreenState extends State<ChatScreen> {
       if (messageId == null || !mounted) return;
       setState(() {
         final i = _messages.indexWhere((m) => m.id == messageId);
-        if (i >= 0) _messages[i].readAt = DateTime.tryParse(data['read_at'] as String? ?? '');
+        if (i >= 0)
+          _messages[i].readAt = DateTime.tryParse(
+            data['read_at'] as String? ?? '',
+          );
       });
       return;
     }
@@ -97,14 +163,18 @@ class _ChatScreenState extends State<ChatScreen> {
       final vmk = context.read<SessionProvider>().vmk!;
       if (msg.encPayload != null) {
         try {
-          msg.decryptedText = await VaultCrypto.decryptText(vmk, msg.encPayload!);
+          msg.decryptedText = await VaultCrypto.decryptText(
+            vmk,
+            msg.encPayload!,
+          );
         } catch (_) {
           msg.decryptedText = '[unable to decrypt]';
         }
       }
       if (!mounted) return;
       final myId = context.read<SessionProvider>().spouseId;
-      final isNewIncoming = msg.senderId != myId && !_messages.any((m) => m.id == msg.id);
+      final isNewIncoming =
+          msg.senderId != myId && !_messages.any((m) => m.id == msg.id);
       setState(() {
         final existingIndex = _messages.indexWhere((m) => m.id == msg.id);
         if (existingIndex >= 0) {
@@ -123,8 +193,103 @@ class _ChatScreenState extends State<ChatScreen> {
 
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (_scrollController.hasClients) {
-        _scrollController.animateTo(_scrollController.position.maxScrollExtent, duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+      if (_itemScrollController.isAttached && _messages.isNotEmpty) {
+        _itemScrollController.scrollTo(
+          index: _messages.length - 1,
+          duration: const Duration(milliseconds: 250),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  // --- Search: on-device only, since messages are E2E encrypted the
+  // server never sees plaintext and can't search for us. Matches
+  // currently-loaded messages first, then keeps paging further back
+  // through history (decrypting as it goes) until either a match turns
+  // up or the very start of the conversation is reached. ---
+
+  void _openSearch() {
+    setState(() {
+      _searching = true;
+      _searchResults = [];
+      _searchStatus = null;
+    });
+  }
+
+  void _closeSearch() {
+    setState(() {
+      _searching = false;
+      _searchController.clear();
+      _searchResults = [];
+      _searchStatus = null;
+    });
+  }
+
+  Future<void> _runSearch(String rawQuery) async {
+    final query = rawQuery.trim();
+    if (query.isEmpty) {
+      setState(() {
+        _searchResults = [];
+        _searchStatus = null;
+      });
+      return;
+    }
+    setState(() => _searchLoading = true);
+    final vmk = context.read<SessionProvider>().vmk!;
+    final lower = query.toLowerCase();
+    List<ChatMessageModel> matches = _messages
+        .where((m) => (m.decryptedText ?? '').toLowerCase().contains(lower))
+        .toList();
+
+    // Keep paging further back until we find something, run out of
+    // history, or hit a sane safety cap (very long threads shouldn't spin
+    // forever on a query that simply doesn't exist).
+    var safetyPages = 0;
+    while (matches.isEmpty && _hasMoreHistory && safetyPages < 40 && mounted) {
+      safetyPages++;
+      setState(() => _searchStatus = 'পুরনো মেসেজ খোঁজা হচ্ছে...');
+      final older = await _chatService.getHistory(
+        vmk,
+        before: _messages.first.id,
+        limit: 100,
+      );
+      if (!mounted) return;
+      if (older.isEmpty) {
+        setState(() => _hasMoreHistory = false);
+        break;
+      }
+      setState(() {
+        _messages = [...older, ..._messages];
+        _hasMoreHistory = older.length >= 100;
+      });
+      matches = _messages
+          .where((m) => (m.decryptedText ?? '').toLowerCase().contains(lower))
+          .toList();
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _searchResults = matches.reversed.toList(); // newest match first
+      _searchLoading = false;
+      _searchStatus = matches.isEmpty
+          ? (_hasMoreHistory ? null : 'কিছু পাওয়া যায়নি।')
+          : null;
+    });
+  }
+
+  void _jumpToSearchResult(ChatMessageModel msg) {
+    _closeSearch();
+    final index = _messages.indexWhere((m) => m.id == msg.id);
+    if (index < 0) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_itemScrollController.isAttached) {
+        _itemScrollController.scrollTo(
+          index: index,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+          alignment: 0.4,
+        );
       }
     });
   }
@@ -138,13 +303,28 @@ class _ChatScreenState extends State<ChatScreen> {
     ChatSoundService.playSent();
   }
 
-  Future<void> _sendMediaFile(String contentType, String kind, File file) async {
+  Future<void> _sendMediaFile(
+    String contentType,
+    String kind,
+    File file,
+  ) async {
     setState(() => _sending = true);
     try {
       final vmk = context.read<SessionProvider>().vmk!;
       final bytes = await file.readAsBytes();
-      final asset = await _mediaService.upload(vmk, kind: kind, bytes: bytes);
-      final msg = await _chatService.sendMedia(contentType: contentType, mediaAssetId: asset.id);
+      final thumbnailBytes = kind == 'video'
+          ? await generateVideoThumbnail(file.path)
+          : null;
+      final asset = await _mediaService.upload(
+        vmk,
+        kind: kind,
+        bytes: bytes,
+        thumbnailBytes: thumbnailBytes,
+      );
+      final msg = await _chatService.sendMedia(
+        contentType: contentType,
+        mediaAssetId: asset.id,
+      );
       if (mounted) setState(() => _messages.add(msg));
       _scrollToBottom();
       ChatSoundService.playSent();
@@ -154,7 +334,10 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _pickImage() async {
-    final file = await ImagePicker().pickImage(source: ImageSource.gallery, imageQuality: 90);
+    final file = await ImagePicker().pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 90,
+    );
     if (file != null) await _sendMediaFile('photo', 'image', File(file.path));
   }
 
@@ -175,29 +358,33 @@ class _ChatScreenState extends State<ChatScreen> {
   void _startRecordTimer() {
     _recordTimer?.cancel();
     _recordTimer = Timer.periodic(const Duration(seconds: 1), (_) {
-      if (mounted) setState(() => _recordDuration += const Duration(seconds: 1));
+      if (mounted)
+        setState(() => _recordDuration += const Duration(seconds: 1));
     });
   }
 
   Future<void> _startRecording() async {
     if (!await _recorder.hasPermission()) return;
     final dir = Directory.systemTemp;
-    final path = '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+    final path =
+        '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
     await _recorder.start(const RecordConfig(), path: path);
     _waveform.clear();
     _recordDuration = Duration.zero;
     _startRecordTimer();
     _amplitudeSub?.cancel();
-    _amplitudeSub = _recorder.onAmplitudeChanged(const Duration(milliseconds: 150)).listen((amp) {
-      // amp.current is dBFS, roughly -45 (quiet) to 0 (loud) in practice.
-      final level = ((amp.current + 45) / 45).clamp(0.05, 1.0);
-      if (mounted) {
-        setState(() {
-          _waveform.add(level);
-          if (_waveform.length > 40) _waveform.removeAt(0);
+    _amplitudeSub = _recorder
+        .onAmplitudeChanged(const Duration(milliseconds: 150))
+        .listen((amp) {
+          // amp.current is dBFS, roughly -45 (quiet) to 0 (loud) in practice.
+          final level = ((amp.current + 45) / 45).clamp(0.05, 1.0);
+          if (mounted) {
+            setState(() {
+              _waveform.add(level);
+              if (_waveform.length > 40) _waveform.removeAt(0);
+            });
+          }
         });
-      }
-    });
     setState(() {
       _recording = true;
       _paused = false;
@@ -250,22 +437,89 @@ class _ChatScreenState extends State<ChatScreen> {
     _recordTimer?.cancel();
     _amplitudeSub?.cancel();
     _recorder.dispose();
+    _itemPositionsListener.itemPositions.removeListener(_onScrollPositionsChanged);
+    _searchController.dispose();
     super.dispose();
   }
 
-  String _fmtDuration(Duration d) => '${d.inMinutes}:${(d.inSeconds % 60).toString().padLeft(2, '0')}';
+  String _fmtDuration(Duration d) =>
+      '${d.inMinutes}:${(d.inSeconds % 60).toString().padLeft(2, '0')}';
+
+  bool _isSameDay(DateTime a, DateTime b) =>
+      a.year == b.year && a.month == b.month && a.day == b.day;
+
+  Widget _buildSearchResults() {
+    if (_searchLoading) {
+      return const Center(child: CircularProgressIndicator(color: AppColors.halalGreen));
+    }
+    if (_searchController.text.trim().isEmpty) {
+      return const Center(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: Text('একটা শব্দ বা লাইন লিখে সার্চ করুন।', style: TextStyle(color: Colors.grey)),
+        ),
+      );
+    }
+    if (_searchResults.isEmpty) {
+      return Center(
+        child: Text(_searchStatus ?? 'কিছু পাওয়া যায়নি।', style: const TextStyle(color: Colors.grey)),
+      );
+    }
+    final query = _searchController.text.trim();
+    return ListView.separated(
+      padding: const EdgeInsets.all(12),
+      itemCount: _searchResults.length,
+      separatorBuilder: (_, _) => const Divider(height: 1),
+      itemBuilder: (context, i) {
+        final msg = _searchResults[i];
+        final text = msg.decryptedText ?? '';
+        final matchIndex = text.toLowerCase().indexOf(query.toLowerCase());
+        return ListTile(
+          leading: const Icon(Iconsax.message_2),
+          title: matchIndex < 0
+              ? Text(text, maxLines: 2, overflow: TextOverflow.ellipsis)
+              : _highlightedSnippet(text, matchIndex, query.length),
+          subtitle: Text(DateFormat.yMMMd().add_jm().format(msg.createdAt.toLocal())),
+          onTap: () => _jumpToSearchResult(msg),
+        );
+      },
+    );
+  }
+
+  Widget _highlightedSnippet(String text, int matchIndex, int matchLength) {
+    const contextChars = 40;
+    final start = (matchIndex - contextChars).clamp(0, text.length);
+    final end = (matchIndex + matchLength + contextChars).clamp(0, text.length);
+    final prefix = start > 0 ? '…' : '';
+    final suffix = end < text.length ? '…' : '';
+    return RichText(
+      maxLines: 2,
+      overflow: TextOverflow.ellipsis,
+      text: TextSpan(
+        style: DefaultTextStyle.of(context).style,
+        children: [
+          TextSpan(text: '$prefix${text.substring(start, matchIndex)}'),
+          TextSpan(
+            text: text.substring(matchIndex, matchIndex + matchLength),
+            style: const TextStyle(fontWeight: FontWeight.bold, backgroundColor: Color(0x552F9E63)),
+          ),
+          TextSpan(text: '${text.substring(matchIndex + matchLength, end)}$suffix'),
+        ],
+      ),
+    );
+  }
 
   Widget _seenTick(ChatMessageModel msg) {
     IconData icon;
     Color color;
     if (msg.readAt != null) {
-      icon = Icons.done_all;
+      icon = Iconsax.tick_circle_copy;
       color = Colors.lightBlueAccent;
     } else if (msg.deliveredAt != null) {
-      icon = Icons.done_all;
+      icon = Iconsax.tick_circle_copy;
       color = Colors.white70;
     } else {
-      icon = Icons.done;
+      icon = Iconsax.tick_circle;
       color = Colors.white70;
     }
     return Icon(icon, size: 14, color: color);
@@ -275,9 +529,20 @@ class _ChatScreenState extends State<ChatScreen> {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(Icons.lock_outline, size: 13, color: mine ? Colors.white70 : Colors.grey),
+        Icon(
+          Iconsax.lock,
+          size: 13,
+          color: mine ? Colors.white70 : Colors.grey,
+        ),
         const SizedBox(width: 5),
-        Text('★ ★ ★ ★', style: TextStyle(color: mine ? Colors.white : Colors.grey.shade700, letterSpacing: 2, fontSize: 13)),
+        Text(
+          '★ ★ ★ ★',
+          style: TextStyle(
+            color: mine ? Colors.white : Colors.grey.shade700,
+            letterSpacing: 2,
+            fontSize: 13,
+          ),
+        ),
       ],
     );
   }
@@ -287,36 +552,74 @@ class _ChatScreenState extends State<ChatScreen> {
     final myId = context.watch<SessionProvider>().spouseId;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('চ্যাট'),
-        actions: [
-          IconButton(
-            icon: Icon(_hidden ? Icons.visibility_off_outlined : Icons.visibility_outlined),
-            tooltip: _hidden ? 'মেসেজ দেখান' : 'মেসেজ লুকান (শুধু এই ফোনে)',
-            onPressed: () => setState(() => _hidden = !_hidden),
-          ),
-        ],
+        title: _searching
+            ? TextField(
+                controller: _searchController,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  hintText: 'মেসেজ খুঁজুন...',
+                  border: InputBorder.none,
+                ),
+                onSubmitted: _runSearch,
+              )
+            : const Text('চ্যাট'),
+        leading: _searching
+            ? IconButton(icon: const Icon(Iconsax.arrow_left_2), onPressed: _closeSearch)
+            : null,
+        actions: _searching
+            ? [
+                IconButton(
+                  icon: const Icon(Iconsax.search_normal_1),
+                  onPressed: () => _runSearch(_searchController.text),
+                ),
+              ]
+            : [
+                IconButton(icon: const Icon(Iconsax.search_normal_1), onPressed: _openSearch),
+                IconButton(
+                  icon: Icon(_hidden ? Iconsax.eye_slash : Iconsax.eye),
+                  tooltip: _hidden ? 'মেসেজ দেখান' : 'মেসেজ লুকান (শুধু এই ফোনে)',
+                  onPressed: () => setState(() => _hidden = !_hidden),
+                ),
+              ],
       ),
-      body: Column(
-        children: [
-          Expanded(
-            child: _loading
-                ? const ShimmerTileList()
-                : ListView.builder(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.all(12),
-                    itemCount: _messages.length,
-                    itemBuilder: (context, i) {
-                      final msg = _messages[i];
-                      final mine = msg.senderId == myId;
-                      final isMedia = msg.contentType == 'photo' || msg.contentType == 'video';
-                      return Align(
-                        alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+      body: _searching
+          ? _buildSearchResults()
+          : Column(
+              children: [
+                Expanded(
+                  child: _loading
+                      ? const ShimmerTileList()
+                      : ScrollablePositionedList.builder(
+                          itemScrollController: _itemScrollController,
+                          itemPositionsListener: _itemPositionsListener,
+                          padding: const EdgeInsets.all(12),
+                          itemCount: _messages.length,
+                          itemBuilder: (context, i) {
+                            final msg = _messages[i];
+                            final mine = msg.senderId == myId;
+                            final isMedia =
+                                msg.contentType == 'photo' ||
+                                msg.contentType == 'video';
+                            final showDateDivider =
+                                i == 0 ||
+                                !_isSameDay(
+                                  _messages[i - 1].createdAt.toLocal(),
+                                  msg.createdAt.toLocal(),
+                                );
+                            final bubble = Align(
+                        alignment: mine
+                            ? Alignment.centerRight
+                            : Alignment.centerLeft,
                         child: Container(
                           margin: const EdgeInsets.symmetric(vertical: 4),
                           padding: const EdgeInsets.all(10),
-                          constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.72),
+                          constraints: BoxConstraints(
+                            maxWidth: MediaQuery.of(context).size.width * 0.72,
+                          ),
                           decoration: BoxDecoration(
-                            color: mine ? AppColors.halalGreen.withValues(alpha: 0.85) : Colors.grey.withValues(alpha: 0.15),
+                            color: mine
+                                ? AppColors.halalGreen.withValues(alpha: 0.85)
+                                : Colors.grey.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(16),
                           ),
                           child: Column(
@@ -325,22 +628,47 @@ class _ChatScreenState extends State<ChatScreen> {
                               if (_hidden)
                                 _hiddenPlaceholder(mine)
                               else if (msg.contentType == 'text')
-                                Text(msg.decryptedText ?? '', style: TextStyle(color: mine ? Colors.white : null))
-                              else if (msg.contentType == 'photo' && msg.mediaAssetId != null)
-                                GestureDetector(
-                                  onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                                    builder: (_) => MediaViewerScreen(assetId: msg.mediaAssetId!, contentType: 'photo'),
-                                  )),
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(10),
-                                    child: SizedBox(height: 180, width: 180, child: DecryptedFullImage(assetId: msg.mediaAssetId!, fit: BoxFit.cover, zoomable: false)),
+                                Text(
+                                  msg.decryptedText ?? '',
+                                  style: TextStyle(
+                                    color: mine ? Colors.white : null,
                                   ),
                                 )
-                              else if (msg.contentType == 'video' && msg.mediaAssetId != null)
+                              else if (msg.contentType == 'photo' &&
+                                  msg.mediaAssetId != null)
                                 GestureDetector(
-                                  onTap: () => Navigator.of(context).push(MaterialPageRoute(
-                                    builder: (_) => MediaViewerScreen(assetId: msg.mediaAssetId!, contentType: 'video'),
-                                  )),
+                                  onTap: () => Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => MediaViewerScreen(
+                                        assetId: msg.mediaAssetId!,
+                                        contentType: 'photo',
+                                      ),
+                                    ),
+                                  ),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(10),
+                                    child: SizedBox(
+                                      height: 180,
+                                      width: 180,
+                                      child: DecryptedFullImage(
+                                        assetId: msg.mediaAssetId!,
+                                        fit: BoxFit.cover,
+                                        zoomable: false,
+                                      ),
+                                    ),
+                                  ),
+                                )
+                              else if (msg.contentType == 'video' &&
+                                  msg.mediaAssetId != null)
+                                GestureDetector(
+                                  onTap: () => Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => MediaViewerScreen(
+                                        assetId: msg.mediaAssetId!,
+                                        contentType: 'video',
+                                      ),
+                                    ),
+                                  ),
                                   child: Stack(
                                     alignment: Alignment.center,
                                     children: [
@@ -349,35 +677,77 @@ class _ChatScreenState extends State<ChatScreen> {
                                         child: SizedBox(
                                           height: 180,
                                           width: 180,
-                                          child: DecryptedThumbnail(assetId: msg.mediaAssetId!, hasThumbnail: false, fit: BoxFit.cover),
+                                          child: DecryptedThumbnail(
+                                            assetId: msg.mediaAssetId!,
+                                            hasThumbnail: msg.mediaHasThumbnail,
+                                            fit: BoxFit.cover,
+                                          ),
                                         ),
                                       ),
-                                      const Icon(Icons.play_circle_fill, color: Colors.white, size: 40),
+                                      const Icon(
+                                        Iconsax.play_circle_copy,
+                                        color: Colors.white,
+                                        size: 40,
+                                      ),
                                     ],
                                   ),
                                 )
-                              else if (msg.contentType == 'voice' && msg.mediaAssetId != null)
-                                DecryptedVoicePlayer(assetId: msg.mediaAssetId!, color: mine ? Colors.white : AppColors.halalGreen)
+                              else if (msg.contentType == 'voice' &&
+                                  msg.mediaAssetId != null)
+                                DecryptedVoicePlayer(
+                                  assetId: msg.mediaAssetId!,
+                                  color: mine
+                                      ? Colors.white
+                                      : AppColors.halalGreen,
+                                )
                               else
-                                Text('[${msg.contentType}]', style: TextStyle(color: mine ? Colors.white : null, fontStyle: FontStyle.italic)),
+                                Text(
+                                  '[${msg.contentType}]',
+                                  style: TextStyle(
+                                    color: mine ? Colors.white : null,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
                               const SizedBox(height: 4),
                               Row(
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
                                   Text(
-                                    DateFormat.jm().format(msg.createdAt.toLocal()),
-                                    style: TextStyle(fontSize: 10, color: mine && !isMedia ? Colors.white70 : Colors.grey),
+                                    DateFormat.jm().format(
+                                      msg.createdAt.toLocal(),
+                                    ),
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      color: mine && !isMedia
+                                          ? Colors.white70
+                                          : Colors.grey,
+                                    ),
                                   ),
-                                  if (mine) ...[const SizedBox(width: 4), _seenTick(msg)],
+                                  if (mine) ...[
+                                    const SizedBox(width: 4),
+                                    _seenTick(msg),
+                                  ],
                                 ],
                               ),
                             ],
                           ),
                         ),
                       );
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          if (showDateDivider) _DateDivider(date: msg.createdAt.toLocal()),
+                          bubble,
+                        ],
+                      );
                     },
                   ),
           ),
+          if (_loadingMoreHistory)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 6),
+              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            ),
           if (_sending) const LinearProgressIndicator(),
           SafeArea(
             child: Padding(
@@ -394,7 +764,7 @@ class _ChatScreenState extends State<ChatScreen> {
     return Row(
       children: [
         PopupMenuButton<String>(
-          icon: const Icon(Icons.add_circle_outline),
+          icon: const Icon(Iconsax.add_circle),
           onSelected: (v) {
             if (v == 'image') _pickImage();
             if (v == 'video') _pickVideo();
@@ -406,7 +776,10 @@ class _ChatScreenState extends State<ChatScreen> {
             PopupMenuItem(value: 'file', child: Text('ফাইল')),
           ],
         ),
-        IconButton(icon: const Icon(Icons.mic_none), onPressed: _startRecording),
+        IconButton(
+          icon: const Icon(Iconsax.microphone),
+          onPressed: _startRecording,
+        ),
         Expanded(
           child: TextField(
             controller: _textController,
@@ -414,7 +787,10 @@ class _ChatScreenState extends State<ChatScreen> {
             onSubmitted: (_) => _sendText(),
           ),
         ),
-        IconButton(icon: const Icon(Icons.send, color: AppColors.halalGreen), onPressed: _sendText),
+        IconButton(
+          icon: const Icon(Iconsax.send, color: AppColors.halalGreen),
+          onPressed: _sendText,
+        ),
       ],
     );
   }
@@ -423,7 +799,7 @@ class _ChatScreenState extends State<ChatScreen> {
     return Row(
       children: [
         IconButton(
-          icon: const Icon(Icons.delete_outline, color: AppColors.rejected),
+          icon: const Icon(Iconsax.trash, color: AppColors.rejected),
           tooltip: 'বাতিল করুন',
           onPressed: _cancelRecording,
         ),
@@ -431,29 +807,86 @@ class _ChatScreenState extends State<ChatScreen> {
           child: Container(
             height: 42,
             padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(color: Colors.grey.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(21)),
+            decoration: BoxDecoration(
+              color: Colors.grey.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(21),
+            ),
             child: Row(
               children: [
-                Icon(Icons.fiber_manual_record, color: _paused ? Colors.grey : Colors.red, size: 12),
+                Icon(
+                  Iconsax.record,
+                  color: _paused ? Colors.grey : Colors.red,
+                  size: 12,
+                ),
                 const SizedBox(width: 8),
-                Expanded(child: _WaveformBars(levels: _waveform, color: _paused ? Colors.grey : AppColors.halalGreen)),
+                Expanded(
+                  child: _WaveformBars(
+                    levels: _waveform,
+                    color: _paused ? Colors.grey : AppColors.halalGreen,
+                  ),
+                ),
                 const SizedBox(width: 8),
-                Text(_fmtDuration(_recordDuration), style: const TextStyle(fontSize: 12)),
+                Text(
+                  _fmtDuration(_recordDuration),
+                  style: const TextStyle(fontSize: 12),
+                ),
               ],
             ),
           ),
         ),
         IconButton(
-          icon: Icon(_paused ? Icons.play_circle_fill : Icons.pause_circle_filled, color: AppColors.halalGreen),
+          icon: Icon(
+            _paused ? Iconsax.play_circle_copy : Iconsax.pause_circle_copy,
+            color: AppColors.halalGreen,
+          ),
           tooltip: _paused ? 'আবার শুরু করুন' : 'থামান',
           onPressed: _togglePause,
         ),
         IconButton(
-          icon: const Icon(Icons.send, color: AppColors.halalGreen),
+          icon: const Icon(Iconsax.send, color: AppColors.halalGreen),
           tooltip: 'পাঠান',
           onPressed: _finishAndSendRecording,
         ),
       ],
+    );
+  }
+}
+
+/// A centered pill showing "আজ" / "গতকাল" / the actual date, inserted
+/// between messages sent on different days -- makes it possible to tell
+/// where you are while scrolling back through a long history. See
+/// DECISIONS.md.
+class _DateDivider extends StatelessWidget {
+  final DateTime date;
+  const _DateDivider({required this.date});
+
+  String _label() {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final day = DateTime(date.year, date.month, date.day);
+    final diff = today.difference(day).inDays;
+    if (diff == 0) return 'আজ';
+    if (diff == 1) return 'গতকাল';
+    return DateFormat.yMMMd().format(date);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          decoration: BoxDecoration(
+            color: Colors.grey.withValues(alpha: 0.18),
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Text(
+            _label(),
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -468,7 +901,9 @@ class _WaveformBars extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final shown = levels.length > 24 ? levels.sublist(levels.length - 24) : levels;
+    final shown = levels.length > 24
+        ? levels.sublist(levels.length - 24)
+        : levels;
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
@@ -476,7 +911,10 @@ class _WaveformBars extends StatelessWidget {
           Container(
             width: 3,
             height: 4 + level * 20,
-            decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2)),
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(2),
+            ),
           ),
           const SizedBox(width: 2),
         ],

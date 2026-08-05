@@ -18,16 +18,26 @@ class _ScanSetupScreenState extends State<ScanSetupScreen> {
   void _handlePayload(String raw) {
     if (_handled) return;
     try {
-      final decoded = jsonDecode(utf8.decode(base64Decode(raw))) as Map<String, dynamic>;
+      final decoded =
+          jsonDecode(utf8.decode(base64Decode(raw))) as Map<String, dynamic>;
       final server = decoded['server'] as String;
       final code = decoded['code'] as String;
       final vmk = decoded['vmk'] as String;
       _handled = true;
-      Navigator.of(context).pushReplacement(MaterialPageRoute(
-        builder: (_) => ClaimRoleScreen(server: server, token: code, vmkB64: vmk),
-      ));
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) =>
+              ClaimRoleScreen(server: server, token: code, vmkB64: vmk),
+        ),
+      );
     } catch (_) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('এই QR কোড বা টেক্সটটা সঠিক সেটআপ কোড বলে মনে হচ্ছে না।')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'এই QR কোড বা টেক্সটটা সঠিক সেটআপ কোড বলে মনে হচ্ছে না।',
+          ),
+        ),
+      );
     }
   }
 
@@ -51,8 +61,15 @@ class _ScanSetupScreenState extends State<ScanSetupScreen> {
             right: 24,
             child: Container(
               padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(color: Colors.black54, borderRadius: BorderRadius.circular(12)),
-              child: const Text('অ্যাডমিন প্যানেলে দেখানো QR কোডটা ফ্রেমের মধ্যে ধরুন', style: TextStyle(color: Colors.white), textAlign: TextAlign.center),
+              decoration: BoxDecoration(
+                color: Colors.black54,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: const Text(
+                'অ্যাডমিন প্যানেলে দেখানো QR কোডটা ফ্রেমের মধ্যে ধরুন',
+                style: TextStyle(color: Colors.white),
+                textAlign: TextAlign.center,
+              ),
             ),
           ),
           Positioned(

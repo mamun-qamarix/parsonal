@@ -13,6 +13,7 @@ import 'screens/auth/face_verify_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/home/home_shell.dart';
 import 'screens/onboarding/welcome_screen.dart';
+import 'package:iconsax_flutter/iconsax_flutter.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -90,7 +91,9 @@ class _Splash extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return const Scaffold(
-      body: Center(child: Icon(Icons.favorite, size: 56, color: AppColors.halalGreen)),
+      body: Center(
+        child: Icon(Iconsax.heart_copy, size: 56, color: AppColors.halalGreen),
+      ),
     );
   }
 }

@@ -6,6 +6,7 @@ import '../../core/network/error_helper.dart';
 import '../../services/auth_service.dart';
 import '../../widgets/error_message_box.dart';
 import '../../widgets/password_field.dart';
+import 'package:iconsax_flutter/iconsax_flutter.dart';
 
 /// Password reset needs approval from an already-authenticated device
 /// (either spouse's, or the same person's other device) instead of an
@@ -73,9 +74,15 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
     }
     setState(() => _loading = true);
     try {
-      await AuthService().passwordResetComplete(resetToken: _resetToken!, newPassword: _newPassword.text);
+      await AuthService().passwordResetComplete(
+        resetToken: _resetToken!,
+        newPassword: _newPassword.text,
+      );
       if (!mounted) return;
-      setState(() => _message = 'পাসওয়ার্ড বদলানো হয়েছে। এখন ফিরে গিয়ে নতুন পাসওয়ার্ড দিয়ে লগইন করুন।');
+      setState(
+        () => _message =
+            'পাসওয়ার্ড বদলানো হয়েছে। এখন ফিরে গিয়ে নতুন পাসওয়ার্ড দিয়ে লগইন করুন।',
+      );
     } catch (e) {
       setState(() => _message = describeApiError(e));
     } finally {
@@ -101,16 +108,33 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
               ),
               const SizedBox(height: 20),
               if (_resetToken == null)
-                ElevatedButton(onPressed: _loading ? null : _start, child: const Text('রিসেট শুরু করুন / কোড নিন'))
+                ElevatedButton(
+                  onPressed: _loading ? null : _start,
+                  child: const Text('রিসেট শুরু করুন / কোড নিন'),
+                )
               else ...[
                 Container(
                   padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(12)),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.grey.shade300),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
                   child: Column(
                     children: [
-                      const Text('এই কোডটা অন্য ডিভাইসে দিন:', style: TextStyle(fontSize: 12, color: Colors.grey)),
+                      const Text(
+                        'এই কোডটা অন্য ডিভাইসে দিন:',
+                        style: TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
                       const SizedBox(height: 8),
-                      SelectableText(_resetToken!, textAlign: TextAlign.center, style: const TextStyle(fontFamily: 'monospace', fontSize: 16, fontWeight: FontWeight.w600)),
+                      SelectableText(
+                        _resetToken!,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontFamily: 'monospace',
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -119,24 +143,47 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
                   const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      SizedBox(height: 16, width: 16, child: CircularProgressIndicator(strokeWidth: 2)),
+                      SizedBox(
+                        height: 16,
+                        width: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
                       SizedBox(width: 10),
-                      Text('অন্য ডিভাইস থেকে অনুমোদনের অপেক্ষায়...', style: TextStyle(color: Colors.grey, fontSize: 13)),
+                      Text(
+                        'অন্য ডিভাইস থেকে অনুমোদনের অপেক্ষায়...',
+                        style: TextStyle(color: Colors.grey, fontSize: 13),
+                      ),
                     ],
                   )
                 else ...[
                   const Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.check_circle, color: Colors.green, size: 18),
+                      Icon(
+                        Iconsax.tick_circle_copy,
+                        color: Colors.green,
+                        size: 18,
+                      ),
                       SizedBox(width: 6),
-                      Text('অনুমোদন হয়েছে ✓', style: TextStyle(color: Colors.green, fontWeight: FontWeight.w600)),
+                      Text(
+                        'অনুমোদন হয়েছে ✓',
+                        style: TextStyle(
+                          color: Colors.green,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 16),
-                  PasswordField(controller: _newPassword, labelText: 'নতুন পাসওয়ার্ড'),
+                  PasswordField(
+                    controller: _newPassword,
+                    labelText: 'নতুন পাসওয়ার্ড',
+                  ),
                   const SizedBox(height: 12),
-                  ElevatedButton(onPressed: _loading ? null : _complete, child: const Text('নতুন পাসওয়ার্ড সেট করুন')),
+                  ElevatedButton(
+                    onPressed: _loading ? null : _complete,
+                    child: const Text('নতুন পাসওয়ার্ড সেট করুন'),
+                  ),
                 ],
               ],
               if (_message != null) ...[

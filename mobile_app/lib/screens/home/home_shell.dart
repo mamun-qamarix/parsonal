@@ -7,6 +7,7 @@ import '../chat/chat_screen.dart';
 import '../profile/profile_screen.dart';
 import '../reel/reel_screen.dart';
 import 'home_tab.dart';
+import 'package:iconsax_flutter/iconsax_flutter.dart';
 
 class HomeShell extends StatefulWidget {
   const HomeShell({super.key});
@@ -41,7 +42,9 @@ class _HomeShellState extends State<HomeShell> {
     _wsSub = WsClient.instance.events.listen((data) {
       final type = data['type'];
       if (type == 'daily_reminder') {
-        _showBanner(data['message'] as String? ?? "You have something waiting for you 💚");
+        _showBanner(
+          data['message'] as String? ?? "You have something waiting for you 💚",
+        );
       } else if (_labels.containsKey(type)) {
         _showBanner(_labels[type]!);
       }
@@ -50,7 +53,9 @@ class _HomeShellState extends State<HomeShell> {
 
   void _showBanner(String text) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(text), duration: const Duration(seconds: 3)));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(text), duration: const Duration(seconds: 3)),
+    );
   }
 
   @override
@@ -67,10 +72,26 @@ class _HomeShellState extends State<HomeShell> {
         selectedIndex: _index,
         onDestinationSelected: (i) => setState(() => _index = i),
         destinations: const [
-          NavigationDestination(icon: Icon(Icons.home_outlined), selectedIcon: Icon(Icons.home), label: 'Home'),
-          NavigationDestination(icon: Icon(Icons.play_circle_outline), selectedIcon: Icon(Icons.play_circle), label: 'Reel'),
-          NavigationDestination(icon: Icon(Icons.chat_bubble_outline), selectedIcon: Icon(Icons.chat_bubble), label: 'Chat'),
-          NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Profile'),
+          NavigationDestination(
+            icon: Icon(Iconsax.home),
+            selectedIcon: Icon(Iconsax.home_copy),
+            label: 'Home',
+          ),
+          NavigationDestination(
+            icon: Icon(Iconsax.play_circle),
+            selectedIcon: Icon(Iconsax.play_circle),
+            label: 'Reel',
+          ),
+          NavigationDestination(
+            icon: Icon(Iconsax.message_2),
+            selectedIcon: Icon(Iconsax.message_2_copy),
+            label: 'Chat',
+          ),
+          NavigationDestination(
+            icon: Icon(Iconsax.profile_circle),
+            selectedIcon: Icon(Iconsax.profile_circle_copy),
+            label: 'Profile',
+          ),
         ],
       ),
     );

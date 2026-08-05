@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../core/theme/app_theme.dart';
 import '../services/profile_service.dart';
+import 'package:iconsax_flutter/iconsax_flutter.dart';
 
 class CountdownCard extends StatefulWidget {
   const CountdownCard({super.key});
@@ -29,7 +30,9 @@ class _CountdownCardState extends State<CountdownCard> {
     final data = await _service.getCountdown();
     if (mounted) {
       setState(() {
-        _target = data != null ? DateTime.parse(data['target_datetime']).toLocal() : null;
+        _target = data != null
+            ? DateTime.parse(data['target_datetime']).toLocal()
+            : null;
         _loading = false;
       });
     }
@@ -37,11 +40,25 @@ class _CountdownCardState extends State<CountdownCard> {
 
   Future<void> _pick() async {
     final now = DateTime.now();
-    final date = await showDatePicker(context: context, firstDate: now, lastDate: now.add(const Duration(days: 3650)), initialDate: _target ?? now.add(const Duration(days: 7)));
+    final date = await showDatePicker(
+      context: context,
+      firstDate: now,
+      lastDate: now.add(const Duration(days: 3650)),
+      initialDate: _target ?? now.add(const Duration(days: 7)),
+    );
     if (date == null || !mounted) return;
-    final time = await showTimePicker(context: context, initialTime: TimeOfDay.fromDateTime(_target ?? now));
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(_target ?? now),
+    );
     if (time == null) return;
-    final combined = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+    final combined = DateTime(
+      date.year,
+      date.month,
+      date.day,
+      time.hour,
+      time.minute,
+    );
     await _service.setCountdown(combined);
     setState(() => _target = combined);
   }
@@ -66,24 +83,40 @@ class _CountdownCardState extends State<CountdownCard> {
           padding: const EdgeInsets.all(16),
           child: Row(
             children: [
-              const Icon(Icons.favorite, color: AppColors.halalGreen, size: 28),
+              const Icon(
+                Iconsax.heart_copy,
+                color: AppColors.halalGreen,
+                size: 28,
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text('Next time together', style: TextStyle(fontWeight: FontWeight.w600)),
+                    const Text(
+                      'Next time together',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
                     const SizedBox(height: 2),
                     if (target == null)
-                      const Text('Tap to set a date', style: TextStyle(color: Colors.grey))
+                      const Text(
+                        'Tap to set a date',
+                        style: TextStyle(color: Colors.grey),
+                      )
                     else if (remaining != null && remaining.isNegative)
                       const Text('It\'s (almost) here! 💚')
                     else if (remaining != null)
-                      Text(_formatDuration(remaining), style: const TextStyle(color: AppColors.halalGreen, fontWeight: FontWeight.bold)),
+                      Text(
+                        _formatDuration(remaining),
+                        style: const TextStyle(
+                          color: AppColors.halalGreen,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                   ],
                 ),
               ),
-              const Icon(Icons.edit_calendar_outlined, color: Colors.grey),
+              const Icon(Iconsax.calendar_edit, color: Colors.grey),
             ],
           ),
         ),

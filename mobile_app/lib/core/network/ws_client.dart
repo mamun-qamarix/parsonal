@@ -21,8 +21,12 @@ class WsClient {
       final server = await SecureStorageService.instance.server;
       final token = await SecureStorageService.instance.accessToken;
       if (server == null || token == null) return;
-      final wsUrl = server.replaceFirst('https://', 'wss://').replaceFirst('http://', 'ws://');
-      _channel = WebSocketChannel.connect(Uri.parse('$wsUrl/ws/chat?token=$token'));
+      final wsUrl = server
+          .replaceFirst('https://', 'wss://')
+          .replaceFirst('http://', 'ws://');
+      _channel = WebSocketChannel.connect(
+        Uri.parse('$wsUrl/ws/chat?token=$token'),
+      );
       _channel!.stream.listen(
         (raw) {
           try {

@@ -22,3 +22,4 @@ class ChatMessageOut(ORMBase):
     delivered_at: datetime | None
     read_at: datetime | None
     media_asset_id: uuid.UUID | None = None
+    media_has_thumbnail: bool = False

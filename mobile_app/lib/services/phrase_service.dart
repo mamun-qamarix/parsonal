@@ -7,12 +7,21 @@ import '../models/models.dart';
 class PhraseService {
   final _dio = ApiClient.instance.dio;
 
-  Future<List<PhraseModel>> list(Uint8List vmk, {String? direction, bool sortByRating = false}) async {
-    final res = await _dio.get('/phrases', queryParameters: {
-      if (direction != null) 'direction': direction,
-      'sort_by_rating': sortByRating,
-    });
-    final phrases = (res.data as List).map((e) => PhraseModel.fromJson(e)).toList();
+  Future<List<PhraseModel>> list(
+    Uint8List vmk, {
+    String? direction,
+    bool sortByRating = false,
+  }) async {
+    final res = await _dio.get(
+      '/phrases',
+      queryParameters: {
+        if (direction != null) 'direction': direction,
+        'sort_by_rating': sortByRating,
+      },
+    );
+    final phrases = (res.data as List)
+        .map((e) => PhraseModel.fromJson(e))
+        .toList();
     for (final p in phrases) {
       try {
         p.decryptedText = await VaultCrypto.decryptText(vmk, p.encPayload);
@@ -23,9 +32,16 @@ class PhraseService {
     return phrases;
   }
 
-  Future<PhraseModel> create(Uint8List vmk, String direction, String text) async {
+  Future<PhraseModel> create(
+    Uint8List vmk,
+    String direction,
+    String text,
+  ) async {
     final enc = await VaultCrypto.encryptText(vmk, text);
-    final res = await _dio.post('/phrases', data: {'direction': direction, 'enc_payload': enc});
+    final res = await _dio.post(
+      '/phrases',
+      data: {'direction': direction, 'enc_payload': enc},
+    );
     final phrase = PhraseModel.fromJson(res.data);
     phrase.decryptedText = text;
     return phrase;

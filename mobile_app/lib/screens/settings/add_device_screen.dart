@@ -8,6 +8,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../../core/storage/secure_storage_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../providers/session_provider.dart';
+import 'package:iconsax_flutter/iconsax_flutter.dart';
 
 /// Lets an already-authenticated device add a second phone to the SAME
 /// role (lost/replaced phone, or wanting the account on two of one
@@ -37,7 +38,11 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
     final session = context.read<SessionProvider>();
     final server = await SecureStorageService.instance.server;
     final vmk = session.vmk;
-    if (server == null || vmk == null || session.role == null || session.spouseId == null) return;
+    if (server == null ||
+        vmk == null ||
+        session.role == null ||
+        session.spouseId == null)
+      return;
     final payload = {
       'type': 'device_pairing',
       'server': server,
@@ -63,10 +68,13 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
                   children: [
                     Container(
                       padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(color: AppColors.rejected.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
+                      decoration: BoxDecoration(
+                        color: AppColors.rejected.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                       child: const Row(
                         children: [
-                          Icon(Icons.warning_amber_rounded, color: AppColors.rejected),
+                          Icon(Iconsax.warning_2, color: AppColors.rejected),
                           SizedBox(width: 8),
                           Expanded(
                             child: Text(
@@ -86,31 +94,53 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
                     Center(
                       child: Container(
                         padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
-                        child: QrImageView(data: _payload!, size: 220, backgroundColor: Colors.white),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: QrImageView(
+                          data: _payload!,
+                          size: 220,
+                          backgroundColor: Colors.white,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 16),
                     Center(
                       child: TextButton(
                         onPressed: () => setState(() => _revealed = !_revealed),
-                        child: Text(_revealed ? 'কোড লুকান' : 'স্ক্যান করতে না পারলে — কোড টেক্সট হিসেবে কপি করুন'),
+                        child: Text(
+                          _revealed
+                              ? 'কোড লুকান'
+                              : 'স্ক্যান করতে না পারলে — কোড টেক্সট হিসেবে কপি করুন',
+                        ),
                       ),
                     ),
                     if (_revealed) ...[
                       Container(
                         padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(border: Border.all(color: Colors.grey.shade300), borderRadius: BorderRadius.circular(8)),
-                        child: SelectableText(_payload!, style: const TextStyle(fontFamily: 'monospace', fontSize: 12)),
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey.shade300),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: SelectableText(
+                          _payload!,
+                          style: const TextStyle(
+                            fontFamily: 'monospace',
+                            fontSize: 12,
+                          ),
+                        ),
                       ),
                       const SizedBox(height: 8),
                       Center(
                         child: OutlinedButton.icon(
-                          icon: const Icon(Icons.copy, size: 18),
+                          icon: const Icon(Iconsax.copy, size: 18),
                           label: const Text('কপি করুন'),
                           onPressed: () {
                             Clipboard.setData(ClipboardData(text: _payload!));
-                            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('কপি হয়েছে')));
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('কপি হয়েছে')),
+                            );
                           },
                         ),
                       ),
@@ -119,7 +149,10 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
                     Text(
                       'কাজ শেষ হলে এই স্ক্রিন থেকে বেরিয়ে যান — কোডটা আর দরকার নেই।',
                       textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.grey.shade600, fontSize: 12),
+                      style: TextStyle(
+                        color: Colors.grey.shade600,
+                        fontSize: 12,
+                      ),
                     ),
                   ],
                 ),

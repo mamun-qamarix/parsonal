@@ -51,7 +51,11 @@ class PushNotificationService {
   /// notification permission if needed and registers the current token.
   Future<void> registerToken() async {
     try {
-      final settings = await FirebaseMessaging.instance.requestPermission(alert: true, badge: true, sound: true);
+      final settings = await FirebaseMessaging.instance.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
       if (settings.authorizationStatus == AuthorizationStatus.denied) return;
       final token = await FirebaseMessaging.instance.getToken();
       if (token != null) await _sendToken(token);

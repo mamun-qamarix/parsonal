@@ -9,6 +9,7 @@ import '../../services/vault_service.dart';
 import '../../widgets/error_message_box.dart';
 import '../../widgets/shimmer_loading.dart';
 import 'entry_detail_screen.dart';
+import 'package:iconsax_flutter/iconsax_flutter.dart';
 
 class ConsentRequestsScreen extends StatefulWidget {
   const ConsentRequestsScreen({super.key});
@@ -31,7 +32,11 @@ class _ConsentRequestsScreenState extends State<ConsentRequestsScreen> {
   Future<void> _load() async {
     setState(() => _loading = true);
     final requests = await _service.listConsentRequests();
-    if (mounted) setState(() { _requests = requests; _loading = false; });
+    if (mounted)
+      setState(() {
+        _requests = requests;
+        _loading = false;
+      });
   }
 
   Future<void> _decide(ConsentRequestModel req, bool approve) async {
@@ -53,35 +58,61 @@ class _ConsentRequestsScreenState extends State<ConsentRequestsScreen> {
       body: _loading
           ? const ShimmerTileList()
           : _requests.isEmpty
-              ? const Center(child: Text('No pending requests'))
-              : RefreshIndicator(
-                  onRefresh: _load,
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(12),
-                    itemCount: _requests.length,
-                    itemBuilder: (context, i) {
-                      final req = _requests[i];
-                      final isMine = req.requestedBy == myId;
-                      return Card(
-                        child: ListTile(
-                          onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => EntryDetailScreen(entryId: req.entryId))),
-                          leading: Icon(req.action == 'delete' ? Icons.delete_outline : Icons.edit_outlined),
-                          title: Text('${req.action == 'delete' ? 'Delete' : 'Edit'} request'),
-                          subtitle: Text('${isMine ? 'You requested' : 'Your spouse requested'} this on ${DateFormat.yMMMd().add_jm().format(req.createdAt.toLocal())}'),
-                          trailing: isMine
-                              ? const Text('Waiting...', style: TextStyle(color: Colors.grey))
-                              : Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    IconButton(icon: const Icon(Icons.check_circle, color: Colors.green), onPressed: () => _decide(req, true)),
-                                    IconButton(icon: const Icon(Icons.cancel, color: Colors.red), onPressed: () => _decide(req, false)),
-                                  ],
-                                ),
+          ? const Center(child: Text('No pending requests'))
+          : RefreshIndicator(
+              onRefresh: _load,
+              child: ListView.builder(
+                padding: const EdgeInsets.all(12),
+                itemCount: _requests.length,
+                itemBuilder: (context, i) {
+                  final req = _requests[i];
+                  final isMine = req.requestedBy == myId;
+                  return Card(
+                    child: ListTile(
+                      onTap: () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) =>
+                              EntryDetailScreen(entryId: req.entryId),
                         ),
-                      );
-                    },
-                  ),
-                ),
+                      ),
+                      leading: Icon(
+                        req.action == 'delete' ? Iconsax.trash : Iconsax.edit_2,
+                      ),
+                      title: Text(
+                        '${req.action == 'delete' ? 'Delete' : 'Edit'} request',
+                      ),
+                      subtitle: Text(
+                        '${isMine ? 'You requested' : 'Your spouse requested'} this on ${DateFormat.yMMMd().add_jm().format(req.createdAt.toLocal())}',
+                      ),
+                      trailing: isMine
+                          ? const Text(
+                              'Waiting...',
+                              style: TextStyle(color: Colors.grey),
+                            )
+                          : Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                IconButton(
+                                  icon: const Icon(
+                                    Iconsax.tick_circle_copy,
+                                    color: Colors.green,
+                                  ),
+                                  onPressed: () => _decide(req, true),
+                                ),
+                                IconButton(
+                                  icon: const Icon(
+                                    Iconsax.close_circle,
+                                    color: Colors.red,
+                                  ),
+                                  onPressed: () => _decide(req, false),
+                                ),
+                              ],
+                            ),
+                    ),
+                  );
+                },
+              ),
+            ),
     );
   }
 }

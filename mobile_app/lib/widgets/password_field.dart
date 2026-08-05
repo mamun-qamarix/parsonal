@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:iconsax_flutter/iconsax_flutter.dart';
 
 /// A password/PIN text field with a show/hide (eye) toggle, used
 /// everywhere a password or PIN is entered so the user can check what
@@ -40,7 +41,7 @@ class _PasswordFieldState extends State<PasswordField> {
         labelText: widget.labelText,
         hintText: widget.hintText,
         suffixIcon: IconButton(
-          icon: Icon(_obscured ? Icons.visibility_off_outlined : Icons.visibility_outlined),
+          icon: Icon(_obscured ? Iconsax.eye_slash : Iconsax.eye),
           tooltip: _obscured ? 'পাসওয়ার্ড দেখান' : 'পাসওয়ার্ড লুকান',
           onPressed: () => setState(() => _obscured = !_obscured),
         ),

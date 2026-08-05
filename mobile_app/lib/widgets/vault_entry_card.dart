@@ -5,6 +5,7 @@ import '../core/theme/app_theme.dart';
 import '../models/models.dart';
 import '../services/vault_service.dart';
 import 'decrypted_media.dart';
+import 'package:iconsax_flutter/iconsax_flutter.dart';
 
 /// Social-media-feed-style post card: a full-width media block up top (like
 /// a Facebook/Instagram post) instead of a small side thumbnail, so photos
@@ -35,11 +36,11 @@ class _VaultEntryCardState extends State<VaultEntryCard> {
   IconData get _typeIcon {
     switch (widget.entry.contentType) {
       case 'photo':
-        return Icons.image_outlined;
+        return Iconsax.image;
       case 'video':
-        return Icons.videocam_outlined;
+        return Iconsax.video;
       default:
-        return Icons.notes_outlined;
+        return Iconsax.document_text;
     }
   }
 
@@ -47,7 +48,9 @@ class _VaultEntryCardState extends State<VaultEntryCard> {
   Widget build(BuildContext context) {
     final entry = widget.entry;
     final asset = entry.mediaAssets.isNotEmpty ? entry.mediaAssets.first : null;
-    final accent = entry.authorRole == 'husband' ? AppColors.husband : AppColors.wife;
+    final accent = entry.authorRole == 'husband'
+        ? AppColors.husband
+        : AppColors.wife;
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -63,21 +66,38 @@ class _VaultEntryCardState extends State<VaultEntryCard> {
                   CircleAvatar(
                     radius: 16,
                     backgroundColor: accent,
-                    child: Icon(entry.authorRole == 'husband' ? Icons.man : Icons.woman, size: 18, color: Colors.white),
+                    child: Icon(
+                      entry.authorRole == 'husband'
+                          ? Iconsax.man
+                          : Iconsax.woman,
+                      size: 18,
+                      color: Colors.white,
+                    ),
                   ),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text(entry.authorRole == 'husband' ? 'স্বামী' : 'স্ত্রী', style: const TextStyle(fontWeight: FontWeight.w600)),
-                        Text(DateFormat.yMMMd().add_jm().format(entry.createdAt.toLocal()), style: Theme.of(context).textTheme.bodySmall),
+                        Text(
+                          entry.authorRole == 'husband' ? 'স্বামী' : 'স্ত্রী',
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        Text(
+                          DateFormat.yMMMd().add_jm().format(
+                            entry.createdAt.toLocal(),
+                          ),
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
                       ],
                     ),
                   ),
                   IconButton(
                     onPressed: _busy ? null : _toggleFavorite,
-                    icon: Icon(_favorite ? Icons.favorite : Icons.favorite_border, color: _favorite ? Colors.redAccent : Colors.grey),
+                    icon: Icon(
+                      _favorite ? Iconsax.heart_copy : Iconsax.heart,
+                      color: _favorite ? Colors.redAccent : Colors.grey,
+                    ),
                   ),
                 ],
               ),
@@ -89,14 +109,23 @@ class _VaultEntryCardState extends State<VaultEntryCard> {
                   fit: StackFit.expand,
                   children: [
                     if (entry.contentType == 'photo' || asset.hasThumbnail)
-                      DecryptedThumbnail(assetId: asset.id, hasThumbnail: asset.hasThumbnail)
+                      DecryptedThumbnail(
+                        assetId: asset.id,
+                        hasThumbnail: asset.hasThumbnail,
+                      )
                     else
-                      Container(color: AppColors.halalGreen.withValues(alpha: 0.08)),
+                      Container(
+                        color: AppColors.halalGreen.withValues(alpha: 0.08),
+                      ),
                     if (entry.contentType == 'video')
                       Container(
                         color: Colors.black26,
                         child: const Center(
-                          child: Icon(Icons.play_circle_fill, size: 56, color: Colors.white),
+                          child: Icon(
+                            Iconsax.play_circle_copy,
+                            size: 56,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
                   ],
@@ -107,16 +136,35 @@ class _VaultEntryCardState extends State<VaultEntryCard> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  if (entry.decryptedText != null && entry.decryptedText!.isNotEmpty)
-                    Text(entry.decryptedText!, maxLines: 3, overflow: TextOverflow.ellipsis)
+                  if (entry.decryptedText != null &&
+                      entry.decryptedText!.isNotEmpty)
+                    Text(
+                      entry.decryptedText!,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                    )
                   else if (asset == null)
-                    Row(children: [Icon(_typeIcon, size: 16, color: Colors.grey), const SizedBox(width: 6), Text(entry.contentType, style: const TextStyle(color: Colors.grey))]),
+                    Row(
+                      children: [
+                        Icon(_typeIcon, size: 16, color: Colors.grey),
+                        const SizedBox(width: 6),
+                        Text(
+                          entry.contentType,
+                          style: const TextStyle(color: Colors.grey),
+                        ),
+                      ],
+                    ),
                   const SizedBox(height: 6),
                   Row(
                     children: [
-                      const Icon(Icons.visibility_outlined, size: 14, color: Colors.grey),
+                      const Icon(Iconsax.eye, size: 14, color: Colors.grey),
                       const SizedBox(width: 4),
-                      Text('${entry.viewCount}', style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Colors.grey)),
+                      Text(
+                        '${entry.viewCount}',
+                        style: Theme.of(
+                          context,
+                        ).textTheme.bodySmall?.copyWith(color: Colors.grey),
+                      ),
                     ],
                   ),
                 ],

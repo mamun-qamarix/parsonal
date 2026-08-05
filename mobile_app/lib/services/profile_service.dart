@@ -12,20 +12,32 @@ class ProfileService {
     final profile = ProfileModel.fromJson(res.data);
     if (profile.encDisplayName != null) {
       try {
-        profile.decryptedName = await VaultCrypto.decryptText(vmk, profile.encDisplayName!);
+        profile.decryptedName = await VaultCrypto.decryptText(
+          vmk,
+          profile.encDisplayName!,
+        );
       } catch (_) {}
     }
     if (profile.encBio != null) {
       try {
-        profile.decryptedBio = await VaultCrypto.decryptText(vmk, profile.encBio!);
+        profile.decryptedBio = await VaultCrypto.decryptText(
+          vmk,
+          profile.encBio!,
+        );
       } catch (_) {}
     }
     return profile;
   }
 
-  Future<void> updateMine(Uint8List vmk, {String? name, String? bio, String? photoAssetId}) async {
+  Future<void> updateMine(
+    Uint8List vmk, {
+    String? name,
+    String? bio,
+    String? photoAssetId,
+  }) async {
     final data = <String, dynamic>{};
-    if (name != null) data['enc_display_name'] = await VaultCrypto.encryptText(vmk, name);
+    if (name != null)
+      data['enc_display_name'] = await VaultCrypto.encryptText(vmk, name);
     if (bio != null) data['enc_bio'] = await VaultCrypto.encryptText(vmk, bio);
     if (photoAssetId != null) data['profile_photo_asset_id'] = photoAssetId;
     await _dio.put('/profile/me', data: data);
@@ -37,7 +49,10 @@ class ProfileService {
   }
 
   Future<void> setCountdown(DateTime target, {String? note}) async {
-    await _dio.put('/countdown', data: {'target_datetime': target.toUtc().toIso8601String()});
+    await _dio.put(
+      '/countdown',
+      data: {'target_datetime': target.toUtc().toIso8601String()},
+    );
   }
 
   Future<String> getSetting(String key, {String fallback = ''}) async {

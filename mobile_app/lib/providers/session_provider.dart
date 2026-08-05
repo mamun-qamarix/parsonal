@@ -40,19 +40,23 @@ class SessionProvider extends ChangeNotifier {
 
   set autoLockMinutesAndPersist(int value) {
     autoLockMinutes = value;
-    SharedPreferences.getInstance().then((prefs) => prefs.setInt(_kAutoLockMinutesPref, value));
+    SharedPreferences.getInstance().then(
+      (prefs) => prefs.setInt(_kAutoLockMinutesPref, value),
+    );
     notifyListeners();
   }
 
   Future<SessionState> _decideReentryState() async {
     final lastAuth = await SecureStorageService.instance.lastPasswordAuthAt;
-    if (lastAuth != null && DateTime.now().difference(lastAuth) < passwordWindow) {
+    if (lastAuth != null &&
+        DateTime.now().difference(lastAuth) < passwordWindow) {
       return SessionState.needsBiometric;
     }
     return SessionState.locked;
   }
 
-  Future<void> _recordPasswordAuth() => SecureStorageService.instance.setLastPasswordAuthAt(DateTime.now());
+  Future<void> _recordPasswordAuth() =>
+      SecureStorageService.instance.setLastPasswordAuthAt(DateTime.now());
 
   Future<void> bootstrap() async {
     final prefs = await SharedPreferences.getInstance();
@@ -86,7 +90,13 @@ class SessionProvider extends ChangeNotifier {
   }) async {
     await ApiClient.instance.configureBaseUrl(server);
     await SecureStorageService.instance.saveSession(
-      server: server, accessToken: accessToken, refreshToken: refreshToken, vmkB64: vmkB64, role: role, spouseId: spouseId, deviceId: deviceId,
+      server: server,
+      accessToken: accessToken,
+      refreshToken: refreshToken,
+      vmkB64: vmkB64,
+      role: role,
+      spouseId: spouseId,
+      deviceId: deviceId,
     );
     await _recordPasswordAuth();
     this.role = role;
@@ -133,7 +143,13 @@ class SessionProvider extends ChangeNotifier {
     final server = await SecureStorageService.instance.server;
     final vmkB64 = await SecureStorageService.instance.vmkB64;
     await SecureStorageService.instance.saveSession(
-      server: server ?? '', accessToken: accessToken, refreshToken: refreshToken, vmkB64: vmkB64 ?? '', role: role, spouseId: spouseId, deviceId: deviceId,
+      server: server ?? '',
+      accessToken: accessToken,
+      refreshToken: refreshToken,
+      vmkB64: vmkB64 ?? '',
+      role: role,
+      spouseId: spouseId,
+      deviceId: deviceId,
     );
     await _recordPasswordAuth();
     this.role = role;
@@ -172,7 +188,12 @@ class SessionProvider extends ChangeNotifier {
   }) async {
     await ApiClient.instance.configureBaseUrl(server);
     await SecureStorageService.instance.saveSession(
-      server: server, accessToken: '', refreshToken: '', vmkB64: vmkB64, role: role, spouseId: spouseId,
+      server: server,
+      accessToken: '',
+      refreshToken: '',
+      vmkB64: vmkB64,
+      role: role,
+      spouseId: spouseId,
     );
     this.role = role;
     this.spouseId = spouseId;

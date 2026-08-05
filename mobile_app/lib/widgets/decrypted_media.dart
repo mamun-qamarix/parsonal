@@ -10,11 +10,15 @@ import 'package:video_player/video_player.dart';
 import '../core/theme/app_theme.dart';
 import '../providers/session_provider.dart';
 import '../services/media_service.dart';
+import 'package:iconsax_flutter/iconsax_flutter.dart';
 
 class _DecryptedMediaCache {
   static final Map<String, Uint8List> _cache = {};
 
-  static Future<Uint8List> get(String key, Future<Uint8List> Function() loader) async {
+  static Future<Uint8List> get(
+    String key,
+    Future<Uint8List> Function() loader,
+  ) async {
     final cached = _cache[key];
     if (cached != null) return cached;
     final data = await loader();
@@ -30,7 +34,12 @@ class DecryptedThumbnail extends StatelessWidget {
   final String assetId;
   final bool hasThumbnail;
   final BoxFit fit;
-  const DecryptedThumbnail({super.key, required this.assetId, required this.hasThumbnail, this.fit = BoxFit.cover});
+  const DecryptedThumbnail({
+    super.key,
+    required this.assetId,
+    required this.hasThumbnail,
+    this.fit = BoxFit.cover,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -39,14 +48,24 @@ class DecryptedThumbnail extends StatelessWidget {
     return FutureBuilder<Uint8List>(
       future: _DecryptedMediaCache.get(
         'thumb:$assetId',
-        () => hasThumbnail ? service.downloadThumbnail(vmk, assetId) : service.downloadRaw(vmk, assetId),
+        () => hasThumbnail
+            ? service.downloadThumbnail(vmk, assetId)
+            : service.downloadRaw(vmk, assetId),
       ),
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          return Container(color: Colors.grey.withValues(alpha: 0.15), child: const Center(child: CircularProgressIndicator(strokeWidth: 2)));
+          return Container(
+            color: Colors.grey.withValues(alpha: 0.15),
+            child: const Center(
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          );
         }
         if (snapshot.hasError || !snapshot.hasData) {
-          return Container(color: Colors.grey.withValues(alpha: 0.15), child: const Icon(Icons.broken_image_outlined));
+          return Container(
+            color: Colors.grey.withValues(alpha: 0.15),
+            child: const Icon(Iconsax.gallery_slash),
+          );
         }
         return Image.memory(snapshot.data!, fit: fit);
       },
@@ -64,20 +83,28 @@ class DecryptedFullImage extends StatelessWidget {
   final String assetId;
   final BoxFit fit;
   final bool zoomable;
-  const DecryptedFullImage({super.key, required this.assetId, this.fit = BoxFit.contain, this.zoomable = true});
+  const DecryptedFullImage({
+    super.key,
+    required this.assetId,
+    this.fit = BoxFit.contain,
+    this.zoomable = true,
+  });
 
   @override
   Widget build(BuildContext context) {
     final vmk = context.read<SessionProvider>().vmk!;
     final service = MediaService();
     return FutureBuilder<Uint8List>(
-      future: _DecryptedMediaCache.get('full:$assetId', () => service.downloadRaw(vmk, assetId)),
+      future: _DecryptedMediaCache.get(
+        'full:$assetId',
+        () => service.downloadRaw(vmk, assetId),
+      ),
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
           return const Center(child: CircularProgressIndicator());
         }
         if (snapshot.hasError || !snapshot.hasData) {
-          return const Center(child: Icon(Icons.broken_image_outlined, size: 48));
+          return const Center(child: Icon(Iconsax.gallery_slash, size: 48));
         }
         final image = Image.memory(snapshot.data!, fit: fit);
         return zoomable ? InteractiveViewer(child: image) : image;
@@ -91,9 +118,23 @@ class DecryptedFullImage extends StatelessWidget {
 /// freedom (a tight/expand parent forces it to ignore the real ratio and
 /// stretch) -- give it a Center or similarly unconstraining parent. See
 /// DECISIONS.md.
+///
+/// Shows standard playback controls -- play/pause, a scrub bar with
+/// position/duration, and ±10s skip buttons -- previously this was just a
+/// bare play/pause toggle with no way to scrub through a longer video. If
+/// [onTrimRequested] is given, a scissor button also appears that hands the
+/// caller the local decrypted file path so it can open a trim UI (kept out
+/// of this widget since what happens with the trimmed result -- save as a
+/// new vault entry vs. a new chat message -- is caller-specific). See
+/// DECISIONS.md.
 class DecryptedVideoPlayer extends StatefulWidget {
   final String assetId;
-  const DecryptedVideoPlayer({super.key, required this.assetId});
+  final void Function(String localVideoPath)? onTrimRequested;
+  const DecryptedVideoPlayer({
+    super.key,
+    required this.assetId,
+    this.onTrimRequested,
+  });
 
   @override
   State<DecryptedVideoPlayer> createState() => _DecryptedVideoPlayerState();
@@ -113,10 +154,14 @@ class _DecryptedVideoPlayerState extends State<DecryptedVideoPlayer> {
   Future<void> _load() async {
     try {
       final vmk = context.read<SessionProvider>().vmk!;
-      final bytes = await _DecryptedMediaCache.get('full:${widget.assetId}', () => MediaService().downloadRaw(vmk, widget.assetId));
+      final bytes = await _DecryptedMediaCache.get(
+        'full:${widget.assetId}',
+        () => MediaService().downloadRaw(vmk, widget.assetId),
+      );
       final file = await _writeTempFile(widget.assetId, bytes);
       final controller = VideoPlayerController.file(file);
       await controller.initialize();
+      controller.addListener(_onTick);
       if (!mounted) return;
       setState(() {
         _controller = controller;
@@ -127,6 +172,10 @@ class _DecryptedVideoPlayerState extends State<DecryptedVideoPlayer> {
     }
   }
 
+  void _onTick() {
+    if (mounted) setState(() {});
+  }
+
   Future<File> _writeTempFile(String assetId, Uint8List bytes) async {
     final dir = await getTemporaryDirectory();
     final file = File('${dir.path}/vault_video_$assetId.mp4');
@@ -134,22 +183,114 @@ class _DecryptedVideoPlayerState extends State<DecryptedVideoPlayer> {
     return file;
   }
 
+  void _seekBy(Duration offset) {
+    final controller = _controller;
+    if (controller == null) return;
+    final target = controller.value.position + offset;
+    final clamped = target < Duration.zero
+        ? Duration.zero
+        : (target > controller.value.duration ? controller.value.duration : target);
+    controller.seekTo(clamped);
+  }
+
+  String _fmt(Duration d) {
+    final h = d.inHours;
+    final m = (d.inMinutes % 60).toString().padLeft(2, '0');
+    final s = (d.inSeconds % 60).toString().padLeft(2, '0');
+    return h > 0 ? '$h:$m:$s' : '$m:$s';
+  }
+
   @override
   Widget build(BuildContext context) {
-    if (_error) return const Center(child: Icon(Icons.error_outline));
+    if (_error) return const Center(child: Icon(Iconsax.danger));
     final controller = _controller;
-    if (controller == null) return const Center(child: CircularProgressIndicator());
+    if (controller == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    final position = controller.value.position;
+    final duration = controller.value.duration;
     return AspectRatio(
       aspectRatio: controller.value.aspectRatio,
       child: Stack(
         alignment: Alignment.center,
         children: [
           VideoPlayer(controller),
-          IconButton(
-            iconSize: 56,
-            color: Colors.white,
-            icon: Icon(controller.value.isPlaying ? Icons.pause_circle : Icons.play_circle),
-            onPressed: () => setState(() => controller.value.isPlaying ? controller.pause() : controller.play()),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              IconButton(
+                iconSize: 32,
+                color: Colors.white,
+                icon: const Icon(Iconsax.backward_10_seconds),
+                onPressed: () => _seekBy(const Duration(seconds: -10)),
+              ),
+              IconButton(
+                iconSize: 56,
+                color: Colors.white,
+                icon: Icon(
+                  controller.value.isPlaying ? Iconsax.pause_circle : Iconsax.play_circle,
+                ),
+                onPressed: () => setState(
+                  () => controller.value.isPlaying ? controller.pause() : controller.play(),
+                ),
+              ),
+              IconButton(
+                iconSize: 32,
+                color: Colors.white,
+                icon: const Icon(Iconsax.forward_10_seconds),
+                onPressed: () => _seekBy(const Duration(seconds: 10)),
+              ),
+            ],
+          ),
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 0,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  colors: [Colors.transparent, Colors.black.withValues(alpha: 0.55)],
+                ),
+              ),
+              child: Row(
+                children: [
+                  Text(_fmt(position), style: const TextStyle(color: Colors.white, fontSize: 11)),
+                  Expanded(
+                    child: SliderTheme(
+                      data: SliderTheme.of(context).copyWith(
+                        trackHeight: 2,
+                        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                        overlayShape: const RoundSliderOverlayShape(overlayRadius: 12),
+                      ),
+                      child: Slider(
+                        value: position.inMilliseconds.clamp(0, duration.inMilliseconds).toDouble(),
+                        max: duration.inMilliseconds > 0 ? duration.inMilliseconds.toDouble() : 1,
+                        activeColor: Colors.white,
+                        inactiveColor: Colors.white30,
+                        onChanged: (v) => controller.seekTo(Duration(milliseconds: v.toInt())),
+                      ),
+                    ),
+                  ),
+                  Text(_fmt(duration), style: const TextStyle(color: Colors.white, fontSize: 11)),
+                  if (widget.onTrimRequested != null) ...[
+                    const SizedBox(width: 4),
+                    IconButton(
+                      tooltip: 'ভিডিও ক্লিপ করুন',
+                      iconSize: 20,
+                      color: Colors.white,
+                      icon: const Icon(Iconsax.scissor),
+                      onPressed: () {
+                        final file = _tempFile;
+                        if (file != null) widget.onTrimRequested!(file.path);
+                      },
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ),
         ],
       ),
@@ -158,6 +299,7 @@ class _DecryptedVideoPlayerState extends State<DecryptedVideoPlayer> {
 
   @override
   void dispose() {
+    _controller?.removeListener(_onTick);
     _controller?.dispose();
     _tempFile?.delete().catchError((_) => _tempFile!);
     super.dispose();
@@ -207,10 +349,21 @@ class _DecryptedVoicePlayerState extends State<DecryptedVoicePlayer> {
   Future<void> _load() async {
     try {
       final vmk = context.read<SessionProvider>().vmk!;
-      final bytes = await _DecryptedMediaCache.get('full:${widget.assetId}', () => MediaService().downloadRaw(vmk, widget.assetId));
-      if (mounted) setState(() { _bytes = bytes; _loading = false; });
+      final bytes = await _DecryptedMediaCache.get(
+        'full:${widget.assetId}',
+        () => MediaService().downloadRaw(vmk, widget.assetId),
+      );
+      if (mounted)
+        setState(() {
+          _bytes = bytes;
+          _loading = false;
+        });
     } catch (_) {
-      if (mounted) setState(() { _error = true; _loading = false; });
+      if (mounted)
+        setState(() {
+          _error = true;
+          _loading = false;
+        });
     }
   }
 
@@ -229,20 +382,30 @@ class _DecryptedVoicePlayerState extends State<DecryptedVoicePlayer> {
     super.dispose();
   }
 
-  String _fmt(Duration d) => '${d.inMinutes}:${(d.inSeconds % 60).toString().padLeft(2, '0')}';
+  String _fmt(Duration d) =>
+      '${d.inMinutes}:${(d.inSeconds % 60).toString().padLeft(2, '0')}';
 
   @override
   Widget build(BuildContext context) {
     final color = widget.color ?? AppColors.halalGreen;
-    if (_loading) return const SizedBox(height: 36, width: 36, child: Center(child: CircularProgressIndicator(strokeWidth: 2)));
-    if (_error) return Icon(Icons.error_outline, color: color);
+    if (_loading)
+      return const SizedBox(
+        height: 36,
+        width: 36,
+        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+      );
+    if (_error) return Icon(Iconsax.danger, color: color);
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         IconButton(
           padding: EdgeInsets.zero,
           constraints: const BoxConstraints(),
-          icon: Icon(_playing ? Icons.pause_circle_filled : Icons.play_circle_filled, color: color, size: 32),
+          icon: Icon(
+            _playing ? Iconsax.pause_circle_copy : Iconsax.play_circle_copy,
+            color: color,
+            size: 32,
+          ),
           onPressed: _toggle,
         ),
         const SizedBox(width: 6),
@@ -253,14 +416,18 @@ class _DecryptedVoicePlayerState extends State<DecryptedVoicePlayer> {
             mainAxisSize: MainAxisSize.min,
             children: [
               LinearProgressIndicator(
-                value: _duration.inMilliseconds > 0 ? _position.inMilliseconds / _duration.inMilliseconds : 0,
+                value: _duration.inMilliseconds > 0
+                    ? _position.inMilliseconds / _duration.inMilliseconds
+                    : 0,
                 color: color,
                 backgroundColor: color.withValues(alpha: 0.2),
                 minHeight: 3,
               ),
               const SizedBox(height: 3),
               Text(
-                _duration.inMilliseconds > 0 ? '${_fmt(_position)} / ${_fmt(_duration)}' : 'ভয়েস মেসেজ',
+                _duration.inMilliseconds > 0
+                    ? '${_fmt(_position)} / ${_fmt(_duration)}'
+                    : 'ভয়েস মেসেজ',
                 style: TextStyle(fontSize: 10, color: color),
               ),
             ],

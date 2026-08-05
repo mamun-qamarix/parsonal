@@ -28,7 +28,11 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   Future<void> _load() async {
     final vmk = context.read<SessionProvider>().vmk!;
     final entries = await VaultService().listEntries(vmk, favoritesOnly: true);
-    if (mounted) setState(() { _entries = entries; _loading = false; });
+    if (mounted)
+      setState(() {
+        _entries = entries;
+        _loading = false;
+      });
   }
 
   @override
@@ -49,7 +53,12 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                         child: VaultEntryCard(
                           entry: _entries[i],
                           onTap: () async {
-                            await Navigator.of(context).push(MaterialPageRoute(builder: (_) => EntryDetailScreen(entryId: _entries[i].id)));
+                            await Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) =>
+                                    EntryDetailScreen(entryId: _entries[i].id),
+                              ),
+                            );
                             _load();
                           },
                         ),

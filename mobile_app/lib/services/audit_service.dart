@@ -6,6 +6,8 @@ class AuditService {
 
   Future<List<AuditLogEntryModel>> getLog({int limit = 200}) async {
     final res = await _dio.get('/audit/log', queryParameters: {'limit': limit});
-    return (res.data as List).map((e) => AuditLogEntryModel.fromJson(e)).toList();
+    return (res.data as List)
+        .map((e) => AuditLogEntryModel.fromJson(e))
+        .toList();
   }
 }

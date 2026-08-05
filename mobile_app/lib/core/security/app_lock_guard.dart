@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../providers/session_provider.dart';
+import 'package:iconsax_flutter/iconsax_flutter.dart';
 
 /// Wraps the whole app to:
 /// - block screenshots / screen recording app-wide. On Android this is
@@ -21,7 +22,8 @@ class AppLockGuard extends StatefulWidget {
   State<AppLockGuard> createState() => _AppLockGuardState();
 }
 
-class _AppLockGuardState extends State<AppLockGuard> with WidgetsBindingObserver {
+class _AppLockGuardState extends State<AppLockGuard>
+    with WidgetsBindingObserver {
   bool _obscured = false;
 
   @override
@@ -39,7 +41,8 @@ class _AppLockGuardState extends State<AppLockGuard> with WidgetsBindingObserver
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     final session = context.read<SessionProvider>();
-    if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
       setState(() => _obscured = true);
       if (state == AppLifecycleState.paused) {
         session.lock();
@@ -63,7 +66,7 @@ class _AppLockGuardState extends State<AppLockGuard> with WidgetsBindingObserver
               child: Container(
                 color: Theme.of(context).scaffoldBackgroundColor,
                 child: const Center(
-                  child: Icon(Icons.lock_outline, size: 48, color: Colors.grey),
+                  child: Icon(Iconsax.lock, size: 48, color: Colors.grey),
                 ),
               ),
             ),

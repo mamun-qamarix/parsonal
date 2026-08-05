@@ -6,6 +6,7 @@ import '../../models/models.dart';
 import '../../providers/session_provider.dart';
 import '../../services/vault_service.dart';
 import '../../services/wishlist_service.dart';
+import 'package:iconsax_flutter/iconsax_flutter.dart';
 
 /// A plain wishlist -- NOT a task/checklist. No checkbox, no
 /// mark-as-done, no strikethrough; items just live in the list until you
@@ -72,7 +73,11 @@ class _WishlistSectionState extends State<WishlistSection> {
     if (result == null || result.text.isEmpty) return;
     final vmk = context.read<SessionProvider>().vmk!;
     if (result.newCategoryName != null) {
-      final cat = await VaultService().createCategory(vmk, 'wishlist', result.newCategoryName!);
+      final cat = await VaultService().createCategory(
+        vmk,
+        'wishlist',
+        result.newCategoryName!,
+      );
       await _service.create(vmk, result.text, categoryId: cat.id);
     } else {
       await _service.create(vmk, result.text, categoryId: result.categoryId);
@@ -87,26 +92,44 @@ class _WishlistSectionState extends State<WishlistSection> {
       children: [
         Row(
           children: [
-            const Text('উইশলিস্ট', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16)),
+            const Text(
+              'উইশলিস্ট',
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+            ),
             const Spacer(),
-            if (_isMine) IconButton(icon: const Icon(Icons.add_circle_outline, color: AppColors.halalGreen), onPressed: _add),
+            if (_isMine)
+              IconButton(
+                icon: const Icon(
+                  Iconsax.add_circle,
+                  color: AppColors.halalGreen,
+                ),
+                onPressed: _add,
+              ),
           ],
         ),
         if (_loading)
-          const Padding(padding: EdgeInsets.all(12), child: LinearProgressIndicator())
+          const Padding(
+            padding: EdgeInsets.all(12),
+            child: LinearProgressIndicator(),
+          )
         else if (_items.isEmpty)
-          const Padding(padding: EdgeInsets.symmetric(vertical: 12), child: Text('এখনো কিছু নেই', style: TextStyle(color: Colors.grey)))
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: Text('এখনো কিছু নেই', style: TextStyle(color: Colors.grey)),
+          )
         else
           ..._items.map((item) {
             final categoryName = _categoryName(item.categoryId);
             return Card(
               child: ListTile(
-                leading: const Icon(Icons.card_giftcard_outlined, color: AppColors.halalGreen),
+                leading: const Icon(Iconsax.gift, color: AppColors.halalGreen),
                 title: Text(item.decryptedText ?? ''),
-                subtitle: categoryName != null ? Text(categoryName, style: const TextStyle(fontSize: 12)) : null,
+                subtitle: categoryName != null
+                    ? Text(categoryName, style: const TextStyle(fontSize: 12))
+                    : null,
                 trailing: _isMine
                     ? IconButton(
-                        icon: const Icon(Icons.delete_outline, size: 20),
+                        icon: const Icon(Iconsax.trash, size: 20),
                         onPressed: () async {
                           await _service.delete(item.id);
                           _load();
@@ -150,7 +173,11 @@ class _AddWishlistItemDialogState extends State<_AddWishlistItemDialog> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          TextField(controller: _textController, autofocus: true, decoration: const InputDecoration(hintText: 'কী চান লিখুন')),
+          TextField(
+            controller: _textController,
+            autofocus: true,
+            decoration: const InputDecoration(hintText: 'কী চান লিখুন'),
+          ),
           const SizedBox(height: 12),
           if (!_creatingCategory) ...[
             Row(
@@ -158,17 +185,27 @@ class _AddWishlistItemDialogState extends State<_AddWishlistItemDialog> {
                 Expanded(
                   child: DropdownButtonFormField<String?>(
                     initialValue: _categoryId,
-                    decoration: const InputDecoration(labelText: 'ক্যাটাগরি (ঐচ্ছিক)'),
+                    decoration: const InputDecoration(
+                      labelText: 'ক্যাটাগরি (ঐচ্ছিক)',
+                    ),
                     items: [
-                      const DropdownMenuItem<String?>(value: null, child: Text('কোনোটি না')),
-                      ...widget.categories.map((c) => DropdownMenuItem<String?>(value: c.id, child: Text(c.decryptedName ?? '...'))),
+                      const DropdownMenuItem<String?>(
+                        value: null,
+                        child: Text('কোনোটি না'),
+                      ),
+                      ...widget.categories.map(
+                        (c) => DropdownMenuItem<String?>(
+                          value: c.id,
+                          child: Text(c.decryptedName ?? '...'),
+                        ),
+                      ),
                     ],
                     onChanged: (v) => setState(() => _categoryId = v),
                   ),
                 ),
                 IconButton(
                   tooltip: 'নতুন ক্যাটাগরি বানান',
-                  icon: const Icon(Icons.add_circle_outline),
+                  icon: const Icon(Iconsax.add_circle),
                   onPressed: () => setState(() => _creatingCategory = true),
                 ),
               ],
@@ -179,25 +216,36 @@ class _AddWishlistItemDialogState extends State<_AddWishlistItemDialog> {
               autofocus: true,
               decoration: InputDecoration(
                 labelText: 'নতুন ক্যাটাগরির নাম',
-                suffixIcon: IconButton(icon: const Icon(Icons.close), onPressed: () => setState(() => _creatingCategory = false)),
+                suffixIcon: IconButton(
+                  icon: const Icon(Iconsax.close_circle),
+                  onPressed: () => setState(() => _creatingCategory = false),
+                ),
               ),
             ),
           ],
         ],
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('বাতিল')),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('বাতিল'),
+        ),
         FilledButton(
           onPressed: () {
             final text = _textController.text.trim();
             if (text.isEmpty) return;
-            final newCategoryName = _creatingCategory ? _newCategoryController.text.trim() : null;
+            final newCategoryName = _creatingCategory
+                ? _newCategoryController.text.trim()
+                : null;
             Navigator.pop(
               context,
               _NewWishlistItem(
                 text: text,
                 categoryId: _categoryId,
-                newCategoryName: (newCategoryName != null && newCategoryName.isNotEmpty) ? newCategoryName : null,
+                newCategoryName:
+                    (newCategoryName != null && newCategoryName.isNotEmpty)
+                    ? newCategoryName
+                    : null,
               ),
             );
           },

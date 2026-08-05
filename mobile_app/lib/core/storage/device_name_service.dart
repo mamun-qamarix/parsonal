@@ -16,14 +16,19 @@ class DeviceNameService {
         if (model.isEmpty) return 'আমার ফোন';
         // Avoid "Samsung Samsung Galaxy A52" when the model already
         // includes the manufacturer name.
-        if (manufacturer.isEmpty || model.toLowerCase().contains(manufacturer.toLowerCase())) {
+        if (manufacturer.isEmpty ||
+            model.toLowerCase().contains(manufacturer.toLowerCase())) {
           return model;
         }
         return '$manufacturer $model';
       }
       if (Platform.isIOS) {
         final ios = await info.iosInfo;
-        return ios.name.isNotEmpty ? ios.name : (ios.utsname.machine.isNotEmpty ? ios.utsname.machine : 'আমার ফোন');
+        return ios.name.isNotEmpty
+            ? ios.name
+            : (ios.utsname.machine.isNotEmpty
+                  ? ios.utsname.machine
+                  : 'আমার ফোন');
       }
     } catch (_) {
       // Fall through to the generic default below.

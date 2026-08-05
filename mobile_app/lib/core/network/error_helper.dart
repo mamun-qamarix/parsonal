@@ -7,18 +7,25 @@ import 'package:dio/dio.dart';
 const Map<String, String> _knownBackendErrors = {
   'Invalid credentials': 'পাসওয়ার্ড সঠিক নয়।',
   'Invalid role': 'রোলটি সঠিক নয়।',
-  'Face not enrolled yet for this spouse': 'এই ব্যবহারকারীর মুখ এখনো রেজিস্টার করা হয়নি — আগে মুখ রেজিস্ট্রেশন সম্পন্ন করুন।',
+  'Face not enrolled yet for this spouse':
+      'এই ব্যবহারকারীর মুখ এখনো রেজিস্টার করা হয়নি — আগে মুখ রেজিস্ট্রেশন সম্পন্ন করুন।',
   'Face verification failed': 'মুখ মেলেনি — আবার চেষ্টা করুন।',
-  'Invalid or expired challenge token': 'সময় শেষ হয়ে গেছে — প্রথম থেকে আবার চেষ্টা করুন।',
+  'Invalid or expired challenge token':
+      'সময় শেষ হয়ে গেছে — প্রথম থেকে আবার চেষ্টা করুন।',
   'Invalid or expired token': 'সেশনের মেয়াদ শেষ হয়ে গেছে — আবার লগইন করুন।',
   'Spouse not found': 'এই ব্যবহারকারীকে খুঁজে পাওয়া যায়নি।',
-  'Setup code not found': 'এই সেটআপ কোডটি খুঁজে পাওয়া যায়নি — বানান ঠিক আছে কিনা দেখুন।',
+  'Setup code not found':
+      'এই সেটআপ কোডটি খুঁজে পাওয়া যায়নি — বানান ঠিক আছে কিনা দেখুন।',
   'Admin login required': 'অ্যাডমিন লগইন করা লাগবে।',
   'Invalid admin password': 'অ্যাডমিন পাসওয়ার্ড সঠিক নয়।',
-  'Reset session not found or expired': 'রিসেট কোডটি খুঁজে পাওয়া যায়নি বা মেয়াদ শেষ হয়ে গেছে।',
-  'An already-logged-in device must approve this reset first': 'নতুন পাসওয়ার্ড সেট করার আগে অন্য কোনো লগইন করা ডিভাইস থেকে এই রিসেট অনুমোদন করাতে হবে।',
-  'Target spouse not found': 'যার পাসওয়ার্ড পরিবর্তন করতে চাইছেন তাকে খুঁজে পাওয়া যায়নি।',
-  'Too many attempts. Please wait a few minutes and try again.': 'অনেকবার চেষ্টা করা হয়েছে — কিছুক্ষণ অপেক্ষা করে আবার চেষ্টা করুন।',
+  'Reset session not found or expired':
+      'রিসেট কোডটি খুঁজে পাওয়া যায়নি বা মেয়াদ শেষ হয়ে গেছে।',
+  'An already-logged-in device must approve this reset first':
+      'নতুন পাসওয়ার্ড সেট করার আগে অন্য কোনো লগইন করা ডিভাইস থেকে এই রিসেট অনুমোদন করাতে হবে।',
+  'Target spouse not found':
+      'যার পাসওয়ার্ড পরিবর্তন করতে চাইছেন তাকে খুঁজে পাওয়া যায়নি।',
+  'Too many attempts. Please wait a few minutes and try again.':
+      'অনেকবার চেষ্টা করা হয়েছে — কিছুক্ষণ অপেক্ষা করে আবার চেষ্টা করুন।',
 };
 
 /// Turns any error thrown from an API call into a specific, user-facing

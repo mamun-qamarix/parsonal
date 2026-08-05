@@ -4,17 +4,23 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/media/video_thumbnail_helper.dart';
 import '../../core/network/error_helper.dart';
 import '../../models/models.dart';
 import '../../providers/session_provider.dart';
 import '../../services/media_service.dart';
 import '../../services/vault_service.dart';
 import '../../widgets/error_message_box.dart';
+import 'package:iconsax_flutter/iconsax_flutter.dart';
 
 class CreateEntryScreen extends StatefulWidget {
   final String contentType; // text | photo | video
   final List<Category> categories;
-  const CreateEntryScreen({super.key, required this.contentType, required this.categories});
+  const CreateEntryScreen({
+    super.key,
+    required this.contentType,
+    required this.categories,
+  });
 
   @override
   State<CreateEntryScreen> createState() => _CreateEntryScreenState();
@@ -35,10 +41,20 @@ class _CreateEntryScreenState extends State<CreateEntryScreen> {
       context: context,
       builder: (_) => AlertDialog(
         title: const Text('নতুন ক্যাটাগরি'),
-        content: TextField(controller: controller, autofocus: true, decoration: const InputDecoration(hintText: 'যেমন: ভ্রমণের স্মৃতি')),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(hintText: 'যেমন: ভ্রমণের স্মৃতি'),
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('বাতিল')),
-          FilledButton(onPressed: () => Navigator.pop(context, controller.text.trim()), child: const Text('তৈরি করুন')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('বাতিল'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('তৈরি করুন'),
+          ),
         ],
       ),
     );
@@ -53,7 +69,9 @@ class _CreateEntryScreenState extends State<CreateEntryScreen> {
 
   Future<void> _pickMedia() async {
     final picker = ImagePicker();
-    final file = widget.contentType == 'photo' ? await picker.pickImage(source: ImageSource.gallery, imageQuality: 90) : await picker.pickVideo(source: ImageSource.gallery);
+    final file = widget.contentType == 'photo'
+        ? await picker.pickImage(source: ImageSource.gallery, imageQuality: 90)
+        : await picker.pickVideo(source: ImageSource.gallery);
     if (file != null) setState(() => _picked = file);
   }
 
@@ -77,10 +95,14 @@ class _CreateEntryScreenState extends State<CreateEntryScreen> {
       final mediaIds = <String>[];
       if (_picked != null) {
         final bytes = await File(_picked!.path).readAsBytes();
+        final thumbnailBytes = widget.contentType == 'video'
+            ? await generateVideoThumbnail(_picked!.path)
+            : null;
         final asset = await MediaService().upload(
           vmk,
           kind: widget.contentType == 'photo' ? 'image' : 'video',
           bytes: bytes,
+          thumbnailBytes: thumbnailBytes,
           onSendProgress: (sent, total) {
             if (total <= 0 || !mounted) return;
             setState(() => _uploadProgress = sent / total);
@@ -99,7 +121,11 @@ class _CreateEntryScreenState extends State<CreateEntryScreen> {
     } catch (e) {
       setState(() => _error = describeApiError(e));
     } finally {
-      if (mounted) setState(() { _saving = false; _uploadProgress = null; });
+      if (mounted)
+        setState(() {
+          _saving = false;
+          _uploadProgress = null;
+        });
     }
   }
 
@@ -125,15 +151,31 @@ class _CreateEntryScreenState extends State<CreateEntryScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (widget.contentType == 'text')
-                TextField(controller: _textController, maxLines: 6, decoration: const InputDecoration(hintText: 'সঙ্গীর জন্য কিছু লিখুন...'))
+                TextField(
+                  controller: _textController,
+                  maxLines: 6,
+                  decoration: const InputDecoration(
+                    hintText: 'সঙ্গীর জন্য কিছু লিখুন...',
+                  ),
+                )
               else ...[
                 OutlinedButton.icon(
-                  icon: const Icon(Icons.attach_file),
+                  icon: const Icon(Iconsax.paperclip_2),
                   onPressed: _pickMedia,
-                  label: Text(_picked == null ? '$_typeLabel বাছাই করুন' : 'বাছাই করা হয়েছে: ${_picked!.name}'),
+                  label: Text(
+                    _picked == null
+                        ? '$_typeLabel বাছাই করুন'
+                        : 'বাছাই করা হয়েছে: ${_picked!.name}',
+                  ),
                 ),
                 const SizedBox(height: 12),
-                TextField(controller: _textController, maxLines: 3, decoration: const InputDecoration(hintText: 'ক্যাপশন লিখুন (ঐচ্ছিক)')),
+                TextField(
+                  controller: _textController,
+                  maxLines: 3,
+                  decoration: const InputDecoration(
+                    hintText: 'ক্যাপশন লিখুন (ঐচ্ছিক)',
+                  ),
+                ),
               ],
               const SizedBox(height: 16),
               Row(
@@ -141,24 +183,46 @@ class _CreateEntryScreenState extends State<CreateEntryScreen> {
                   Expanded(
                     child: DropdownButtonFormField<String>(
                       initialValue: _categoryId,
-                      decoration: const InputDecoration(labelText: 'ক্যাটাগরি (ঐচ্ছিক)'),
-                      items: _categories.map((c) => DropdownMenuItem(value: c.id, child: Text(c.decryptedName ?? '...'))).toList(),
+                      decoration: const InputDecoration(
+                        labelText: 'ক্যাটাগরি (ঐচ্ছিক)',
+                      ),
+                      items: _categories
+                          .map(
+                            (c) => DropdownMenuItem(
+                              value: c.id,
+                              child: Text(c.decryptedName ?? '...'),
+                            ),
+                          )
+                          .toList(),
                       onChanged: (v) => setState(() => _categoryId = v),
                     ),
                   ),
-                  IconButton(tooltip: 'নতুন ক্যাটাগরি বানান', icon: const Icon(Icons.add_circle_outline), onPressed: _addCategory),
+                  IconButton(
+                    tooltip: 'নতুন ক্যাটাগরি বানান',
+                    icon: const Icon(Iconsax.add_circle),
+                    onPressed: _addCategory,
+                  ),
                 ],
               ),
               const SizedBox(height: 20),
-              if (_error != null) Padding(padding: const EdgeInsets.only(bottom: 12), child: ErrorMessageBox(_error!)),
+              if (_error != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: ErrorMessageBox(_error!),
+                ),
               if (_saving && _picked != null) ...[
                 ClipRRect(
                   borderRadius: BorderRadius.circular(999),
-                  child: LinearProgressIndicator(value: _uploadProgress, minHeight: 6),
+                  child: LinearProgressIndicator(
+                    value: _uploadProgress,
+                    minHeight: 6,
+                  ),
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  _uploadProgress != null ? 'আপলোড হচ্ছে... ${(_uploadProgress! * 100).toStringAsFixed(0)}%' : 'আপলোড শুরু হচ্ছে...',
+                  _uploadProgress != null
+                      ? 'আপলোড হচ্ছে... ${(_uploadProgress! * 100).toStringAsFixed(0)}%'
+                      : 'আপলোড শুরু হচ্ছে...',
                   textAlign: TextAlign.center,
                   style: const TextStyle(fontSize: 12, color: Colors.grey),
                 ),
@@ -167,7 +231,11 @@ class _CreateEntryScreenState extends State<CreateEntryScreen> {
               ElevatedButton(
                 onPressed: _saving ? null : _submit,
                 child: _saving
-                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
                     : const Text('ভল্টে সেভ করুন'),
               ),
             ],

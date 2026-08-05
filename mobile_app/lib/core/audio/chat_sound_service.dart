@@ -17,7 +17,10 @@ class ChatSoundService {
 
   static Future<void> playReceived() async {
     try {
-      await _receivedPlayer.play(AssetSource('sounds/received.wav'), volume: 0.6);
+      await _receivedPlayer.play(
+        AssetSource('sounds/received.wav'),
+        volume: 0.6,
+      );
     } catch (_) {}
   }
 }

@@ -5,6 +5,7 @@ import '../../core/security/biometric_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../providers/session_provider.dart';
 import '../../widgets/error_message_box.dart';
+import 'package:iconsax_flutter/iconsax_flutter.dart';
 
 /// Shown when it's been under an hour since the last password entry --
 /// just a fingerprint/face/device-PIN tap gets back in, no password
@@ -40,7 +41,8 @@ class _BiometricUnlockScreenState extends State<BiometricUnlockScreen> {
     } else {
       setState(() {
         _checking = false;
-        _error = 'যাচাই করা যায়নি — আবার চেষ্টা করুন, অথবা পাসওয়ার্ড দিয়ে ঢুকুন।';
+        _error =
+            'যাচাই করা যায়নি — আবার চেষ্টা করুন, অথবা পাসওয়ার্ড দিয়ে ঢুকুন।';
       });
     }
   }
@@ -56,27 +58,46 @@ class _BiometricUnlockScreenState extends State<BiometricUnlockScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Icon(Icons.fingerprint, size: 72, color: AppColors.halalGreen),
+              const Icon(
+                Iconsax.finger_scan,
+                size: 72,
+                color: AppColors.halalGreen,
+              ),
               const SizedBox(height: 16),
               Text(
-                role == 'husband' ? 'স্বাগতম, স্বামী' : (role == 'wife' ? 'স্বাগতম, স্ত্রী' : 'স্বাগতম'),
+                role == 'husband'
+                    ? 'স্বাগতম, স্বামী'
+                    : (role == 'wife' ? 'স্বাগতম, স্ত্রী' : 'স্বাগতম'),
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 4),
-              const Text('প্রবেশ করতে ফিঙ্গারপ্রিন্ট দিন', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
+              const Text(
+                'প্রবেশ করতে ফিঙ্গারপ্রিন্ট দিন',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey),
+              ),
               const SizedBox(height: 24),
-              if (_error != null) Padding(padding: const EdgeInsets.only(bottom: 12), child: ErrorMessageBox(_error!, textAlign: TextAlign.center)),
+              if (_error != null)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: ErrorMessageBox(_error!, textAlign: TextAlign.center),
+                ),
               ElevatedButton.icon(
-                icon: const Icon(Icons.fingerprint),
+                icon: const Icon(Iconsax.finger_scan),
                 onPressed: _checking ? null : _tryUnlock,
                 label: _checking
-                    ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
                     : const Text('আবার চেষ্টা করুন'),
               ),
               const SizedBox(height: 12),
               TextButton(
-                onPressed: () => context.read<SessionProvider>().useFallbackPassword(),
+                onPressed: () =>
+                    context.read<SessionProvider>().useFallbackPassword(),
                 child: const Text('পাসওয়ার্ড দিয়ে ঢুকুন'),
               ),
             ],

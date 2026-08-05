@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../../models/models.dart';
 import '../../services/audit_service.dart';
 import '../../widgets/shimmer_loading.dart';
+import 'package:iconsax_flutter/iconsax_flutter.dart';
 
 class AuditLogScreen extends StatefulWidget {
   const AuditLogScreen({super.key});
@@ -24,18 +25,22 @@ class _AuditLogScreenState extends State<AuditLogScreen> {
 
   Future<void> _load() async {
     final log = await AuditService().getLog();
-    if (mounted) setState(() { _log = log; _loading = false; });
+    if (mounted)
+      setState(() {
+        _log = log;
+        _loading = false;
+      });
   }
 
   IconData _iconFor(String action) {
-    if (action.startsWith('content.view')) return Icons.visibility_outlined;
-    if (action.contains('delete')) return Icons.delete_outline;
-    if (action.contains('edit')) return Icons.edit_outlined;
-    if (action.contains('create')) return Icons.add_circle_outline;
-    if (action.startsWith('auth.')) return Icons.lock_outline;
-    if (action.startsWith('reaction')) return Icons.favorite_border;
-    if (action.startsWith('comment')) return Icons.mode_comment_outlined;
-    return Icons.info_outline;
+    if (action.startsWith('content.view')) return Iconsax.eye;
+    if (action.contains('delete')) return Iconsax.trash;
+    if (action.contains('edit')) return Iconsax.edit_2;
+    if (action.contains('create')) return Iconsax.add_circle;
+    if (action.startsWith('auth.')) return Iconsax.lock;
+    if (action.startsWith('reaction')) return Iconsax.heart;
+    if (action.startsWith('comment')) return Iconsax.message_2;
+    return Iconsax.info_circle;
   }
 
   @override
@@ -53,7 +58,12 @@ class _AuditLogScreenState extends State<AuditLogScreen> {
                   return ListTile(
                     leading: Icon(_iconFor(entry.action)),
                     title: Text(entry.action),
-                    subtitle: Text(DateFormat.yMMMd().add_jm().format(entry.createdAt.toLocal()) + (entry.detail != null ? ' · ${entry.detail}' : '')),
+                    subtitle: Text(
+                      DateFormat.yMMMd().add_jm().format(
+                            entry.createdAt.toLocal(),
+                          ) +
+                          (entry.detail != null ? ' · ${entry.detail}' : ''),
+                    ),
                   );
                 },
               ),
