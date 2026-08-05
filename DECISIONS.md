@@ -604,6 +604,35 @@ Verified against a local Postgres: a message's `read_at` is null until
 the recipient marks it, marking works and persists, and a sender
 marking their own message is a safe no-op.
 
+## 29. Chat: sounds, WhatsApp-style voice recording, privacy mask
+
+**Sounds:** chat was completely silent -- easy to miss a new message
+while the screen was open but not focused on the conversation. Added
+two short, distinct sounds (synthesized locally as plain sine-tone WAVs,
+no external asset library needed) played via `audioplayers`: a light
+upward blip on send, a two-note "ding-dong" on receiving a genuinely new
+incoming message (not on `chat_ack` echoes of your own sends, not on
+`chat_read` events).
+
+**Voice recording redesigned, WhatsApp-style:** previously tapping the
+mic just silently recorded with zero feedback. Now, while recording, the
+input row is replaced with: a live waveform (bars driven by
+`record`'s `onAmplitudeChanged` stream, so it visibly reacts to actual
+volume), a running MM:SS timer, a delete/cancel button, a pause/resume
+button (the `record` package supports pausing and resuming into the
+*same* file, confirmed via its source before relying on it), and a send
+button that stops recording and sends immediately in one tap.
+
+**Privacy mask (the eye icon):** a new app-bar toggle in the chat screen
+that replaces every message's content with a starred placeholder
+(`🔒 ★ ★ ★ ★`) -- deliberately **local UI state only**, not persisted,
+not synced, and not visible to or affected by the other spouse's device
+at all. It exists purely so whoever is holding a specific phone can
+instantly hide the transcript from anyone glancing at that screen
+(including re-hiding it from themselves if handing the phone to someone
+else); the other spouse's own chat view is completely unaffected unless
+they independently toggle their own icon.
+
 ## 19. Add Device (peer-to-peer pairing)
 
 **Problem:** each role (`husband`/`wife`) can only be claimed once, ever

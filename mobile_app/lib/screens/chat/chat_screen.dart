@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:record/record.dart';
 
+import '../../core/audio/chat_sound_service.dart';
 import '../../core/crypto/vault_crypto.dart';
 import '../../core/network/ws_client.dart';
 import '../../core/theme/app_theme.dart';
@@ -35,8 +36,20 @@ class _ChatScreenState extends State<ChatScreen> {
   List<ChatMessageModel> _messages = [];
   StreamSubscription? _wsSub;
   bool _loading = true;
-  bool _recording = false;
   bool _sending = false;
+
+  // Privacy mask: purely local UI state, per DECISIONS.md -- toggling this
+  // only affects what THIS device renders, never synced or visible to the
+  // other spouse unless they independently toggle their own.
+  bool _hidden = false;
+
+  // WhatsApp-style voice recording state.
+  bool _recording = false;
+  bool _paused = false;
+  Duration _recordDuration = Duration.zero;
+  Timer? _recordTimer;
+  StreamSubscription<Amplitude>? _amplitudeSub;
+  final List<double> _waveform = [];
 
   @override
   void initState() {
@@ -90,6 +103,8 @@ class _ChatScreenState extends State<ChatScreen> {
         }
       }
       if (!mounted) return;
+      final myId = context.read<SessionProvider>().spouseId;
+      final isNewIncoming = msg.senderId != myId && !_messages.any((m) => m.id == msg.id);
       setState(() {
         final existingIndex = _messages.indexWhere((m) => m.id == msg.id);
         if (existingIndex >= 0) {
@@ -99,8 +114,10 @@ class _ChatScreenState extends State<ChatScreen> {
         }
       });
       _scrollToBottom();
-      final myId = context.read<SessionProvider>().spouseId;
-      if (msg.senderId != myId) _chatService.markRead(msg.id);
+      if (isNewIncoming) {
+        ChatSoundService.playReceived();
+        _chatService.markRead(msg.id);
+      }
     }
   }
 
@@ -118,6 +135,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final vmk = context.read<SessionProvider>().vmk!;
     _textController.clear();
     await _chatService.sendTextViaWs(vmk, text);
+    ChatSoundService.playSent();
   }
 
   Future<void> _sendMediaFile(String contentType, String kind, File file) async {
@@ -129,6 +147,7 @@ class _ChatScreenState extends State<ChatScreen> {
       final msg = await _chatService.sendMedia(contentType: contentType, mediaAssetId: asset.id);
       if (mounted) setState(() => _messages.add(msg));
       _scrollToBottom();
+      ChatSoundService.playSent();
     } finally {
       if (mounted) setState(() => _sending = false);
     }
@@ -151,27 +170,90 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  Future<void> _toggleRecording() async {
-    if (_recording) {
-      final path = await _recorder.stop();
-      setState(() => _recording = false);
-      if (path != null) await _sendMediaFile('voice', 'voice', File(path));
-    } else {
-      if (await _recorder.hasPermission()) {
-        final dir = Directory.systemTemp;
-        final path = '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
-        await _recorder.start(const RecordConfig(), path: path);
-        setState(() => _recording = true);
+  // --- Voice recording: start/pause/resume/cancel/send, WhatsApp-style ---
+
+  void _startRecordTimer() {
+    _recordTimer?.cancel();
+    _recordTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted) setState(() => _recordDuration += const Duration(seconds: 1));
+    });
+  }
+
+  Future<void> _startRecording() async {
+    if (!await _recorder.hasPermission()) return;
+    final dir = Directory.systemTemp;
+    final path = '${dir.path}/voice_${DateTime.now().millisecondsSinceEpoch}.m4a';
+    await _recorder.start(const RecordConfig(), path: path);
+    _waveform.clear();
+    _recordDuration = Duration.zero;
+    _startRecordTimer();
+    _amplitudeSub?.cancel();
+    _amplitudeSub = _recorder.onAmplitudeChanged(const Duration(milliseconds: 150)).listen((amp) {
+      // amp.current is dBFS, roughly -45 (quiet) to 0 (loud) in practice.
+      final level = ((amp.current + 45) / 45).clamp(0.05, 1.0);
+      if (mounted) {
+        setState(() {
+          _waveform.add(level);
+          if (_waveform.length > 40) _waveform.removeAt(0);
+        });
       }
+    });
+    setState(() {
+      _recording = true;
+      _paused = false;
+    });
+  }
+
+  Future<void> _togglePause() async {
+    if (_paused) {
+      await _recorder.resume();
+      _startRecordTimer();
+    } else {
+      await _recorder.pause();
+      _recordTimer?.cancel();
     }
+    setState(() => _paused = !_paused);
+  }
+
+  Future<void> _resetRecordingState() async {
+    _recordTimer?.cancel();
+    await _amplitudeSub?.cancel();
+    if (mounted) {
+      setState(() {
+        _recording = false;
+        _paused = false;
+        _recordDuration = Duration.zero;
+        _waveform.clear();
+      });
+    }
+  }
+
+  Future<void> _cancelRecording() async {
+    final path = await _recorder.stop();
+    await _resetRecordingState();
+    if (path != null) {
+      try {
+        await File(path).delete();
+      } catch (_) {}
+    }
+  }
+
+  Future<void> _finishAndSendRecording() async {
+    final path = await _recorder.stop();
+    await _resetRecordingState();
+    if (path != null) await _sendMediaFile('voice', 'voice', File(path));
   }
 
   @override
   void dispose() {
     _wsSub?.cancel();
+    _recordTimer?.cancel();
+    _amplitudeSub?.cancel();
     _recorder.dispose();
     super.dispose();
   }
+
+  String _fmtDuration(Duration d) => '${d.inMinutes}:${(d.inSeconds % 60).toString().padLeft(2, '0')}';
 
   Widget _seenTick(ChatMessageModel msg) {
     IconData icon;
@@ -189,11 +271,31 @@ class _ChatScreenState extends State<ChatScreen> {
     return Icon(icon, size: 14, color: color);
   }
 
+  Widget _hiddenPlaceholder(bool mine) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Icons.lock_outline, size: 13, color: mine ? Colors.white70 : Colors.grey),
+        const SizedBox(width: 5),
+        Text('★ ★ ★ ★', style: TextStyle(color: mine ? Colors.white : Colors.grey.shade700, letterSpacing: 2, fontSize: 13)),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final myId = context.watch<SessionProvider>().spouseId;
     return Scaffold(
-      appBar: AppBar(title: const Text('চ্যাট')),
+      appBar: AppBar(
+        title: const Text('চ্যাট'),
+        actions: [
+          IconButton(
+            icon: Icon(_hidden ? Icons.visibility_off_outlined : Icons.visibility_outlined),
+            tooltip: _hidden ? 'মেসেজ দেখান' : 'মেসেজ লুকান (শুধু এই ফোনে)',
+            onPressed: () => setState(() => _hidden = !_hidden),
+          ),
+        ],
+      ),
       body: Column(
         children: [
           Expanded(
@@ -220,7 +322,9 @@ class _ChatScreenState extends State<ChatScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              if (msg.contentType == 'text')
+                              if (_hidden)
+                                _hiddenPlaceholder(mine)
+                              else if (msg.contentType == 'text')
                                 Text(msg.decryptedText ?? '', style: TextStyle(color: mine ? Colors.white : null))
                               else if (msg.contentType == 'photo' && msg.mediaAssetId != null)
                                 GestureDetector(
@@ -278,39 +382,105 @@ class _ChatScreenState extends State<ChatScreen> {
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              child: Row(
-                children: [
-                  PopupMenuButton<String>(
-                    icon: const Icon(Icons.add_circle_outline),
-                    onSelected: (v) {
-                      if (v == 'image') _pickImage();
-                      if (v == 'video') _pickVideo();
-                      if (v == 'file') _pickFile();
-                    },
-                    itemBuilder: (_) => const [
-                      PopupMenuItem(value: 'image', child: Text('ছবি')),
-                      PopupMenuItem(value: 'video', child: Text('ভিডিও')),
-                      PopupMenuItem(value: 'file', child: Text('ফাইল')),
-                    ],
-                  ),
-                  IconButton(
-                    icon: Icon(_recording ? Icons.stop_circle : Icons.mic_none, color: _recording ? Colors.red : null),
-                    onPressed: _toggleRecording,
-                  ),
-                  Expanded(
-                    child: TextField(
-                      controller: _textController,
-                      decoration: const InputDecoration(hintText: 'লিখুন...'),
-                      onSubmitted: (_) => _sendText(),
-                    ),
-                  ),
-                  IconButton(icon: const Icon(Icons.send, color: AppColors.halalGreen), onPressed: _sendText),
-                ],
-              ),
+              child: _recording ? _buildRecordingBar() : _buildNormalInputBar(),
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildNormalInputBar() {
+    return Row(
+      children: [
+        PopupMenuButton<String>(
+          icon: const Icon(Icons.add_circle_outline),
+          onSelected: (v) {
+            if (v == 'image') _pickImage();
+            if (v == 'video') _pickVideo();
+            if (v == 'file') _pickFile();
+          },
+          itemBuilder: (_) => const [
+            PopupMenuItem(value: 'image', child: Text('ছবি')),
+            PopupMenuItem(value: 'video', child: Text('ভিডিও')),
+            PopupMenuItem(value: 'file', child: Text('ফাইল')),
+          ],
+        ),
+        IconButton(icon: const Icon(Icons.mic_none), onPressed: _startRecording),
+        Expanded(
+          child: TextField(
+            controller: _textController,
+            decoration: const InputDecoration(hintText: 'লিখুন...'),
+            onSubmitted: (_) => _sendText(),
+          ),
+        ),
+        IconButton(icon: const Icon(Icons.send, color: AppColors.halalGreen), onPressed: _sendText),
+      ],
+    );
+  }
+
+  Widget _buildRecordingBar() {
+    return Row(
+      children: [
+        IconButton(
+          icon: const Icon(Icons.delete_outline, color: AppColors.rejected),
+          tooltip: 'বাতিল করুন',
+          onPressed: _cancelRecording,
+        ),
+        Expanded(
+          child: Container(
+            height: 42,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(color: Colors.grey.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(21)),
+            child: Row(
+              children: [
+                Icon(Icons.fiber_manual_record, color: _paused ? Colors.grey : Colors.red, size: 12),
+                const SizedBox(width: 8),
+                Expanded(child: _WaveformBars(levels: _waveform, color: _paused ? Colors.grey : AppColors.halalGreen)),
+                const SizedBox(width: 8),
+                Text(_fmtDuration(_recordDuration), style: const TextStyle(fontSize: 12)),
+              ],
+            ),
+          ),
+        ),
+        IconButton(
+          icon: Icon(_paused ? Icons.play_circle_fill : Icons.pause_circle_filled, color: AppColors.halalGreen),
+          tooltip: _paused ? 'আবার শুরু করুন' : 'থামান',
+          onPressed: _togglePause,
+        ),
+        IconButton(
+          icon: const Icon(Icons.send, color: AppColors.halalGreen),
+          tooltip: 'পাঠান',
+          onPressed: _finishAndSendRecording,
+        ),
+      ],
+    );
+  }
+}
+
+/// Small live waveform made of simple bars driven by the recorder's
+/// amplitude stream -- WhatsApp-style visual feedback that recording is
+/// actually picking up sound. See DECISIONS.md.
+class _WaveformBars extends StatelessWidget {
+  final List<double> levels;
+  final Color color;
+  const _WaveformBars({required this.levels, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    final shown = levels.length > 24 ? levels.sublist(levels.length - 24) : levels;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        for (final level in shown) ...[
+          Container(
+            width: 3,
+            height: 4 + level * 20,
+            decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(2)),
+          ),
+          const SizedBox(width: 2),
+        ],
+      ],
     );
   }
 }
