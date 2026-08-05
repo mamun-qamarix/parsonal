@@ -32,13 +32,13 @@ class SocialService {
     );
   }
 
-  Future<List<ReactionBreakdown>> getReactionBreakdown(
+  Future<List<ReactionPersonGroup>> getReactionBreakdown(
     String targetType,
     String targetId,
   ) async {
     final res = await _dio.get('/reactions/$targetType/$targetId');
     return (res.data as List)
-        .map((e) => ReactionBreakdown.fromJson(e))
+        .map((e) => ReactionPersonGroup.fromJson(e))
         .toList();
   }
 

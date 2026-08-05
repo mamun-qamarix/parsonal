@@ -940,6 +940,92 @@ all new routes registered, and a `--split-per-abi` release build
 succeeded (`arm64-v8a` ~40MB, unchanged despite the net-new features --
 video_trimmer's removal offset the added code).
 
+## 34. Real profile identity everywhere, per-person reactions, notification inbox, chat gallery
+
+**Profiles: either spouse can edit either one now.** Previously `PUT
+/profile/me` only ever touched the *caller's own* profile, and the
+Flutter UI hid the edit controls entirely when viewing the other
+person's tab. New `PUT /profile/{role}` lets either spouse edit either
+profile directly -- same shared-trust model as device management, vault
+entries, etc. `/profile/me` is left in place, just no longer called by
+the client.
+
+**Real name + photo everywhere a role was shown generically.** Vault
+entry cards, comments, and Reel used to show a plain "husband"/"wife"
+label with a colored generic icon. New `ProfileCache` (fetches +
+decrypts both profiles once per session, since there are only ever two)
+backs a small `AuthorAvatar`/`AuthorRow` pair of widgets used everywhere
+"who did this" needs to render -- falls back to the old generic
+label/icon only if that profile has no name/photo set yet.
+
+**Reactions, grouped by person instead of by emoji.** Now that reacting
+with several different emoji is normal, showing a count next to each one
+made no sense. `GET /reactions/...` now returns one row per person
+(`{role, emojis: [...], is_me}`) instead of one row per emoji with
+husband/wife counts -- the client renders one line per reactor: their
+avatar, then all their emoji stuck directly together, no counts. Tapping
+an emoji in your own row removes it.
+
+**Notification inbox.** Notifications were purely ephemeral before --
+a WebSocket ping that showed a SnackBar *if* you happened to be looking
+right then, nothing persisted, no history, no unread count. New
+`NotificationLog` table records every `notify_spouse()` event per
+recipient (`notify_spouse()` now takes `db` and writes a row before
+doing anything else); `GET /notifications`, `GET /notifications/unread-
+count`, `POST /notifications/mark-all-read` back a bell icon (badge =
+unread count, refreshes live off the same WS events the SnackBar system
+already listens for) and a full inbox screen. Body text is rendered on
+read from category/content_type via the same `notification_body()`
+table pushes already used -- never stored pre-rendered, so a wording
+change applies retroactively, and the same "never reveals actual
+content" guarantee from the push-notification work holds here too.
+
+**Home screen, further redesign on top of #33:**
+- Long captions get a "আরও দেখুন" (see more) toggle instead of being cut
+  off with no way to read the rest.
+- Media no longer force-crops to a fixed 16:10 box -- `DecryptedThumbnail`
+  gained an `onAspectRatio` callback (decodes real width/height once
+  bytes arrive) that drives the card's `AspectRatio`, capped so height
+  never exceeds 2x the width (an extreme portrait photo/video would
+  otherwise blow out the feed's rhythm) but otherwise shows the media's
+  true proportions.
+- New category filter row (horizontal, "সব" selected by default) using
+  the vault categories that were already being fetched for the create-
+  entry flow but never surfaced as a filter.
+- Split the single floating `SliverAppBar` from #33 into two: the title
+  bar alone floats/snaps back on any scroll-up, while the countdown card
+  + filter pills now live in a separate, non-floating sliver that
+  scrolls away normally and only comes back once actually scrolled back
+  near the top -- fixes the previous version snapping the *entire*
+  header back on every small upward scroll jitter, which read as buggy.
+
+**Tap-to-fullscreen-zoom, audited everywhere media shows.** Vault entry
+cards, the entry detail screen's photo, and profile photos now all open
+the same `MediaViewerScreen` (moved from `screens/chat/` to `widgets/`
+since it's no longer chat-specific) on tap -- pinch-zoomable, aspect
+ratio always preserved via `BoxFit.contain`. Chat bubbles already had
+this from an earlier release.
+
+**Chat media gallery.** New gallery icon in the chat app bar opens a
+grid of every photo/video ever exchanged (`GET /chat/media`, joining
+`MediaAsset` to `ChatMessage` by `chat_message_id`). Tapping a thumbnail
+opens the same full-screen zoom viewer; each thumbnail also has a
+"পোস্ট করুন" (post) button that publishes that exact image to the home
+feed as a new vault entry -- reusing the already-uploaded `MediaAsset`
+via the existing `media_asset_ids` param on `POST /vault/entries`
+instead of re-uploading. A `MediaAsset` ending up linked to both a chat
+message and a vault entry is fine: `entry_id` and `chat_message_id` are
+independent nullable FK columns, and every query that lists media
+already filters by exactly one of them.
+
+**Bottom nav:** labels removed (`NavigationDestinationLabelBehavior.
+alwaysHide`) -- icons alone, per explicit request.
+
+**Verified:** `flutter analyze` clean, backend imports cleanly (80
+routes registered), and a `--split-per-abi` release build succeeded
+(`arm64-v8a` still ~40MB despite this being the largest single batch of
+UI changes yet).
+
 ## 19. Add Device (peer-to-peer pairing)
 
 **Problem:** each role (`husband`/`wife`) can only be claimed once, ever

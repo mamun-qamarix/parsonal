@@ -8,7 +8,7 @@ from app.config import get_settings
 from app.database import init_models
 from app.services.scheduler import start_scheduler, stop_scheduler
 from app.services.storage import ensure_bucket
-from app.routers import auth, admin, content, media, social, chat, wishlist, phrase, profile, audit, reel, device
+from app.routers import auth, admin, content, media, social, chat, wishlist, phrase, profile, audit, reel, device, notifications
 
 settings = get_settings()
 logging.basicConfig(level=logging.INFO)
@@ -48,6 +48,7 @@ app.include_router(profile.router)
 app.include_router(audit.router)
 app.include_router(reel.router)
 app.include_router(device.router)
+app.include_router(notifications.router)
 
 
 @app.get("/health")

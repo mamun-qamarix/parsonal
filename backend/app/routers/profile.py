@@ -63,6 +63,33 @@ async def update_my_profile(payload: ProfileUpdate, spouse: Spouse = Depends(get
     return _out(profile, spouse.role.value)
 
 
+@router.put("/profile/{role}", response_model=ProfileOut)
+async def update_profile(role: str, payload: ProfileUpdate, spouse: Spouse = Depends(get_current_spouse), db: AsyncSession = Depends(get_db)):
+    """Either spouse can edit either profile -- same shared-trust model as
+    everywhere else in the app (device management, vault entries, etc.).
+    /profile/me above is kept for backward compatibility but the client
+    now always calls this instead, passing whichever role's tab is open.
+    See DECISIONS.md."""
+    target = await db.execute(select(Spouse).where(Spouse.role == RoleEnum(role)))
+    target_spouse = target.scalar_one_or_none()
+    if target_spouse is None:
+        raise HTTPException(status_code=404, detail="Not registered yet")
+
+    profile = await _get_or_create_profile(db, target_spouse.id)
+    if payload.enc_display_name is not None:
+        profile.enc_display_name = b64_to_bytes(payload.enc_display_name)
+    if payload.enc_bio is not None:
+        profile.enc_bio = b64_to_bytes(payload.enc_bio)
+    if payload.enc_anniversary_dates is not None:
+        profile.enc_anniversary_dates = b64_to_bytes(payload.enc_anniversary_dates)
+    if payload.profile_photo_asset_id is not None:
+        profile.profile_photo_asset_id = payload.profile_photo_asset_id
+    profile.updated_at = utcnow()
+    await db.commit()
+    await db.refresh(profile)
+    return _out(profile, role)
+
+
 # ---------- Countdown to next meet ----------
 
 @router.get("/countdown", response_model=CountdownOut | None)

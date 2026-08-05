@@ -9,6 +9,7 @@ import '../../services/vault_service.dart';
 import '../../widgets/comment_section.dart';
 import '../../widgets/decrypted_media.dart';
 import '../../widgets/match_celebration_overlay.dart';
+import '../../widgets/media_viewer_screen.dart';
 import '../../widgets/reaction_bar.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
 
@@ -167,11 +168,22 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
                 borderRadius: BorderRadius.circular(16),
                 child: entry.contentType == 'video'
                     ? DecryptedVideoPlayer(assetId: entry.mediaAssets.first.id)
-                    : SizedBox(
-                        height: 320,
-                        width: double.infinity,
-                        child: DecryptedFullImage(
-                          assetId: entry.mediaAssets.first.id,
+                    : GestureDetector(
+                        onTap: () => Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => MediaViewerScreen(
+                              assetId: entry.mediaAssets.first.id,
+                              contentType: 'photo',
+                            ),
+                          ),
+                        ),
+                        child: SizedBox(
+                          height: 320,
+                          width: double.infinity,
+                          child: DecryptedFullImage(
+                            assetId: entry.mediaAssets.first.id,
+                            zoomable: false, // full zoom lives in MediaViewerScreen now
+                          ),
                         ),
                       ),
               ),

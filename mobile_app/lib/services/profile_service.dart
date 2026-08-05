@@ -43,6 +43,23 @@ class ProfileService {
     await _dio.put('/profile/me', data: data);
   }
 
+  /// Either spouse can edit either profile -- same shared-trust model as
+  /// everywhere else in the app. See DECISIONS.md.
+  Future<void> updateRole(
+    Uint8List vmk,
+    String role, {
+    String? name,
+    String? bio,
+    String? photoAssetId,
+  }) async {
+    final data = <String, dynamic>{};
+    if (name != null)
+      data['enc_display_name'] = await VaultCrypto.encryptText(vmk, name);
+    if (bio != null) data['enc_bio'] = await VaultCrypto.encryptText(vmk, bio);
+    if (photoAssetId != null) data['profile_photo_asset_id'] = photoAssetId;
+    await _dio.put('/profile/$role', data: data);
+  }
+
   Future<Map<String, dynamic>?> getCountdown() async {
     final res = await _dio.get('/countdown');
     return res.data as Map<String, dynamic>?;

@@ -4,7 +4,9 @@ import 'package:provider/provider.dart';
 import '../core/theme/app_theme.dart';
 import '../models/models.dart';
 import '../providers/session_provider.dart';
+import '../services/profile_cache.dart';
 import '../services/social_service.dart';
+import 'author_badge.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
 
 class CommentSection extends StatefulWidget {
@@ -123,17 +125,7 @@ class _CommentSectionState extends State<CommentSection> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                CircleAvatar(
-                  radius: 14,
-                  backgroundColor: c.authorRole == 'husband'
-                      ? AppColors.husband
-                      : AppColors.wife,
-                  child: Icon(
-                    c.authorRole == 'husband' ? Iconsax.man : Iconsax.woman,
-                    size: 16,
-                    color: Colors.white,
-                  ),
-                ),
+                AuthorAvatar(role: c.authorRole, radius: 14),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Container(
@@ -145,7 +137,15 @@ class _CommentSectionState extends State<CommentSection> {
                       color: Colors.grey.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: Text(c.decryptedText ?? ''),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        _AuthorNameLabel(role: c.authorRole),
+                        const SizedBox(height: 2),
+                        Text(c.decryptedText ?? ''),
+                      ],
+                    ),
                   ),
                 ),
                 const SizedBox(width: 4),
@@ -192,6 +192,24 @@ class _CommentSectionState extends State<CommentSection> {
           ],
         ),
       ],
+    );
+  }
+}
+
+class _AuthorNameLabel extends StatelessWidget {
+  final String role;
+  const _AuthorNameLabel({required this.role});
+
+  @override
+  Widget build(BuildContext context) {
+    final vmk = context.read<SessionProvider>().vmk!;
+    return FutureBuilder<ProfileModel?>(
+      future: ProfileCache.instance.get(vmk, role),
+      initialData: ProfileCache.instance.peek(role),
+      builder: (context, snapshot) => Text(
+        authorDisplayName(role, snapshot.data),
+        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
+      ),
     );
   }
 }

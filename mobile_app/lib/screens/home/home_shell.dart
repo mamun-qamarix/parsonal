@@ -1,8 +1,11 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../core/network/ws_client.dart';
+import '../../providers/session_provider.dart';
+import '../../services/profile_cache.dart';
 import '../chat/chat_screen.dart';
 import '../profile/profile_screen.dart';
 import '../reel/reel_screen.dart';
@@ -39,6 +42,8 @@ class _HomeShellState extends State<HomeShell> {
   @override
   void initState() {
     super.initState();
+    final vmk = context.read<SessionProvider>().vmk;
+    if (vmk != null) ProfileCache.instance.warmUp(vmk);
     _wsSub = WsClient.instance.events.listen((data) {
       final type = data['type'];
       if (type == 'daily_reminder') {

@@ -74,7 +74,7 @@ class AppTheme {
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: isDark ? const Color(0xFF17211C) : Colors.white,
         indicatorColor: AppColors.halalGreen.withValues(alpha: 0.18),
-        labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+        labelBehavior: NavigationDestinationLabelBehavior.alwaysHide,
         elevation: 0,
       ),
       dialogTheme: DialogThemeData(

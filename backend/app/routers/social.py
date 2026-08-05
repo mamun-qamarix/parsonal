@@ -9,7 +9,7 @@ from app.deps import get_current_spouse, other_role
 from app.models.social import Reaction, Comment, Favorite, MatchCelebrationSeen
 from app.models.user import Spouse, Device, RoleEnum
 from app.models.audit import AuditLogEntry
-from app.schemas.common import b64_to_bytes, bytes_to_b64, ReactionBreakdown
+from app.schemas.common import b64_to_bytes, bytes_to_b64, ReactionPersonGroup
 from app.schemas.social import ReactionCreate, CommentCreate, CommentEdit, CommentOut, FavoriteToggle
 from app.services.notifications import notify_spouse
 
@@ -32,7 +32,7 @@ async def _notify_other_spouse(db: AsyncSession, my_role: str, category: str) ->
     if target is None:
         return
     tokens = await _push_tokens_for_role(db, target_role)
-    await notify_spouse(str(target.id), tokens, category=category)
+    await notify_spouse(db, str(target.id), tokens, category=category)
 
 
 def _role_of(spouse: Spouse) -> str:
@@ -86,25 +86,29 @@ async def remove_reaction(payload: ReactionCreate, spouse: Spouse = Depends(get_
     return {"ok": True}
 
 
-@router.get("/reactions/{target_type}/{target_id}", response_model=list[ReactionBreakdown])
+@router.get("/reactions/{target_type}/{target_id}", response_model=list[ReactionPersonGroup])
 async def get_reaction_breakdown(target_type: str, target_id: uuid.UUID, spouse: Spouse = Depends(get_current_spouse), db: AsyncSession = Depends(get_db)):
+    """One row per person who's reacted, their emoji in the order added --
+    see ReactionPersonGroup. `reacted_by_me` used to gate a per-emoji
+    toggle; now the client checks the caller's own row's emoji list for
+    the same purpose."""
     result = await db.execute(
         select(Reaction, Spouse.role).join(Spouse, Spouse.id == Reaction.spouse_id).where(
             Reaction.target_type == target_type, Reaction.target_id == target_id
-        )
+        ).order_by(Reaction.created_at)
     )
     rows = result.all()
-    by_emoji: dict[str, dict] = {}
+    by_role: dict[str, dict] = {}
     for reaction, role in rows:
-        entry = by_emoji.setdefault(reaction.emoji, {"husband_count": 0, "wife_count": 0, "reacted_by_me": False})
-        if role == RoleEnum.husband:
-            entry["husband_count"] += 1
-        else:
-            entry["wife_count"] += 1
+        entry = by_role.setdefault(role.value, {"emojis": [], "is_me": False})
+        entry["emojis"].append(reaction.emoji)
         if reaction.spouse_id == spouse.id:
-            entry["reacted_by_me"] = True
+            entry["is_me"] = True
 
-    return [ReactionBreakdown(emoji=e, husband_count=v["husband_count"], wife_count=v["wife_count"], reacted_by_me=v["reacted_by_me"]) for e, v in by_emoji.items()]
+    return [
+        ReactionPersonGroup(role=r, emojis=by_role[r]["emojis"], is_me=by_role[r]["is_me"])
+        for r in ("husband", "wife") if r in by_role
+    ]
 
 
 async def _check_match(db: AsyncSession, target_type: str, target_id: uuid.UUID) -> bool:

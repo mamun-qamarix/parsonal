@@ -20,7 +20,8 @@ import '../../services/chat_service.dart';
 import '../../services/media_service.dart';
 import '../../widgets/decrypted_media.dart';
 import '../../widgets/shimmer_loading.dart';
-import 'media_viewer_screen.dart';
+import '../../widgets/media_viewer_screen.dart';
+import 'chat_gallery_screen.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
 
 class ChatScreen extends StatefulWidget {
@@ -574,6 +575,13 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
               ]
             : [
+                IconButton(
+                  icon: const Icon(Iconsax.gallery),
+                  tooltip: 'গ্যালারি',
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const ChatGalleryScreen()),
+                  ),
+                ),
                 IconButton(icon: const Icon(Iconsax.search_normal_1), onPressed: _openSearch),
                 IconButton(
                   icon: Icon(_hidden ? Iconsax.eye_slash : Iconsax.eye),

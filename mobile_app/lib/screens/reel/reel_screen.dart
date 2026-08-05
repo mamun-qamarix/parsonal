@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../core/theme/app_theme.dart';
 import '../../providers/session_provider.dart';
 import '../../services/reel_service.dart';
+import '../../widgets/author_badge.dart';
 import '../../widgets/comment_section.dart';
 import '../../widgets/decrypted_media.dart';
 import '../../widgets/match_celebration_overlay.dart';
@@ -135,23 +136,10 @@ class _ReelPage extends StatelessWidget {
             children: [
               Row(
                 children: [
-                  CircleAvatar(
-                    radius: 12,
-                    backgroundColor: entry.authorRole == 'husband'
-                        ? AppColors.husband
-                        : AppColors.wife,
-                    child: Icon(
-                      entry.authorRole == 'husband'
-                          ? Iconsax.man
-                          : Iconsax.woman,
-                      size: 14,
-                      color: Colors.white,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    entry.authorRole,
-                    style: const TextStyle(
+                  AuthorRow(
+                    role: entry.authorRole,
+                    avatarRadius: 12,
+                    textStyle: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
                     ),

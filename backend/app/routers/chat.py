@@ -11,7 +11,7 @@ from app.models.chat import ChatMessage, ChatContentTypeEnum
 from app.models.media import MediaAsset
 from app.models.user import Spouse, Device, RoleEnum
 from app.models.common import utcnow
-from app.schemas.chat import ChatMessageCreate, ChatMessageOut
+from app.schemas.chat import ChatMessageCreate, ChatMessageOut, ChatMediaOut
 from app.services.security import decode_token_safe, TokenError
 from app.services.notifications import notify_spouse
 from app.ws.manager import ws_manager
@@ -81,7 +81,7 @@ async def send_message_rest(payload: ChatMessageCreate, spouse: Spouse = Depends
             await db.commit()
         tokens_result = await db.execute(select(Device.push_token).where(Device.spouse_id == target.id, Device.push_token.is_not(None)))
         tokens = [t for t in tokens_result.scalars().all() if t]
-        await notify_spouse(str(target.id), tokens, category="chat", content_type=payload.content_type)
+        await notify_spouse(db, str(target.id), tokens, category="chat", content_type=payload.content_type)
 
     return await _msg_to_out(db, msg)
 
@@ -104,6 +104,26 @@ async def get_message_history(before: uuid.UUID | None = None, limit: int = 50, 
     result = await db.execute(query)
     messages = list(reversed(result.scalars().all()))
     return [await _msg_to_out(db, m) for m in messages]
+
+
+@router.get("/chat/media", response_model=list[ChatMediaOut])
+async def list_chat_media(spouse: Spouse = Depends(get_current_spouse), db: AsyncSession = Depends(get_db)):
+    """Every photo/video ever exchanged in chat, newest first -- powers the
+    gallery screen. See DECISIONS.md."""
+    result = await db.execute(
+        select(ChatMessage, MediaAsset)
+        .join(MediaAsset, MediaAsset.chat_message_id == ChatMessage.id)
+        .where(ChatMessage.content_type.in_([ChatContentTypeEnum.photo, ChatContentTypeEnum.video]))
+        .order_by(ChatMessage.created_at.desc())
+    )
+    rows = result.all()
+    return [
+        ChatMediaOut(
+            message_id=msg.id, media_asset_id=asset.id, content_type=msg.content_type.value,
+            has_thumbnail=asset.thumbnail_object_key is not None, created_at=msg.created_at,
+        )
+        for msg, asset in rows
+    ]
 
 
 @router.post("/chat/messages/{message_id}/read")
@@ -173,7 +193,7 @@ async def chat_ws(websocket: WebSocket, token: str = Query(...)):
                                 await db.commit()
                             tokens_result = await db.execute(select(Device.push_token).where(Device.spouse_id == target.id, Device.push_token.is_not(None)))
                             tokens = [t for t in tokens_result.scalars().all() if t]
-                            await notify_spouse(str(target.id), tokens, category="chat", content_type=payload.content_type)
+                            await notify_spouse(db, str(target.id), tokens, category="chat", content_type=payload.content_type)
 
                         await websocket.send_text(json.dumps({"type": "chat_ack", "message": json.loads((await _msg_to_out(db, msg)).model_dump_json())}))
                 if msg_type == "typing":

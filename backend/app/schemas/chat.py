@@ -23,3 +23,15 @@ class ChatMessageOut(ORMBase):
     read_at: datetime | None
     media_asset_id: uuid.UUID | None = None
     media_has_thumbnail: bool = False
+
+
+class ChatMediaOut(BaseModel):
+    """One entry per photo/video ever exchanged in chat -- powers the
+    gallery screen (see DECISIONS.md), so a couple can browse everything
+    they've shared without scrolling back through the whole conversation."""
+
+    message_id: uuid.UUID
+    media_asset_id: uuid.UUID
+    content_type: str  # photo | video
+    has_thumbnail: bool
+    created_at: datetime

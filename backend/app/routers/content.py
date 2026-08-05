@@ -37,7 +37,7 @@ async def _notify_other_spouse(db: AsyncSession, my_role: str, category: str, co
     if target is None:
         return
     tokens = await _push_tokens_for_role(db, target_role)
-    await notify_spouse(str(target.id), tokens, category=category, content_type=content_type)
+    await notify_spouse(db, str(target.id), tokens, category=category, content_type=content_type)
 
 
 # ---------- Categories ----------

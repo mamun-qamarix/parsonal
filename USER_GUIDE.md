@@ -67,7 +67,7 @@
 
 সরাসরি এখান থেকে APK ফাইলটা দুই ফোনেই ডাউনলোড করুন, আলাদা করে বানানোর দরকার নেই:
 
-**[⬇️ couple-vault-v2.6.0.apk ডাউনলোড করুন](https://github.com/mamun-qamarix/parsonal/releases/download/apk-v2.6.0/couple-vault-v2.6.0.apk)**
+**[⬇️ couple-vault-v2.7.0.apk ডাউনলোড করুন](https://github.com/mamun-qamarix/parsonal/releases/download/apk-v2.7.0/couple-vault-v2.7.0.apk)**
 
 *(APK-এর সাইজ এখনো ~৪০MB।)*
 

@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../../widgets/decrypted_media.dart';
 
-/// Full-screen viewer opened by tapping an image/video bubble in chat --
-/// images are pinch-zoomable, videos play with their real aspect ratio
-/// (not stretched to fill the screen). See DECISIONS.md.
+/// Full-screen viewer opened by tapping any image/video anywhere in the
+/// app (chat bubbles, vault entries, profile photos) -- images are
+/// pinch-zoomable and never distorted (BoxFit.contain preserves the real
+/// aspect ratio), videos play with their real aspect ratio too (not
+/// stretched to fill the screen). See DECISIONS.md.
 class MediaViewerScreen extends StatelessWidget {
   final String assetId;
   final String contentType; // photo | video

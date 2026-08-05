@@ -9,9 +9,11 @@ import '../../core/theme/app_theme.dart';
 import '../../models/models.dart';
 import '../../providers/session_provider.dart';
 import '../../services/media_service.dart';
+import '../../services/profile_cache.dart';
 import '../../services/profile_service.dart';
 import '../../widgets/decrypted_media.dart';
 import '../../widgets/error_message_box.dart';
+import '../../widgets/media_viewer_screen.dart';
 import '../audit/audit_log_screen.dart';
 import '../phrases/phrases_screen.dart';
 import '../settings/settings_screen.dart';
@@ -111,7 +113,8 @@ class _ProfileViewState extends State<_ProfileView> {
   final _nameController = TextEditingController();
   final _bioController = TextEditingController();
 
-  bool get _isMine => context.read<SessionProvider>().role == widget.role;
+  // Either spouse can edit either profile now -- the shared-trust model
+  // used everywhere else in the app. See DECISIONS.md.
 
   @override
   void initState() {
@@ -133,11 +136,13 @@ class _ProfileViewState extends State<_ProfileView> {
 
   Future<void> _save() async {
     final vmk = context.read<SessionProvider>().vmk!;
-    await _service.updateMine(
+    await _service.updateRole(
       vmk,
+      widget.role,
       name: _nameController.text.trim(),
       bio: _bioController.text.trim(),
     );
+    ProfileCache.instance.invalidate(widget.role);
     setState(() => _editing = false);
     _load();
   }
@@ -161,7 +166,8 @@ class _ProfileViewState extends State<_ProfileView> {
         kind: 'image',
         bytes: bytes,
       );
-      await _service.updateMine(vmk, photoAssetId: asset.id);
+      await _service.updateRole(vmk, widget.role, photoAssetId: asset.id);
+      ProfileCache.instance.invalidate(widget.role);
       await _load();
     } catch (e) {
       setState(() => _error = describeApiError(e));
@@ -183,62 +189,73 @@ class _ProfileViewState extends State<_ProfileView> {
         Center(
           child: Stack(
             children: [
-              ClipOval(
-                child: SizedBox(
-                  width: 88,
-                  height: 88,
-                  child: photoId != null
-                      ? DecryptedThumbnail(
-                          assetId: photoId,
-                          hasThumbnail: false,
-                        )
-                      : CircleAvatar(
-                          radius: 44,
-                          backgroundColor: accent,
-                          child: Icon(
-                            widget.role == 'husband'
-                                ? Iconsax.man
-                                : Iconsax.woman,
-                            size: 44,
-                            color: Colors.white,
+              GestureDetector(
+                onTap: photoId == null
+                    ? null
+                    : () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => MediaViewerScreen(
+                            assetId: photoId,
+                            contentType: 'photo',
                           ),
                         ),
-                ),
-              ),
-              if (_isMine)
-                Positioned(
-                  bottom: 0,
-                  right: 0,
-                  child: InkWell(
-                    onTap: _uploadingPhoto ? null : _changePhoto,
-                    borderRadius: BorderRadius.circular(20),
-                    child: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: AppColors.halalGreen,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: Theme.of(context).scaffoldBackgroundColor,
-                          width: 2,
-                        ),
                       ),
-                      child: _uploadingPhoto
-                          ? const SizedBox(
-                              height: 14,
-                              width: 14,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Icon(
-                              Iconsax.camera,
-                              size: 14,
+                child: ClipOval(
+                  child: SizedBox(
+                    width: 88,
+                    height: 88,
+                    child: photoId != null
+                        ? DecryptedThumbnail(
+                            assetId: photoId,
+                            hasThumbnail: false,
+                          )
+                        : CircleAvatar(
+                            radius: 44,
+                            backgroundColor: accent,
+                            child: Icon(
+                              widget.role == 'husband'
+                                  ? Iconsax.man
+                                  : Iconsax.woman,
+                              size: 44,
                               color: Colors.white,
                             ),
-                    ),
+                          ),
                   ),
                 ),
+              ),
+              Positioned(
+                bottom: 0,
+                right: 0,
+                child: InkWell(
+                  onTap: _uploadingPhoto ? null : _changePhoto,
+                  borderRadius: BorderRadius.circular(20),
+                  child: Container(
+                    padding: const EdgeInsets.all(6),
+                    decoration: BoxDecoration(
+                      color: AppColors.halalGreen,
+                      shape: BoxShape.circle,
+                      border: Border.all(
+                        color: Theme.of(context).scaffoldBackgroundColor,
+                        width: 2,
+                      ),
+                    ),
+                    child: _uploadingPhoto
+                        ? const SizedBox(
+                            height: 14,
+                            width: 14,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(
+                            Iconsax.camera,
+                            size: 14,
+                            color: Colors.white,
+                          ),
+                  ),
+                ),
+              ),
             ],
           ),
         ),
@@ -297,8 +314,7 @@ class _ProfileViewState extends State<_ProfileView> {
                 const SizedBox(height: 6),
                 Text(_profile!.decryptedBio!, textAlign: TextAlign.center),
               ],
-              if (_isMine)
-                TextButton.icon(
+              TextButton.icon(
                   onPressed: () => setState(() => _editing = true),
                   icon: const Icon(Iconsax.edit_2, size: 16),
                   label: const Text('এডিট করুন'),

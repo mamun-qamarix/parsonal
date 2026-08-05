@@ -103,7 +103,12 @@ _NOTIFICATION_TEXT: dict[str, dict[str, str]] = {
 }
 
 
-def _notification_body(category: str, content_type: str | None) -> str:
+def notification_body(category: str, content_type: str | None) -> str:
+    """Public so the notification-inbox endpoints (app/routers/
+    notifications.py) can render the same generic text for a persisted
+    NotificationLog row that push notifications use -- the body is never
+    stored pre-rendered, so a wording change here applies retroactively to
+    old inbox entries too."""
     bucket = _NOTIFICATION_TEXT.get(category)
     if bucket is None:
         return GENERIC_UPDATE_MESSAGE
@@ -113,13 +118,14 @@ def _notification_body(category: str, content_type: str | None) -> str:
 
 
 async def notify_spouse(
+    db,
     spouse_id_target: str,
     push_tokens: list[str],
     category: str = "update",
     content_type: str | None = None,
 ) -> None:
-    """Send a real-time WS ping (if connected) and queue pushes for when the
-    app isn't open.
+    """Persists a NotificationLog row (the in-app inbox), sends a real-time
+    WS ping (if connected), and queues pushes for when the app isn't open.
 
     `category` (e.g. "reaction", "comment", "chat", "consent_request") and
     the optional `content_type` (e.g. "text"/"photo"/"video"/"voice") pick a
@@ -127,10 +133,17 @@ async def notify_spouse(
     actual message/entry content. `category` alone still routes/collapses
     the WS event client-side same as before.
     """
+    import uuid as _uuid
+
+    from app.models.notification import NotificationLog
+
+    db.add(NotificationLog(recipient_id=_uuid.UUID(spouse_id_target), category=category, content_type=content_type))
+    await db.commit()
+
     await ws_manager.send_to_spouse(spouse_id_target, {"type": category})
     if not push_tokens:
         return
-    body = _notification_body(category, content_type)
+    body = notification_body(category, content_type)
     for token in push_tokens:
         await send_generic_push(token, body=body)
 

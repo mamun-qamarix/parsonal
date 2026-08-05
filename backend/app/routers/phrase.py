@@ -41,7 +41,7 @@ async def create_phrase(payload: PhraseCreate, spouse: Spouse = Depends(get_curr
     if target:
         tokens_result = await db.execute(select(Device.push_token).where(Device.spouse_id == target.id, Device.push_token.is_not(None)))
         tokens = [t for t in tokens_result.scalars().all() if t]
-        await notify_spouse(str(target.id), tokens, category="phrase")
+        await notify_spouse(db, str(target.id), tokens, category="phrase")
 
     return _out(phrase)
 

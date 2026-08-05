@@ -5,7 +5,9 @@ import 'package:provider/provider.dart';
 import '../models/models.dart';
 import '../providers/session_provider.dart';
 import '../services/vault_service.dart';
+import 'author_badge.dart';
 import 'decrypted_media.dart';
+import 'media_viewer_screen.dart';
 import 'reaction_bar.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
 
@@ -13,9 +15,10 @@ import 'package:iconsax_flutter/iconsax_flutter.dart';
 /// a Facebook/Instagram post) instead of a small side thumbnail, so photos
 /// and videos are actually easy to see while scrolling a list.
 ///
-/// No husband/wife label or avatar on the card itself -- that's what the
-/// husband/wife filter pills above the feed are for, showing it again on
-/// every card was redundant. See DECISIONS.md.
+/// Header shows the poster's real profile photo + name (via [AuthorRow])
+/// instead of a generic husband/wife label -- the filter pills above the
+/// feed already separate by role, so this is about *who*, not *which
+/// role*. See DECISIONS.md.
 class VaultEntryCard extends StatefulWidget {
   final VaultEntry entry;
   final VoidCallback onTap;
@@ -36,6 +39,14 @@ class VaultEntryCard extends StatefulWidget {
 class _VaultEntryCardState extends State<VaultEntryCard> {
   late bool _favorite = widget.entry.isFavoriteMine;
   bool _busy = false;
+  bool _captionExpanded = false;
+
+  // Media shows its own natural aspect ratio (no forced crop) up to a
+  // capped max height of 2x the width -- an extremely tall image/video
+  // would otherwise blow out the feed's rhythm. Starts at a plausible
+  // default and updates once the real dimensions are known. See
+  // DECISIONS.md.
+  double _aspectRatio = 4 / 3;
 
   Future<void> _toggleFavorite() async {
     setState(() => _busy = true);
@@ -129,6 +140,8 @@ class _VaultEntryCardState extends State<VaultEntryCard> {
   Widget build(BuildContext context) {
     final entry = widget.entry;
     final asset = entry.mediaAssets.isNotEmpty ? entry.mediaAssets.first : null;
+    final caption = entry.decryptedText;
+    final captionIsLong = (caption?.length ?? 0) > 140;
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -138,14 +151,14 @@ class _VaultEntryCardState extends State<VaultEntryCard> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(14, 8, 4, 0),
+              padding: const EdgeInsets.fromLTRB(10, 8, 4, 0),
               child: Row(
                 children: [
-                  Expanded(
-                    child: Text(
-                      DateFormat.yMMMd().add_jm().format(entry.createdAt.toLocal()),
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
+                  AuthorRow(role: entry.authorRole),
+                  const Spacer(),
+                  Text(
+                    DateFormat.MMMd().add_jm().format(entry.createdAt.toLocal()),
+                    style: Theme.of(context).textTheme.bodySmall,
                   ),
                   PopupMenuButton<String>(
                     enabled: !_busy,
@@ -168,28 +181,41 @@ class _VaultEntryCardState extends State<VaultEntryCard> {
               ),
             ),
             if (asset != null)
-              AspectRatio(
-                aspectRatio: 16 / 10,
-                child: Stack(
-                  fit: StackFit.expand,
-                  children: [
-                    DecryptedThumbnail(
+              GestureDetector(
+                onTap: () => Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => MediaViewerScreen(
                       assetId: asset.id,
-                      hasThumbnail: asset.hasThumbnail,
-                      isVideo: entry.contentType == 'video',
+                      contentType: entry.contentType,
                     ),
-                    if (entry.contentType == 'video')
-                      Container(
-                        color: Colors.black26,
-                        child: const Center(
-                          child: Icon(
-                            Iconsax.play_circle_copy,
-                            size: 56,
-                            color: Colors.white,
-                          ),
+                  ),
+                ),
+                child: AspectRatio(
+                  aspectRatio: _aspectRatio,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      DecryptedThumbnail(
+                        assetId: asset.id,
+                        hasThumbnail: asset.hasThumbnail,
+                        isVideo: entry.contentType == 'video',
+                        onAspectRatio: (r) => setState(
+                          () => _aspectRatio = r < 0.5 ? 0.5 : r,
                         ),
                       ),
-                  ],
+                      if (entry.contentType == 'video')
+                        Container(
+                          color: Colors.black26,
+                          child: const Center(
+                            child: Icon(
+                              Iconsax.play_circle_copy,
+                              size: 56,
+                              color: Colors.white,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ),
             Padding(
@@ -199,14 +225,31 @@ class _VaultEntryCardState extends State<VaultEntryCard> {
                 children: [
                   ReactionBar(targetType: 'vault_entry', targetId: entry.id),
                   const SizedBox(height: 8),
-                  if (entry.decryptedText != null &&
-                      entry.decryptedText!.isNotEmpty)
+                  if (caption != null && caption.isNotEmpty) ...[
                     Text(
-                      entry.decryptedText!,
-                      maxLines: 3,
-                      overflow: TextOverflow.ellipsis,
-                    )
-                  else if (asset == null)
+                      caption,
+                      maxLines: _captionExpanded ? null : 3,
+                      overflow: _captionExpanded
+                          ? TextOverflow.visible
+                          : TextOverflow.ellipsis,
+                    ),
+                    if (captionIsLong)
+                      GestureDetector(
+                        onTap: () =>
+                            setState(() => _captionExpanded = !_captionExpanded),
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: Text(
+                            _captionExpanded ? 'কম দেখুন' : 'আরও দেখুন',
+                            style: const TextStyle(
+                              color: Colors.grey,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ),
+                  ] else if (asset == null)
                     Row(
                       children: [
                         Icon(_typeIcon, size: 16, color: Colors.grey),

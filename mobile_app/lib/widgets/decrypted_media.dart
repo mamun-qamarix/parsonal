@@ -46,12 +46,17 @@ class DecryptedThumbnail extends StatefulWidget {
   final bool hasThumbnail;
   final bool isVideo;
   final BoxFit fit;
+  /// Fires once with the image's real width/height aspect ratio, for
+  /// callers that want to size their layout to match instead of forcing
+  /// a fixed crop. See DECISIONS.md.
+  final void Function(double aspectRatio)? onAspectRatio;
   const DecryptedThumbnail({
     super.key,
     required this.assetId,
     required this.hasThumbnail,
     this.isVideo = false,
     this.fit = BoxFit.cover,
+    this.onAspectRatio,
   });
 
   @override
@@ -59,6 +64,20 @@ class DecryptedThumbnail extends StatefulWidget {
 }
 
 class _DecryptedThumbnailState extends State<DecryptedThumbnail> {
+  bool _aspectReported = false;
+
+  void _maybeReportAspect(Uint8List bytes) {
+    if (_aspectReported || widget.onAspectRatio == null) return;
+    _aspectReported = true;
+    decodeImageFromList(bytes)
+        .then((img) {
+          if (mounted && img.height > 0) {
+            widget.onAspectRatio!(img.width / img.height);
+          }
+        })
+        .catchError((_) {});
+  }
+
   Future<Uint8List> _load(Uint8List vmk, MediaService service) async {
     if (widget.hasThumbnail) {
       return service.downloadThumbnail(vmk, widget.assetId);
@@ -104,6 +123,7 @@ class _DecryptedThumbnailState extends State<DecryptedThumbnail> {
             child: Icon(widget.isVideo ? Iconsax.video : Iconsax.gallery_slash),
           );
         }
+        _maybeReportAspect(snapshot.data!);
         return Image.memory(snapshot.data!, fit: widget.fit);
       },
     );

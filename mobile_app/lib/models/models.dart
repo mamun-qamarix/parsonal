@@ -117,25 +117,24 @@ class ConsentRequestModel {
       );
 }
 
-class ReactionBreakdown {
-  final String emoji;
-  final int husbandCount;
-  final int wifeCount;
-  final bool reactedByMe;
+/// One row per person who's reacted -- all their emoji, in the order they
+/// added them, no per-emoji counts. See DECISIONS.md.
+class ReactionPersonGroup {
+  final String role;
+  final List<String> emojis;
+  final bool isMe;
 
-  ReactionBreakdown({
-    required this.emoji,
-    required this.husbandCount,
-    required this.wifeCount,
-    required this.reactedByMe,
+  ReactionPersonGroup({
+    required this.role,
+    required this.emojis,
+    required this.isMe,
   });
 
-  factory ReactionBreakdown.fromJson(Map<String, dynamic> json) =>
-      ReactionBreakdown(
-        emoji: json['emoji'],
-        husbandCount: json['husband_count'],
-        wifeCount: json['wife_count'],
-        reactedByMe: json['reacted_by_me'],
+  factory ReactionPersonGroup.fromJson(Map<String, dynamic> json) =>
+      ReactionPersonGroup(
+        role: json['role'],
+        emojis: List<String>.from(json['emojis'] as List),
+        isMe: json['is_me'],
       );
 }
 
@@ -365,5 +364,57 @@ class DeviceModel {
     isThisDevice: json['is_this_device'] ?? false,
     createdAt: DateTime.parse(json['created_at']),
     lastSeenAt: DateTime.parse(json['last_seen_at']),
+  );
+}
+
+class NotificationModel {
+  final String id;
+  final String category;
+  final String? contentType;
+  final String body; // already-rendered generic text, never actual content
+  final DateTime createdAt;
+  final DateTime? readAt;
+
+  NotificationModel({
+    required this.id,
+    required this.category,
+    required this.contentType,
+    required this.body,
+    required this.createdAt,
+    required this.readAt,
+  });
+
+  factory NotificationModel.fromJson(Map<String, dynamic> json) =>
+      NotificationModel(
+        id: json['id'],
+        category: json['category'],
+        contentType: json['content_type'],
+        body: json['body'],
+        createdAt: DateTime.parse(json['created_at']),
+        readAt: json['read_at'] != null ? DateTime.parse(json['read_at']) : null,
+      );
+}
+
+class ChatMediaItem {
+  final String messageId;
+  final String mediaAssetId;
+  final String contentType; // photo | video
+  final bool hasThumbnail;
+  final DateTime createdAt;
+
+  ChatMediaItem({
+    required this.messageId,
+    required this.mediaAssetId,
+    required this.contentType,
+    required this.hasThumbnail,
+    required this.createdAt,
+  });
+
+  factory ChatMediaItem.fromJson(Map<String, dynamic> json) => ChatMediaItem(
+    messageId: json['message_id'],
+    mediaAssetId: json['media_asset_id'],
+    contentType: json['content_type'],
+    hasThumbnail: json['has_thumbnail'] ?? false,
+    createdAt: DateTime.parse(json['created_at']),
   );
 }

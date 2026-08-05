@@ -6,6 +6,7 @@ import '../../models/models.dart';
 import '../../providers/session_provider.dart';
 import '../../services/vault_service.dart';
 import '../../widgets/countdown_card.dart';
+import '../../widgets/notification_bell.dart';
 import '../../widgets/shimmer_loading.dart';
 import '../../widgets/vault_entry_card.dart';
 import '../favorites/favorites_screen.dart';
@@ -33,6 +34,8 @@ class _HomeTabState extends State<HomeTab> {
   bool _loading = true;
   final Set<String> _typeFilter = {'text', 'photo', 'video'};
   final Set<String> _roleFilter = {'husband', 'wife'};
+  // null = "সব" (all categories) -- the default.
+  String? _categoryFilter;
 
   @override
   void initState() {
@@ -113,7 +116,8 @@ class _HomeTabState extends State<HomeTab> {
         .where(
           (e) =>
               _typeFilter.contains(e.contentType) &&
-              _roleFilter.contains(e.authorRole),
+              _roleFilter.contains(e.authorRole) &&
+              (_categoryFilter == null || e.categoryId == _categoryFilter),
         )
         .toList();
     return Scaffold(
@@ -123,13 +127,15 @@ class _HomeTabState extends State<HomeTab> {
       ),
       body: RefreshIndicator(
         onRefresh: _load,
-        // Nothing stays pinned -- the app bar, countdown card, and filter
-        // row all live inside the SliverAppBar's `bottom`, so `floating` +
-        // `snap` slide the whole header away together on scroll-down and
-        // bring it right back on the very next scroll-up gesture (no need
-        // to scroll all the way back to the top). See DECISIONS.md.
         child: CustomScrollView(
           slivers: [
+            // Just the title bar -- floating+snap so it comes right back on
+            // the very next scroll-up gesture. The countdown/filter block
+            // below is a *separate*, non-floating sliver on purpose: it
+            // scrolls away normally with the rest of the content and only
+            // reappears once you've actually scrolled back near the top,
+            // instead of snapping back together with the app bar on every
+            // small upward scroll. See DECISIONS.md.
             SliverAppBar(
               floating: true,
               snap: true,
@@ -141,6 +147,7 @@ class _HomeTabState extends State<HomeTab> {
                 ],
               ),
               actions: [
+                const NotificationBell(),
                 IconButton(
                   icon: const Icon(Iconsax.clock),
                   tooltip: 'হিস্টরি',
@@ -170,71 +177,99 @@ class _HomeTabState extends State<HomeTab> {
                   ),
                 ),
               ],
-              bottom: PreferredSize(
-                preferredSize: const Size.fromHeight(148),
-                child: Column(
-                  children: [
-                    const Padding(
-                      padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
-                      child: CountdownCard(),
+            ),
+            SliverToBoxAdapter(
+              child: Column(
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
+                    child: CountdownCard(),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                    child: SizedBox(
+                      height: 40,
+                      child: ListView(
+                        scrollDirection: Axis.horizontal,
+                        children: [
+                          _FilterPill(
+                            label: 'টেক্সট',
+                            icon: Iconsax.document_text,
+                            color: AppColors.halalGreen,
+                            selected: _typeFilter.contains('text'),
+                            onTap: () => _toggleFilter(_typeFilter, 'text'),
+                          ),
+                          const SizedBox(width: 8),
+                          _FilterPill(
+                            label: 'ছবি',
+                            icon: Iconsax.image,
+                            color: AppColors.halalGreen,
+                            selected: _typeFilter.contains('photo'),
+                            onTap: () => _toggleFilter(_typeFilter, 'photo'),
+                          ),
+                          const SizedBox(width: 8),
+                          _FilterPill(
+                            label: 'ভিডিও',
+                            icon: Iconsax.video,
+                            color: AppColors.halalGreen,
+                            selected: _typeFilter.contains('video'),
+                            onTap: () => _toggleFilter(_typeFilter, 'video'),
+                          ),
+                          Container(
+                            width: 1,
+                            height: 28,
+                            color: Colors.grey.withValues(alpha: 0.3),
+                            margin: const EdgeInsets.symmetric(horizontal: 8),
+                          ),
+                          _FilterPill(
+                            label: 'স্বামী',
+                            icon: Iconsax.man,
+                            color: AppColors.husband,
+                            selected: _roleFilter.contains('husband'),
+                            onTap: () => _toggleFilter(_roleFilter, 'husband'),
+                          ),
+                          const SizedBox(width: 8),
+                          _FilterPill(
+                            label: 'স্ত্রী',
+                            icon: Iconsax.woman,
+                            color: AppColors.wife,
+                            selected: _roleFilter.contains('wife'),
+                            onTap: () => _toggleFilter(_roleFilter, 'wife'),
+                          ),
+                        ],
+                      ),
                     ),
+                  ),
+                  if (_categories.isNotEmpty)
                     Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
                       child: SizedBox(
-                        height: 40,
+                        height: 36,
                         child: ListView(
                           scrollDirection: Axis.horizontal,
                           children: [
                             _FilterPill(
-                              label: 'টেক্সট',
-                              icon: Iconsax.document_text,
+                              label: 'সব',
+                              icon: Iconsax.category,
                               color: AppColors.halalGreen,
-                              selected: _typeFilter.contains('text'),
-                              onTap: () => _toggleFilter(_typeFilter, 'text'),
+                              selected: _categoryFilter == null,
+                              onTap: () => setState(() => _categoryFilter = null),
                             ),
-                            const SizedBox(width: 8),
-                            _FilterPill(
-                              label: 'ছবি',
-                              icon: Iconsax.image,
-                              color: AppColors.halalGreen,
-                              selected: _typeFilter.contains('photo'),
-                              onTap: () => _toggleFilter(_typeFilter, 'photo'),
-                            ),
-                            const SizedBox(width: 8),
-                            _FilterPill(
-                              label: 'ভিডিও',
-                              icon: Iconsax.video,
-                              color: AppColors.halalGreen,
-                              selected: _typeFilter.contains('video'),
-                              onTap: () => _toggleFilter(_typeFilter, 'video'),
-                            ),
-                            Container(
-                              width: 1,
-                              height: 28,
-                              color: Colors.grey.withValues(alpha: 0.3),
-                              margin: const EdgeInsets.symmetric(horizontal: 8),
-                            ),
-                            _FilterPill(
-                              label: 'স্বামী',
-                              icon: Iconsax.man,
-                              color: AppColors.husband,
-                              selected: _roleFilter.contains('husband'),
-                              onTap: () => _toggleFilter(_roleFilter, 'husband'),
-                            ),
-                            const SizedBox(width: 8),
-                            _FilterPill(
-                              label: 'স্ত্রী',
-                              icon: Iconsax.woman,
-                              color: AppColors.wife,
-                              selected: _roleFilter.contains('wife'),
-                              onTap: () => _toggleFilter(_roleFilter, 'wife'),
-                            ),
+                            for (final c in _categories) ...[
+                              const SizedBox(width: 8),
+                              _FilterPill(
+                                label: c.decryptedName ?? '...',
+                                icon: Iconsax.tag,
+                                color: AppColors.halalGreen,
+                                selected: _categoryFilter == c.id,
+                                onTap: () => setState(() => _categoryFilter = c.id),
+                              ),
+                            ],
                           ],
                         ),
                       ),
                     ),
-                  ],
-                ),
+                ],
               ),
             ),
             if (_loading)

@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
 
-import '../core/theme/app_theme.dart';
 import '../models/models.dart';
 import '../services/social_service.dart';
+import 'author_badge.dart';
 import 'match_celebration_overlay.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
 
+/// One row per person who's reacted -- their avatar, then all their emoji
+/// stuck together with no per-emoji counts (multiple different emoji from
+/// the same person is the whole point now, so a count next to each one
+/// would be noise). Tapping an emoji in your own row removes it; the
+/// add-emoji button opens the phone's own keyboard emoji panel to add
+/// another. See DECISIONS.md.
 class ReactionBar extends StatefulWidget {
   final String targetType;
   final String targetId;
@@ -21,7 +27,7 @@ class ReactionBar extends StatefulWidget {
 
 class _ReactionBarState extends State<ReactionBar> {
   final _service = SocialService();
-  List<ReactionBreakdown> _breakdown = [];
+  List<ReactionPersonGroup> _groups = [];
   bool _loading = true;
 
   @override
@@ -32,13 +38,13 @@ class _ReactionBarState extends State<ReactionBar> {
 
   Future<void> _load() async {
     try {
-      final b = await _service.getReactionBreakdown(
+      final groups = await _service.getReactionBreakdown(
         widget.targetType,
         widget.targetId,
       );
       if (mounted) {
         setState(() {
-          _breakdown = b;
+          _groups = groups;
           _loading = false;
         });
       }
@@ -47,77 +53,65 @@ class _ReactionBarState extends State<ReactionBar> {
     }
   }
 
-  Future<void> _toggle(String emoji) async {
-    final existing = _breakdown.where((b) => b.emoji == emoji).firstOrNull;
-    if (existing != null && existing.reactedByMe) {
-      await _service.removeReaction(widget.targetType, widget.targetId, emoji);
-    } else {
-      final matched = await _service.addReaction(
-        widget.targetType,
-        widget.targetId,
-        emoji,
-      );
-      if (matched && mounted) {
-        showMatchCelebration(context);
-      }
-    }
+  Future<void> _removeMine(String emoji) async {
+    await _service.removeReaction(widget.targetType, widget.targetId, emoji);
+    await _load();
+  }
+
+  Future<void> _addEmoji(String emoji) async {
+    final matched = await _service.addReaction(
+      widget.targetType,
+      widget.targetId,
+      emoji,
+    );
+    if (matched && mounted) showMatchCelebration(context);
     await _load();
   }
 
   /// Opens the phone's own keyboard (with its built-in emoji panel -- most
   /// keyboards, e.g. Gboard, have a smiley key right next to the text
-  /// entry) so ANY emoji can be picked, not just a small fixed preset set.
-  /// Stays open after each add so several different emoji can be added
-  /// one after another without reopening it each time. See DECISIONS.md.
+  /// entry) so ANY emoji can be picked. Stays open after each add so
+  /// several different emoji can be added one after another. See
+  /// DECISIONS.md.
   void _openAddEmoji() {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (_) => _AddEmojiSheet(
-        onAdd: (emoji) async {
-          await _toggle(emoji);
-        },
-      ),
+      builder: (_) => _AddEmojiSheet(onAdd: _addEmoji),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const SizedBox(height: 32);
-    return Wrap(
-      spacing: 8,
-      runSpacing: 4,
-      crossAxisAlignment: WrapCrossAlignment.center,
+    if (_loading) return const SizedBox(height: 28);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
       children: [
-        ..._breakdown.map(
-          (b) => InkWell(
-            onTap: () => _toggle(b.emoji),
-            borderRadius: BorderRadius.circular(999),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-              decoration: BoxDecoration(
-                color: b.reactedByMe
-                    ? AppColors.halalGreen.withValues(alpha: 0.15)
-                    : Colors.grey.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(999),
-              ),
-              child: Text(
-                '${b.emoji} ${b.husbandCount + b.wifeCount}',
-                style: const TextStyle(fontSize: 13),
-              ),
+        ..._groups.map(
+          (g) => Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                AuthorAvatar(role: g.role, radius: 10),
+                const SizedBox(width: 6),
+                ...g.emojis.map(
+                  (e) => GestureDetector(
+                    onTap: g.isMe ? () => _removeMine(e) : null,
+                    child: Text(e, style: const TextStyle(fontSize: 18)),
+                  ),
+                ),
+              ],
             ),
           ),
         ),
         InkWell(
           onTap: _openAddEmoji,
           borderRadius: BorderRadius.circular(999),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            decoration: BoxDecoration(
-              color: Colors.grey.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: const Icon(Iconsax.emoji_happy, size: 18),
+          child: const Padding(
+            padding: EdgeInsets.symmetric(vertical: 2),
+            child: Icon(Iconsax.emoji_happy, size: 20, color: Colors.grey),
           ),
         ),
       ],
@@ -212,8 +206,4 @@ class _AddEmojiSheetState extends State<_AddEmojiSheet> {
       ),
     );
   }
-}
-
-extension _FirstOrNull<T> on Iterable<T> {
-  T? get firstOrNull => isEmpty ? null : first;
 }

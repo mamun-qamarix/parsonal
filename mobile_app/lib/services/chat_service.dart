@@ -59,4 +59,9 @@ class ChatService {
   Future<void> markRead(String messageId) async {
     await _dio.post('/chat/messages/$messageId/read');
   }
+
+  Future<List<ChatMediaItem>> listMedia() async {
+    final res = await _dio.get('/chat/media');
+    return (res.data as List).map((e) => ChatMediaItem.fromJson(e)).toList();
+  }
 }

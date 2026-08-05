@@ -32,8 +32,13 @@ class EncPayloadIn(BaseModel):
         return v
 
 
-class ReactionBreakdown(BaseModel):
-    emoji: str
-    husband_count: int
-    wife_count: int
-    reacted_by_me: bool
+class ReactionPersonGroup(BaseModel):
+    """One row per person who's reacted -- all their emoji, in the order
+    they added them, no per-emoji counts. Replaces the old per-emoji-
+    grouped ReactionBreakdown shape now that reacting with several
+    different emoji (not just toggling a fixed preset) is the point. See
+    DECISIONS.md."""
+
+    role: str
+    emojis: list[str]
+    is_me: bool
