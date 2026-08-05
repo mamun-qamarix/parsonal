@@ -85,7 +85,7 @@ class VaultService {
     try {
       return await VaultCrypto.decryptText(vmk, enc);
     } catch (_) {
-      return '[unable to decrypt]';
+      return '[ডিক্রিপ্ট করা যায়নি]';
     }
   }
 

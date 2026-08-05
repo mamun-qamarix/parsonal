@@ -1,5 +1,8 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
+import 'package:intl/date_symbol_data_local.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import 'core/app_globals.dart';
@@ -17,6 +20,12 @@ import 'package:iconsax_flutter/iconsax_flutter.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Whole app is Bengali-only, per DECISIONS.md -- without this, every
+  // unlocalized DateFormat (chat timestamps, date dividers, audit log,
+  // devices screen, etc.) silently falls back to English month names and
+  // Western digits.
+  await initializeDateFormatting('bn', null);
+  Intl.defaultLocale = 'bn';
   // Push notifications are a nice-to-have wake-up channel, not core
   // functionality -- if Firebase isn't set up for this build (or init
   // fails for any reason) the app must still start normally and keep
@@ -39,22 +48,36 @@ class CoupleVaultApp extends StatelessWidget {
       providers: [
         ChangeNotifierProvider(create: (_) => SessionProvider()..bootstrap()),
       ],
-      child: MaterialApp(
-        title: "পার্সোনাল",
-        scaffoldMessengerKey: scaffoldMessengerKey,
-        debugShowCheckedModeBanner: false,
-        theme: AppTheme.light(),
-        darkTheme: AppTheme.dark(),
-        themeMode: ThemeMode.system,
-        // Tap anywhere outside a text field to dismiss the keyboard --
-        // otherwise an open keyboard can cover a button below it, and taps
-        // meant for that button silently land on the keyboard instead.
-        builder: (context, child) => GestureDetector(
-          behavior: HitTestBehavior.translucent,
-          onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
-          child: child,
+      // Consumer, not a plain MaterialApp, so that toggling "intimate mode"
+      // (see ChatScreen / DECISIONS.md) rebuilds theme/darkTheme with the
+      // blue seed everywhere -- via Theme's own InheritedWidget mechanism,
+      // which updates every screen that reads Theme.of(context) in place
+      // without losing their state (unlike keying/recreating the subtree).
+      child: Consumer<SessionProvider>(
+        builder: (context, session, _) => MaterialApp(
+          title: "পার্সোনাল",
+          scaffoldMessengerKey: scaffoldMessengerKey,
+          debugShowCheckedModeBanner: false,
+          theme: AppTheme.light(intimate: session.intimateMode),
+          darkTheme: AppTheme.dark(intimate: session.intimateMode),
+          themeMode: ThemeMode.system,
+          locale: const Locale('bn'),
+          supportedLocales: const [Locale('bn')],
+          localizationsDelegates: const [
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          // Tap anywhere outside a text field to dismiss the keyboard --
+          // otherwise an open keyboard can cover a button below it, and taps
+          // meant for that button silently land on the keyboard instead.
+          builder: (context, child) => GestureDetector(
+            behavior: HitTestBehavior.translucent,
+            onTap: () => FocusManager.instance.primaryFocus?.unfocus(),
+            child: child,
+          ),
+          home: const AppLockGuard(child: AuthGate()),
         ),
-        home: const AppLockGuard(child: AuthGate()),
       ),
     );
   }

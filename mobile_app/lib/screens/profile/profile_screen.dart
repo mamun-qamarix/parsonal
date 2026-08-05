@@ -57,9 +57,7 @@ class _ProfileScreenState extends State<ProfileScreen>
           IconButton(
             icon: const Icon(Iconsax.heart),
             tooltip: 'আমাদের প্রিয় লাইন',
-            onPressed: () => Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const PhrasesScreen())),
+            onPressed: () => openPhrasesScreen(context),
           ),
           IconButton(
             icon: const Icon(Iconsax.task_square),
@@ -232,7 +230,7 @@ class _ProfileViewState extends State<_ProfileView> {
                   child: Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                      color: AppColors.halalGreen,
+                      color: Theme.of(context).colorScheme.primary,
                       shape: BoxShape.circle,
                       border: Border.all(
                         color: Theme.of(context).scaffoldBackgroundColor,
@@ -334,9 +332,7 @@ class _ProfileViewState extends State<_ProfileView> {
               style: TextStyle(fontSize: 12),
             ),
             trailing: const Icon(Iconsax.arrow_right_3),
-            onTap: () => Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const PhrasesScreen())),
+            onTap: () => openPhrasesScreen(context),
           ),
         ),
         const SizedBox(height: 16),

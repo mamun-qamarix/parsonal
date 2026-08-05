@@ -82,7 +82,7 @@ class SocialService {
       try {
         c.decryptedText = await VaultCrypto.decryptText(vmk, c.encPayload);
       } catch (_) {
-        c.decryptedText = '[unable to decrypt]';
+        c.decryptedText = '[ডিক্রিপ্ট করা যায়নি]';
       }
     }
     return comments;

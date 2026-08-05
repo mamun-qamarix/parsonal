@@ -119,6 +119,10 @@ class _ReactionBarState extends State<ReactionBar> {
   }
 }
 
+// Typing an emoji via the keyboard is slow -- these common ones can be
+// added with a single tap instead. See DECISIONS.md.
+const _kCommonEmojis = ['❤️', '😍', '😂', '😮', '😢', '👍', '🥰', '🔥'];
+
 class _AddEmojiSheet extends StatefulWidget {
   final Future<void> Function(String emoji) onAdd;
   const _AddEmojiSheet({required this.onAdd});
@@ -170,8 +174,25 @@ class _AddEmojiSheetState extends State<_AddEmojiSheet> {
           ),
           const SizedBox(height: 4),
           const Text(
-            'কিবোর্ডের ইমোজি বাটন দিয়ে যেকোনো ইমোজি বাছাই করুন -- একের পর এক একাধিক ইমোজি দিয়ে রিয়্যাক্ট করা যাবে।',
+            'একটাতে ট্যাপ করলেই সাথে সাথে যোগ হবে, অথবা নিচে লিখে কিবোর্ডের ইমোজি বাটন দিয়ে যেকোনো ইমোজি বাছাই করুন -- একের পর এক একাধিক ইমোজি দিয়ে রিয়্যাক্ট করা যাবে।',
             style: TextStyle(fontSize: 12, color: Colors.grey),
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: _kCommonEmojis
+                .map(
+                  (e) => InkWell(
+                    borderRadius: BorderRadius.circular(999),
+                    onTap: _sending ? null : () => widget.onAdd(e),
+                    child: Padding(
+                      padding: const EdgeInsets.all(4),
+                      child: Text(e, style: const TextStyle(fontSize: 26)),
+                    ),
+                  ),
+                )
+                .toList(),
           ),
           const SizedBox(height: 14),
           Row(

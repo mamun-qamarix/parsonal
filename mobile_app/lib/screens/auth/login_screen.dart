@@ -46,17 +46,18 @@ class _LoginScreenState extends State<LoginScreen> {
         password: _password.text,
         deviceName: deviceName,
       );
-      if (result['requires_face'] == true) {
-        session.setPendingFaceChallenge(result['face_challenge_token']);
-      } else {
-        await session.completeLogin(
-          accessToken: result['access_token'],
-          refreshToken: result['refresh_token'],
-          role: result['role'],
-          spouseId: result['spouse_id'],
-          deviceId: result['device_id'],
-        );
-      }
+      // Face verification is disabled app-wide for now (see DECISIONS.md) --
+      // password alone always completes login, even if a profile still has
+      // an old server-side face_verification_enabled flag set from before
+      // this was turned off, since there's no longer any UI to re-enable
+      // it or capture a face at all.
+      await session.completeLogin(
+        accessToken: result['access_token'],
+        refreshToken: result['refresh_token'],
+        role: result['role'],
+        spouseId: result['spouse_id'],
+        deviceId: result['device_id'],
+      );
     } catch (e) {
       setState(() => _error = describeApiError(e));
     } finally {

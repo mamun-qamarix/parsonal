@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/theme/app_theme.dart';
 import '../../models/models.dart';
 import '../../providers/session_provider.dart';
 import '../../services/chat_service.dart';
@@ -123,7 +122,7 @@ class _ChatGalleryScreenState extends State<ChatGalleryScreen> {
                           child: ElevatedButton(
                             onPressed: posting ? null : () => _post(item),
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.halalGreen.withValues(alpha: 0.9),
+                              backgroundColor: Theme.of(context).colorScheme.primary.withValues(alpha: 0.9),
                               foregroundColor: Colors.white,
                               padding: EdgeInsets.zero,
                               textStyle: const TextStyle(fontSize: 10),

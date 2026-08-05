@@ -2,8 +2,6 @@ import 'dart:math';
 
 import 'package:flutter/material.dart';
 
-import '../core/theme/app_theme.dart';
-
 void showMatchCelebration(BuildContext context) {
   final overlay = Overlay.of(context);
   late OverlayEntry entry;
@@ -74,7 +72,7 @@ class _MatchCelebrationState extends State<_MatchCelebration>
                           Text('💚', style: TextStyle(fontSize: 40)),
                           SizedBox(height: 6),
                           Text(
-                            'It\'s a match!',
+                            'মিলে গেছে!',
                             style: TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
@@ -82,7 +80,7 @@ class _MatchCelebrationState extends State<_MatchCelebration>
                             ),
                           ),
                           Text(
-                            'You both loved this',
+                            'দুজনেই এটা পছন্দ করেছেন',
                             style: TextStyle(
                               color: Colors.white70,
                               fontSize: 13,
@@ -120,7 +118,7 @@ class _MatchCelebrationState extends State<_MatchCelebration>
           ['❤️', '💚', '💕'][seedIndex % 3],
           style: TextStyle(
             fontSize: 20 + rand.nextInt(16).toDouble(),
-            color: AppColors.halalGreen,
+            color: Theme.of(context).colorScheme.primary,
           ),
         ),
       ),

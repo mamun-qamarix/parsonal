@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/theme/app_theme.dart';
 import '../../providers/session_provider.dart';
 import '../../services/reel_service.dart';
 import '../../widgets/author_badge.dart';
@@ -58,8 +57,8 @@ class _ReelScreenState extends State<ReelScreen> {
       backgroundColor: Colors.black,
       body: SafeArea(
         child: _loading
-            ? const Center(
-                child: CircularProgressIndicator(color: AppColors.halalGreen),
+            ? Center(
+                child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary),
               )
             : _items.isEmpty
             ? const Center(
@@ -146,9 +145,9 @@ class _ReelPage extends StatelessWidget {
                   ),
                   if (item.isMatch) ...[
                     const SizedBox(width: 8),
-                    const Text(
-                      '💚 match',
-                      style: TextStyle(color: AppColors.halalGreenDark),
+                    Text(
+                      '💚 মিলেছে',
+                      style: TextStyle(color: Theme.of(context).colorScheme.primary),
                     ),
                   ],
                 ],

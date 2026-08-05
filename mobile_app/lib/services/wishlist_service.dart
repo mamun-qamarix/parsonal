@@ -22,7 +22,7 @@ class WishlistService {
       try {
         i.decryptedText = await VaultCrypto.decryptText(vmk, i.encPayload);
       } catch (_) {
-        i.decryptedText = '[unable to decrypt]';
+        i.decryptedText = '[ডিক্রিপ্ট করা যায়নি]';
       }
     }
     return items;

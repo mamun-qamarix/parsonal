@@ -31,12 +31,12 @@ class _HomeShellState extends State<HomeShell> {
   ];
 
   static const _labels = {
-    'content_new': 'Your spouse added something new 💚',
-    'reaction': 'Your spouse reacted to something',
-    'comment': 'New comment from your spouse',
-    'consent_request': 'A request needs your approval',
-    'consent_resolved': 'Your request was answered',
-    'phrase': 'Your spouse added a new line',
+    'content_new': 'সঙ্গী নতুন কিছু যোগ করেছে 💚',
+    'content_edited': 'ভল্টের একটা এন্ট্রি এডিট হয়েছে',
+    'content_deleted': 'ভল্টের একটা এন্ট্রি মুছে ফেলা হয়েছে',
+    'reaction': 'সঙ্গী কিছুতে রিয়্যাক্ট করেছে',
+    'comment': 'সঙ্গীর নতুন একটা মন্তব্য এসেছে',
+    'phrase': 'সঙ্গী নতুন একটা প্রিয় লাইন যোগ করেছে',
   };
 
   @override
@@ -48,7 +48,7 @@ class _HomeShellState extends State<HomeShell> {
       final type = data['type'];
       if (type == 'daily_reminder') {
         _showBanner(
-          data['message'] as String? ?? "You have something waiting for you 💚",
+          data['message'] as String? ?? "তোমার জন্য কিছু অপেক্ষা করছে 💚",
         );
       } else if (_labels.containsKey(type)) {
         _showBanner(_labels[type]!);
@@ -80,22 +80,22 @@ class _HomeShellState extends State<HomeShell> {
           NavigationDestination(
             icon: Icon(Iconsax.home),
             selectedIcon: Icon(Iconsax.home_copy),
-            label: 'Home',
+            label: 'হোম',
           ),
           NavigationDestination(
             icon: Icon(Iconsax.play_circle),
             selectedIcon: Icon(Iconsax.play_circle),
-            label: 'Reel',
+            label: 'রিল',
           ),
           NavigationDestination(
             icon: Icon(Iconsax.message_2),
             selectedIcon: Icon(Iconsax.message_2_copy),
-            label: 'Chat',
+            label: 'চ্যাট',
           ),
           NavigationDestination(
             icon: Icon(Iconsax.profile_circle),
             selectedIcon: Icon(Iconsax.profile_circle_copy),
-            label: 'Profile',
+            label: 'প্রোফাইল',
           ),
         ],
       ),

@@ -21,10 +21,10 @@ class BiometricService {
   /// no fingerprint/face is enrolled, so a phone without biometric
   /// hardware set up still has a way in (rather than being stuck until
   /// the hourly password window comes back around).
-  static Future<bool> authenticate() async {
+  static Future<bool> authenticate({String? reason}) async {
     try {
       return await _auth.authenticate(
-        localizedReason: 'অ্যাপে প্রবেশ করতে যাচাই করুন',
+        localizedReason: reason ?? 'অ্যাপে প্রবেশ করতে যাচাই করুন',
         biometricOnly: false,
         persistAcrossBackgrounding: true,
       );

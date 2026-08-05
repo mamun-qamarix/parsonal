@@ -8,6 +8,7 @@ import '../core/network/api_client.dart';
 import '../core/network/ws_client.dart';
 import '../core/notifications/push_notification_service.dart';
 import '../core/storage/secure_storage_service.dart';
+import '../services/profile_service.dart';
 
 enum SessionState {
   unknown,
@@ -37,6 +38,57 @@ class SessionProvider extends ChangeNotifier {
   int autoLockMinutes = 5;
 
   String? _pendingFaceChallengeToken;
+
+  // "Intimate mode" -- a shared, whole-app green->blue accent swap either
+  // spouse can flip from the chat screen, purely as an at-a-glance private
+  // signal for the two of them. Backed by the generic AppSetting key/value
+  // store server-side and kept in sync live over the same WS connection
+  // chat already uses -- listened for here (not per-screen) since it's a
+  // single global flag that affects the whole app's theme. See
+  // DECISIONS.md.
+  static const _kIntimateModeKey = 'intimate_mode_enabled';
+  bool intimateMode = false;
+  StreamSubscription? _globalWsSub;
+
+  SessionProvider() {
+    _globalWsSub = WsClient.instance.events.listen(_onGlobalWsEvent);
+  }
+
+  void _onGlobalWsEvent(Map<String, dynamic> data) {
+    if (data['type'] == 'app_setting' && data['key'] == _kIntimateModeKey) {
+      final on = data['value'] == 'true';
+      if (on != intimateMode) {
+        intimateMode = on;
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<void> loadIntimateMode() async {
+    try {
+      final value = await ProfileService().getSetting(
+        _kIntimateModeKey,
+        fallback: 'false',
+      );
+      intimateMode = value == 'true';
+      notifyListeners();
+    } catch (_) {
+      // Best-effort -- worst case the app just starts in the green theme
+      // until the next toggle or reconnect corrects it.
+    }
+  }
+
+  Future<void> toggleIntimateMode() async {
+    final next = !intimateMode;
+    intimateMode = next; // optimistic; the WS echo-back will just confirm it
+    notifyListeners();
+    try {
+      await ProfileService().setSetting(_kIntimateModeKey, next.toString());
+    } catch (_) {
+      intimateMode = !next; // revert on failure
+      notifyListeners();
+    }
+  }
 
   set autoLockMinutesAndPersist(int value) {
     autoLockMinutes = value;
@@ -106,6 +158,7 @@ class SessionProvider extends ChangeNotifier {
     state = SessionState.authenticated;
     WsClient.instance.connect();
     PushNotificationService.instance.registerToken();
+    loadIntimateMode();
     resetAutoLockTimer();
     notifyListeners();
   }
@@ -159,6 +212,7 @@ class SessionProvider extends ChangeNotifier {
     state = SessionState.authenticated;
     WsClient.instance.connect();
     PushNotificationService.instance.registerToken();
+    loadIntimateMode();
     resetAutoLockTimer();
     notifyListeners();
   }
@@ -236,9 +290,17 @@ class SessionProvider extends ChangeNotifier {
     spouseId = null;
     deviceId = null;
     vmk = null;
+    intimateMode = false;
     state = SessionState.needsSetup;
     notifyListeners();
   }
 
   String get otherRole => role == 'husband' ? 'wife' : 'husband';
+
+  @override
+  void dispose() {
+    _globalWsSub?.cancel();
+    _autoLockTimer?.cancel();
+    super.dispose();
+  }
 }

@@ -215,15 +215,11 @@ async def login_password(payload: LoginPasswordRequest, db: AsyncSession = Depen
     if spouse is None or not verify_secret(payload.password, spouse.password_hash):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    if spouse.face_verification_enabled:
-        face_challenge = _create_challenge_token(
-            str(spouse.id), payload.role, payload.device_name, "face_challenge",
-            device_uuid=payload.device_uuid,
-        )
-        db.add(AuditLogEntry(actor_id=spouse.id, action="auth.password_ok", target_type="spouse", target_id=spouse.id))
-        await db.commit()
-        return LoginPasswordResponse(requires_face=True, face_challenge_token=face_challenge)
-
+    # Face verification is disabled app-wide for now -- to be rebuilt later
+    # (see DECISIONS.md). Deliberately never checking spouse.
+    # face_verification_enabled here anymore, even for a spouse who has it
+    # set from before this was turned off, since the client no longer has
+    # any UI to handle a face challenge at all.
     result_data = await _issue_full_login(db, spouse, payload.device_name, payload.device_uuid)
     return LoginPasswordResponse(requires_face=False, **result_data)
 

@@ -53,7 +53,7 @@ String describeApiError(Object error) {
       case DioExceptionType.receiveTimeout:
         return 'সার্ভারে সংযোগ করতে অনেক সময় লাগছে। ইন্টারনেট সংযোগ ঠিক আছে কিনা দেখুন।';
       case DioExceptionType.connectionError:
-        return 'সার্ভারের সাথে সংযোগ করা যায়নি (${error.message ?? "connection error"})। সার্ভার ঠিকানা ও ইন্টারনেট সংযোগ যাচাই করুন।';
+        return 'সার্ভারের সাথে সংযোগ করা যায়নি (${error.message ?? "সংযোগে ত্রুটি"})। সার্ভার ঠিকানা ও ইন্টারনেট সংযোগ যাচাই করুন।';
       case DioExceptionType.badCertificate:
         return 'সার্ভারের HTTPS সার্টিফিকেট বিশ্বাসযোগ্য নয়।';
       case DioExceptionType.cancel:

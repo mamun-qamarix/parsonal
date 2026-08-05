@@ -46,7 +46,7 @@ class _AuditLogScreenState extends State<AuditLogScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Audit log')),
+      appBar: AppBar(title: const Text('অডিট লগ')),
       body: _loading
           ? const ShimmerTileList()
           : RefreshIndicator(

@@ -169,7 +169,7 @@ class _ChatScreenState extends State<ChatScreen> {
             msg.encPayload!,
           );
         } catch (_) {
-          msg.decryptedText = '[unable to decrypt]';
+          msg.decryptedText = '[ডিক্রিপ্ট করা যায়নি]';
         }
       }
       if (!mounted) return;
@@ -451,7 +451,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _buildSearchResults() {
     if (_searchLoading) {
-      return const Center(child: CircularProgressIndicator(color: AppColors.halalGreen));
+      return Center(child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary));
     }
     if (_searchController.text.trim().isEmpty) {
       return const Center(
@@ -583,6 +583,18 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                 ),
                 IconButton(icon: const Icon(Iconsax.search_normal_1), onPressed: _openSearch),
+                Consumer<SessionProvider>(
+                  builder: (context, session, _) => IconButton(
+                    icon: Icon(
+                      session.intimateMode ? Iconsax.moon_copy : Iconsax.moon,
+                      color: session.intimateMode ? AppColors.intimateBlue : null,
+                    ),
+                    tooltip: session.intimateMode
+                        ? 'গোপন মুহূর্তের মোড বন্ধ করুন'
+                        : 'গোপন মুহূর্তের মোড চালু করুন',
+                    onPressed: session.toggleIntimateMode,
+                  ),
+                ),
                 IconButton(
                   icon: Icon(_hidden ? Iconsax.eye_slash : Iconsax.eye),
                   tooltip: _hidden ? 'মেসেজ দেখান' : 'মেসেজ লুকান (শুধু এই ফোনে)',
@@ -626,7 +638,7 @@ class _ChatScreenState extends State<ChatScreen> {
                           ),
                           decoration: BoxDecoration(
                             color: mine
-                                ? AppColors.halalGreen.withValues(alpha: 0.85)
+                                ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.85)
                                 : Colors.grey.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(16),
                           ),
@@ -707,7 +719,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                   assetId: msg.mediaAssetId!,
                                   color: mine
                                       ? Colors.white
-                                      : AppColors.halalGreen,
+                                      : Theme.of(context).colorScheme.primary,
                                 )
                               else
                                 Text(
@@ -797,7 +809,7 @@ class _ChatScreenState extends State<ChatScreen> {
           ),
         ),
         IconButton(
-          icon: const Icon(Iconsax.send, color: AppColors.halalGreen),
+          icon: Icon(Iconsax.send, color: Theme.of(context).colorScheme.primary),
           onPressed: _sendText,
         ),
       ],
@@ -831,7 +843,7 @@ class _ChatScreenState extends State<ChatScreen> {
                 Expanded(
                   child: _WaveformBars(
                     levels: _waveform,
-                    color: _paused ? Colors.grey : AppColors.halalGreen,
+                    color: _paused ? Colors.grey : Theme.of(context).colorScheme.primary,
                   ),
                 ),
                 const SizedBox(width: 8),
@@ -846,13 +858,13 @@ class _ChatScreenState extends State<ChatScreen> {
         IconButton(
           icon: Icon(
             _paused ? Iconsax.play_circle_copy : Iconsax.pause_circle_copy,
-            color: AppColors.halalGreen,
+            color: Theme.of(context).colorScheme.primary,
           ),
           tooltip: _paused ? 'আবার শুরু করুন' : 'থামান',
           onPressed: _togglePause,
         ),
         IconButton(
-          icon: const Icon(Iconsax.send, color: AppColors.halalGreen),
+          icon: Icon(Iconsax.send, color: Theme.of(context).colorScheme.primary),
           tooltip: 'পাঠান',
           onPressed: _finishAndSendRecording,
         ),
