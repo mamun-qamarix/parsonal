@@ -83,10 +83,18 @@ class _ReelPage extends StatelessWidget {
     return Stack(
       fit: StackFit.expand,
       children: [
+        // Always full-bleed black behind the media -- StackFit.expand gives
+        // every child here a TIGHT full-screen box, which used to force
+        // both the video's AspectRatio and the image to stretch to fill
+        // it, breaking landscape content. Width stays fixed to the screen;
+        // height follows the real aspect ratio, and whatever's left shows
+        // this black background instead of distorting the media. See
+        // DECISIONS.md.
+        const ColoredBox(color: Colors.black),
         if (asset != null)
-          entry.contentType == 'video' ? DecryptedVideoPlayer(assetId: asset.id) : DecryptedFullImage(assetId: asset.id)
-        else
-          const ColoredBox(color: Colors.black),
+          entry.contentType == 'video'
+              ? Center(child: SizedBox(width: MediaQuery.sizeOf(context).width, child: DecryptedVideoPlayer(assetId: asset.id)))
+              : DecryptedFullImage(assetId: asset.id, fit: BoxFit.fitWidth, zoomable: false),
         Positioned(
           left: 16,
           right: 16,

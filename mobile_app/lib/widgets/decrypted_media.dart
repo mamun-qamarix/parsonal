@@ -1,11 +1,13 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:video_player/video_player.dart';
 
+import '../core/theme/app_theme.dart';
 import '../providers/session_provider.dart';
 import '../services/media_service.dart';
 
@@ -52,9 +54,17 @@ class DecryptedThumbnail extends StatelessWidget {
   }
 }
 
+/// [fit] paints correctly within WHATEVER box this is given, tight or not
+/// (BoxFit works at paint time, unlike AspectRatio which needs layout
+/// freedom) -- BoxFit.cover for small fixed preview boxes (chat bubbles),
+/// BoxFit.contain (default) for a full-screen zoom viewer, BoxFit.fitWidth
+/// for Reel's "width fixed, height follows the real aspect ratio" style.
+/// See DECISIONS.md.
 class DecryptedFullImage extends StatelessWidget {
   final String assetId;
-  const DecryptedFullImage({super.key, required this.assetId});
+  final BoxFit fit;
+  final bool zoomable;
+  const DecryptedFullImage({super.key, required this.assetId, this.fit = BoxFit.contain, this.zoomable = true});
 
   @override
   Widget build(BuildContext context) {
@@ -69,14 +79,18 @@ class DecryptedFullImage extends StatelessWidget {
         if (snapshot.hasError || !snapshot.hasData) {
           return const Center(child: Icon(Icons.broken_image_outlined, size: 48));
         }
-        return InteractiveViewer(child: Image.memory(snapshot.data!));
+        final image = Image.memory(snapshot.data!, fit: fit);
+        return zoomable ? InteractiveViewer(child: image) : image;
       },
     );
   }
 }
 
 /// Decrypts a video into a temp buffer and plays it via VideoPlayer's
-/// bytes-backed data source.
+/// bytes-backed data source. Its AspectRatio wrapper needs actual layout
+/// freedom (a tight/expand parent forces it to ignore the real ratio and
+/// stretch) -- give it a Center or similarly unconstraining parent. See
+/// DECISIONS.md.
 class DecryptedVideoPlayer extends StatefulWidget {
   final String assetId;
   const DecryptedVideoPlayer({super.key, required this.assetId});
@@ -147,5 +161,112 @@ class _DecryptedVideoPlayerState extends State<DecryptedVideoPlayer> {
     _controller?.dispose();
     _tempFile?.delete().catchError((_) => _tempFile!);
     super.dispose();
+  }
+}
+
+/// Decrypts a voice note and plays it in place (play/pause + a progress
+/// bar showing position/duration) -- previously voice messages in chat
+/// just showed a "[voice]" text placeholder with no way to actually hear
+/// them. See DECISIONS.md.
+class DecryptedVoicePlayer extends StatefulWidget {
+  final String assetId;
+  final Color? color;
+  const DecryptedVoicePlayer({super.key, required this.assetId, this.color});
+
+  @override
+  State<DecryptedVoicePlayer> createState() => _DecryptedVoicePlayerState();
+}
+
+class _DecryptedVoicePlayerState extends State<DecryptedVoicePlayer> {
+  final _player = AudioPlayer();
+  Uint8List? _bytes;
+  bool _loading = true;
+  bool _error = false;
+  bool _playing = false;
+  Duration _position = Duration.zero;
+  Duration _duration = Duration.zero;
+
+  @override
+  void initState() {
+    super.initState();
+    _player.onPlayerStateChanged.listen((s) {
+      if (mounted) setState(() => _playing = s == PlayerState.playing);
+    });
+    _player.onPositionChanged.listen((p) {
+      if (mounted) setState(() => _position = p);
+    });
+    _player.onDurationChanged.listen((d) {
+      if (mounted) setState(() => _duration = d);
+    });
+    _player.onPlayerComplete.listen((_) {
+      if (mounted) setState(() => _position = Duration.zero);
+    });
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final vmk = context.read<SessionProvider>().vmk!;
+      final bytes = await _DecryptedMediaCache.get('full:${widget.assetId}', () => MediaService().downloadRaw(vmk, widget.assetId));
+      if (mounted) setState(() { _bytes = bytes; _loading = false; });
+    } catch (_) {
+      if (mounted) setState(() { _error = true; _loading = false; });
+    }
+  }
+
+  Future<void> _toggle() async {
+    if (_bytes == null) return;
+    if (_playing) {
+      await _player.pause();
+    } else {
+      await _player.play(BytesSource(_bytes!));
+    }
+  }
+
+  @override
+  void dispose() {
+    _player.dispose();
+    super.dispose();
+  }
+
+  String _fmt(Duration d) => '${d.inMinutes}:${(d.inSeconds % 60).toString().padLeft(2, '0')}';
+
+  @override
+  Widget build(BuildContext context) {
+    final color = widget.color ?? AppColors.halalGreen;
+    if (_loading) return const SizedBox(height: 36, width: 36, child: Center(child: CircularProgressIndicator(strokeWidth: 2)));
+    if (_error) return Icon(Icons.error_outline, color: color);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        IconButton(
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints(),
+          icon: Icon(_playing ? Icons.pause_circle_filled : Icons.play_circle_filled, color: color, size: 32),
+          onPressed: _toggle,
+        ),
+        const SizedBox(width: 6),
+        SizedBox(
+          width: 110,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              LinearProgressIndicator(
+                value: _duration.inMilliseconds > 0 ? _position.inMilliseconds / _duration.inMilliseconds : 0,
+                color: color,
+                backgroundColor: color.withValues(alpha: 0.2),
+                minHeight: 3,
+              ),
+              const SizedBox(height: 3),
+              Text(
+                _duration.inMilliseconds > 0 ? '${_fmt(_position)} / ${_fmt(_duration)}' : 'ভয়েস মেসেজ',
+                style: TextStyle(fontSize: 10, color: color),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
   }
 }

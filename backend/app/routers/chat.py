@@ -96,9 +96,14 @@ async def mark_read(message_id: uuid.UUID, spouse: Spouse = Depends(get_current_
     msg = result.scalar_one_or_none()
     if msg is None:
         raise HTTPException(status_code=404, detail="Not found")
-    if msg.sender_id != spouse.id:
+    if msg.sender_id != spouse.id and msg.read_at is None:
         msg.read_at = utcnow()
         await db.commit()
+        # Tell the sender's live connection so their "seen" tick updates
+        # immediately instead of only on their next full reload.
+        await ws_manager.send_to_spouse(str(msg.sender_id), {
+            "type": "chat_read", "message_id": str(msg.id), "read_at": msg.read_at.isoformat(),
+        })
     return {"ok": True}
 
 

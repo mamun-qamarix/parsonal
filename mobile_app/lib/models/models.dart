@@ -156,8 +156,8 @@ class ChatMessageModel {
   final String contentType;
   final String? encPayload;
   final DateTime createdAt;
-  final DateTime? deliveredAt;
-  final DateTime? readAt;
+  DateTime? deliveredAt;
+  DateTime? readAt;
   final String? mediaAssetId;
   String? decryptedText;
 

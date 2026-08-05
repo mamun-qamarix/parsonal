@@ -555,6 +555,55 @@ per-device setup; the old TOTP endpoints 404; the new approve/status/
 complete password-reset sequence works end-to-end and rejects
 completion before approval.
 
+## 28. Chat read receipts, voice playback, media zoom; Reel aspect ratio
+
+**Chat gaps closed:**
+- **Seen ticks.** `POST /chat/messages/{id}/read` already existed and
+  already set `read_at`, but nothing in the app ever called it, and it
+  never told the sender. Now the chat screen marks every incoming
+  message read as soon as it's loaded or arrives over the socket (the
+  screen being open means it's being looked at), the endpoint broadcasts
+  a new `chat_read` WS event to the sender, and sent messages show a
+  WhatsApp-style tick: single grey (sent), double grey (delivered),
+  double blue (seen). While in `ws_manager.send_to_spouse` for this,
+  fixed a real bug found during the code review pass: it returned `True`
+  (marking a message delivered) whenever the connection set was merely
+  non-empty, even if every individual `send_text` call had thrown --
+  now it only returns `True` if at least one send actually succeeded.
+- **Voice messages were unplayable** -- content_type "voice" just showed
+  a `[voice]` text placeholder. New `DecryptedVoicePlayer` (audioplayers'
+  `BytesSource`, no temp file needed) with play/pause and a position/
+  duration readout.
+- **No way to see media full-size.** Tapping a photo/video bubble now
+  opens a full-screen `MediaViewerScreen` -- pinch-zoomable for photos,
+  full aspect-ratio video playback -- instead of only ever seeing the
+  small in-bubble preview.
+
+**Reel aspect-ratio distortion, root cause:** `Stack(fit:
+StackFit.expand)` gives every non-positioned child a *tight* box
+matching the full screen. `Image`'s own `fit` parameter (BoxFit.cover/
+contain/etc.) works fine under tight constraints -- it paints correctly
+within whatever box it's given -- but `AspectRatio` is a *layout* widget
+that needs actual freedom to size itself; under fully tight constraints
+it has no choice but to obey the box exactly, ignoring its ratio. That's
+why video stretched/cropped wrong while nothing else did. Fix: video is
+now wrapped in `Center(child: SizedBox(width: screenWidth, ...))` --
+width fixed to the screen, height computed from the real aspect ratio
+via the loosened constraints Center provides; images use
+`DecryptedFullImage`'s new `fit: BoxFit.fitWidth`, which needs no such
+wrapper since BoxFit works at paint time. Both now show correctly
+letterboxed/pillarboxed on the full-bleed black background rather than
+stretched -- landscape video displays as landscape, not warped to fill
+a portrait screen. `DecryptedFullImage` gained a `fit` (default
+`BoxFit.contain`, used for the new zoom viewer and now also fixes the
+previously-unspecified, effectively-undefined fit in the vault
+entry-detail screen) and `zoomable` param, with `BoxFit.cover` used at
+the small fixed-size preview call sites (chat bubbles).
+
+Verified against a local Postgres: a message's `read_at` is null until
+the recipient marks it, marking works and persists, and a sender
+marking their own message is a safe no-op.
+
 ## 19. Add Device (peer-to-peer pairing)
 
 **Problem:** each role (`husband`/`wife`) can only be claimed once, ever
