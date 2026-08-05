@@ -74,7 +74,6 @@ dependencies:
   device_info_plus: ^12.4.0
   local_auth: ^3.0.2
   iconsax_flutter: ^1.0.1
-  video_trimmer: ^5.0.0
   get_thumbnail_video: ^0.7.3
   scrollable_positioned_list: ^0.3.8
 

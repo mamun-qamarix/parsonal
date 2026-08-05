@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/media/video_clip_helper.dart';
 import '../../core/theme/app_theme.dart';
 import '../../providers/session_provider.dart';
 import '../../services/reel_service.dart';
@@ -64,7 +63,7 @@ class _ReelScreenState extends State<ReelScreen> {
             : _items.isEmpty
             ? const Center(
                 child: Text(
-                  'No photos or videos yet',
+                  'এখনো কোনো ছবি বা ভিডিও নেই',
                   style: TextStyle(color: Colors.white),
                 ),
               )
@@ -72,16 +71,15 @@ class _ReelScreenState extends State<ReelScreen> {
                 scrollDirection: Axis.vertical,
                 itemCount: _items.length,
                 onPageChanged: _maybeShowMatch,
-                itemBuilder: (context, i) => _ReelPage(item: _items[i]),
+                itemBuilder: (context, i) => _ReelPage(
+                  item: _items[i],
+                  favoritesOnly: _favoritesOnly,
+                  onToggleFavoritesOnly: () {
+                    setState(() => _favoritesOnly = !_favoritesOnly);
+                    _load();
+                  },
+                ),
               ),
-      ),
-      floatingActionButton: FloatingActionButton.small(
-        backgroundColor: _favoritesOnly ? Colors.redAccent : Colors.white24,
-        onPressed: () {
-          setState(() => _favoritesOnly = !_favoritesOnly);
-          _load();
-        },
-        child: const Icon(Iconsax.heart_copy, color: Colors.white),
       ),
     );
   }
@@ -89,7 +87,13 @@ class _ReelScreenState extends State<ReelScreen> {
 
 class _ReelPage extends StatelessWidget {
   final ReelItem item;
-  const _ReelPage({required this.item});
+  final bool favoritesOnly;
+  final VoidCallback onToggleFavoritesOnly;
+  const _ReelPage({
+    required this.item,
+    required this.favoritesOnly,
+    required this.onToggleFavoritesOnly,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -111,15 +115,7 @@ class _ReelPage extends StatelessWidget {
               ? Center(
                   child: SizedBox(
                     width: MediaQuery.sizeOf(context).width,
-                    child: DecryptedVideoPlayer(
-                      assetId: asset.id,
-                      onTrimRequested: (localPath) => handleVideoTrimRequested(
-                        context,
-                        localVideoPath: localPath,
-                        vmk: context.read<SessionProvider>().vmk!,
-                        categoryId: entry.categoryId,
-                      ),
-                    ),
+                    child: DecryptedVideoPlayer(assetId: asset.id),
                   ),
                 )
               : DecryptedFullImage(
@@ -127,9 +123,11 @@ class _ReelPage extends StatelessWidget {
                   fit: BoxFit.fitWidth,
                   zoomable: false,
                 ),
+        // Caption block, bottom-left -- leaves the right edge clear for the
+        // vertical action column below so nothing overlaps. See DECISIONS.md.
         Positioned(
           left: 16,
-          right: 16,
+          right: 76,
           bottom: 24,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -175,51 +173,84 @@ class _ReelPage extends StatelessWidget {
                 ),
               ],
               const SizedBox(height: 10),
-              Row(
-                children: [
-                  Expanded(
-                    child: Theme(
-                      data: Theme.of(context).copyWith(
-                        textTheme: Theme.of(
-                          context,
-                        ).textTheme.apply(bodyColor: Colors.white),
-                      ),
-                      child: ReactionBar(
-                        targetType: 'vault_entry',
-                        targetId: entry.id,
+              Theme(
+                data: Theme.of(context).copyWith(
+                  textTheme: Theme.of(context).textTheme.apply(bodyColor: Colors.white),
+                ),
+                child: ReactionBar(targetType: 'vault_entry', targetId: entry.id),
+              ),
+            ],
+          ),
+        ),
+        // Instagram-style vertical action column on the right -- previously
+        // the comment button (bottom overlay) and the favorites-only toggle
+        // (a separately-positioned FloatingActionButton) sat on top of each
+        // other in the same bottom-right corner. See DECISIONS.md.
+        Positioned(
+          right: 12,
+          bottom: 24,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _ReelActionButton(
+                icon: Iconsax.heart_copy,
+                color: favoritesOnly ? Colors.redAccent : Colors.white,
+                tooltip: favoritesOnly ? 'সব দেখান' : 'শুধু ফেভারিট দেখান',
+                onTap: onToggleFavoritesOnly,
+              ),
+              const SizedBox(height: 18),
+              _ReelActionButton(
+                icon: Iconsax.message_2,
+                color: Colors.white,
+                tooltip: 'মন্তব্য',
+                onTap: () => showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  builder: (_) => Padding(
+                    padding: EdgeInsets.only(
+                      bottom: MediaQuery.of(context).viewInsets.bottom,
+                      left: 16,
+                      right: 16,
+                      top: 16,
+                    ),
+                    child: SizedBox(
+                      height: 400,
+                      child: SingleChildScrollView(
+                        child: CommentSection(
+                          targetType: 'vault_entry',
+                          targetId: entry.id,
+                        ),
                       ),
                     ),
                   ),
-                  IconButton(
-                    icon: const Icon(Iconsax.message_2, color: Colors.white),
-                    onPressed: () => showModalBottomSheet(
-                      context: context,
-                      isScrollControlled: true,
-                      builder: (_) => Padding(
-                        padding: EdgeInsets.only(
-                          bottom: MediaQuery.of(context).viewInsets.bottom,
-                          left: 16,
-                          right: 16,
-                          top: 16,
-                        ),
-                        child: SizedBox(
-                          height: 400,
-                          child: SingleChildScrollView(
-                            child: CommentSection(
-                              targetType: 'vault_entry',
-                              targetId: entry.id,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ],
           ),
         ),
       ],
+    );
+  }
+}
+
+class _ReelActionButton extends StatelessWidget {
+  final IconData icon;
+  final Color color;
+  final String tooltip;
+  final VoidCallback onTap;
+  const _ReelActionButton({
+    required this.icon,
+    required this.color,
+    required this.tooltip,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return IconButton(
+      tooltip: tooltip,
+      onPressed: onTap,
+      icon: Icon(icon, color: color, size: 28),
     );
   }
 }

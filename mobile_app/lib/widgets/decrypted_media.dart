@@ -158,20 +158,11 @@ class DecryptedFullImage extends StatelessWidget {
 ///
 /// Shows standard playback controls -- play/pause, a scrub bar with
 /// position/duration, and ±10s skip buttons -- previously this was just a
-/// bare play/pause toggle with no way to scrub through a longer video. If
-/// [onTrimRequested] is given, a scissor button also appears that hands the
-/// caller the local decrypted file path so it can open a trim UI (kept out
-/// of this widget since what happens with the trimmed result -- save as a
-/// new vault entry vs. a new chat message -- is caller-specific). See
+/// bare play/pause toggle with no way to scrub through a longer video. See
 /// DECISIONS.md.
 class DecryptedVideoPlayer extends StatefulWidget {
   final String assetId;
-  final void Function(String localVideoPath)? onTrimRequested;
-  const DecryptedVideoPlayer({
-    super.key,
-    required this.assetId,
-    this.onTrimRequested,
-  });
+  const DecryptedVideoPlayer({super.key, required this.assetId});
 
   @override
   State<DecryptedVideoPlayer> createState() => _DecryptedVideoPlayerState();
@@ -312,19 +303,6 @@ class _DecryptedVideoPlayerState extends State<DecryptedVideoPlayer> {
                     ),
                   ),
                   Text(_fmt(duration), style: const TextStyle(color: Colors.white, fontSize: 11)),
-                  if (widget.onTrimRequested != null) ...[
-                    const SizedBox(width: 4),
-                    IconButton(
-                      tooltip: 'ভিডিও ক্লিপ করুন',
-                      iconSize: 20,
-                      color: Colors.white,
-                      icon: const Icon(Iconsax.scissor),
-                      onPressed: () {
-                        final file = _tempFile;
-                        if (file != null) widget.onTrimRequested!(file.path);
-                      },
-                    ),
-                  ],
                 ],
               ),
             ),

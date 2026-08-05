@@ -2,8 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/media/video_clip_helper.dart';
-import '../../core/theme/app_theme.dart';
 import '../../models/models.dart';
 import '../../providers/session_provider.dart';
 import '../../services/social_service.dart';
@@ -64,90 +62,59 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
     }
   }
 
-  Future<void> _handleTrimRequested(String localVideoPath) async {
-    final entry = _entry;
-    if (entry == null) return;
-    final vmk = context.read<SessionProvider>().vmk!;
-    await handleVideoTrimRequested(
-      context,
-      localVideoPath: localVideoPath,
-      vmk: vmk,
-      categoryId: entry.categoryId,
-    );
-  }
-
-  Future<void> _requestEdit() async {
+  /// Edits and deletes apply immediately -- no approval needed from the
+  /// other spouse (at least for now). See DECISIONS.md.
+  Future<void> _edit() async {
     final controller = TextEditingController(text: _entry?.decryptedText ?? '');
-    final result = await showDialog<bool>(
+    final text = await showDialog<String>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Request an edit'),
-        content: TextField(
-          controller: controller,
-          maxLines: 5,
-          autofocus: true,
-        ),
+        title: const Text('এডিট করুন'),
+        content: TextField(controller: controller, maxLines: 5, autofocus: true),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            onPressed: () => Navigator.pop(context),
+            child: const Text('বাতিল'),
           ),
           FilledButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Send for approval'),
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('সংরক্ষণ'),
           ),
         ],
       ),
     );
-    if (result != true) return;
+    if (text == null || !mounted) return;
     final vmk = context.read<SessionProvider>().vmk!;
-    await _vaultService.requestEdit(
+    await _vaultService.updateEntry(
       vmk,
       widget.entryId,
-      controller.text.trim(),
+      text,
+      categoryId: _entry?.categoryId,
     );
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Edit request sent — waiting for your spouse\'s approval.',
-          ),
-        ),
-      );
-    }
+    if (mounted) _load();
   }
 
-  Future<void> _requestDelete() async {
+  Future<void> _delete() async {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Request deletion'),
-        content: const Text(
-          'This will ask your spouse to approve deleting this entry. It stays until they do.',
-        ),
+        title: const Text('এন্ট্রিটা মুছে ফেলবেন?'),
+        content: const Text('এটা আর ফেরত আনা যাবে না।'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
-            child: const Text('Cancel'),
+            child: const Text('বাতিল'),
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Request delete'),
+            child: const Text('মুছে ফেলুন'),
           ),
         ],
       ),
     );
-    if (confirm != true) return;
-    await _vaultService.requestDelete(widget.entryId);
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Delete request sent — waiting for your spouse\'s approval.',
-          ),
-        ),
-      );
-    }
+    if (confirm != true || !mounted) return;
+    await _vaultService.deleteEntry(widget.entryId);
+    if (mounted) Navigator.of(context).pop(true);
   }
 
   @override
@@ -168,12 +135,12 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
           ),
           PopupMenuButton<String>(
             onSelected: (v) {
-              if (v == 'edit') _requestEdit();
-              if (v == 'delete') _requestDelete();
+              if (v == 'edit') _edit();
+              if (v == 'delete') _delete();
             },
             itemBuilder: (_) => const [
-              PopupMenuItem(value: 'edit', child: Text('Request edit')),
-              PopupMenuItem(value: 'delete', child: Text('Request delete')),
+              PopupMenuItem(value: 'edit', child: Text('এডিট করুন')),
+              PopupMenuItem(value: 'delete', child: Text('মুছে ফেলুন')),
             ],
           ),
         ],
@@ -184,16 +151,6 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
           children: [
             Row(
               children: [
-                CircleAvatar(
-                  backgroundColor: entry.authorRole == 'husband'
-                      ? AppColors.husband
-                      : AppColors.wife,
-                  child: Icon(
-                    entry.authorRole == 'husband' ? Iconsax.man : Iconsax.woman,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(width: 10),
                 Text(
                   DateFormat.yMMMd().add_jm().format(entry.createdAt.toLocal()),
                 ),
@@ -209,10 +166,7 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
               ClipRRect(
                 borderRadius: BorderRadius.circular(16),
                 child: entry.contentType == 'video'
-                    ? DecryptedVideoPlayer(
-                        assetId: entry.mediaAssets.first.id,
-                        onTrimRequested: _handleTrimRequested,
-                      )
+                    ? DecryptedVideoPlayer(assetId: entry.mediaAssets.first.id)
                     : SizedBox(
                         height: 320,
                         width: double.infinity,

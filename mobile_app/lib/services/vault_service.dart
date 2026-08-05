@@ -101,6 +101,29 @@ class VaultService {
     return res.data['is_favorite'] as bool;
   }
 
+  /// Edits an entry's text/category immediately -- no spouse approval.
+  /// See DECISIONS.md.
+  Future<VaultEntry> updateEntry(
+    Uint8List vmk,
+    String entryId,
+    String text, {
+    String? categoryId,
+  }) async {
+    final enc = await VaultCrypto.encryptText(vmk, text);
+    final res = await _dio.put(
+      '/vault/entries/$entryId',
+      data: {'enc_payload': enc, if (categoryId != null) 'category_id': categoryId},
+    );
+    final entry = VaultEntry.fromJson(res.data);
+    entry.decryptedText = text;
+    return entry;
+  }
+
+  /// Deletes an entry immediately -- no spouse approval. See DECISIONS.md.
+  Future<void> deleteEntry(String entryId) async {
+    await _dio.delete('/vault/entries/$entryId');
+  }
+
   Future<ConsentRequestModel> requestEdit(
     Uint8List vmk,
     String entryId,

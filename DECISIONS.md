@@ -863,6 +863,83 @@ build method** for every future release of this app (saved to memory,
 not just this file) -- README.md's build section and every future
 release/USER_GUIDE.md link should use the `arm64-v8a` split artifact.
 
+## 33. Home feed redesign, free-form reactions, no-consent vault edit/delete, Reel layout fix
+
+**Vault entries: edit/delete no longer need spouse approval, for now.**
+Explicit user instruction, applied the same way as wishlist/phrases/
+comments already work: new `PUT`/`DELETE /vault/entries/{id}` apply
+immediately (still notifying the other spouse, generically, same as any
+other change). The older request/consent endpoints
+(`edit-request`/`delete-request`/`consent-requests`) are left in place
+on the backend but the client no longer calls them -- easy to revert to
+if the couple wants approval back later, without losing any code.
+
+**Reactions, reworked to match what was actually asked for the first
+time.** The old `ReactionBar` showed a small fixed set of 6 preset emoji
+in a long-press bottom sheet. That was never the ask: the user wants to
+tap an "add emoji" button and have their *phone's own keyboard* emoji
+panel open, so literally any emoji is available, repeatable -- add
+several different ones in a row without the sheet closing between each.
+Turns out the backend already supported this shape exactly (the
+`uq_reaction` unique constraint is per `(target, spouse, emoji)`, not
+per `(target, spouse)` -- multiple *different* emoji from the same
+person were always allowed, just never exposed by the UI). Replaced the
+preset picker with a bottom sheet holding one focused, empty `TextField`
+-- tapping it brings up the normal keyboard, whose own emoji key (e.g.
+Gboard's smiley icon) is how the user actually picks the emoji; hitting
+the checkmark or Enter submits it as a new reaction and immediately
+clears the field for the next one, so "add a bunch of different emoji in
+one sitting" is a fluid loop rather than repeated dialog reopens.
+
+**Vault entry cards, redesigned.** Removed the husband/wife avatar+label
+from the card header -- purely redundant now that the husband/wife
+filter pills exist specifically to separate that content, showing it a
+second time on every single card added nothing. New header is just the
+timestamp + a three-dot menu (favorite / edit / delete, all immediate,
+per above). The reaction bar now sits directly under the media, before
+the caption text -- previously reactions weren't shown on cards at all,
+only in the detail view.
+
+**Home screen: nothing stays pinned while scrolling.** Previously the
+app bar was a normal fixed `AppBar` with the countdown card and filter
+pills below it in a plain `Column`, permanently glued to the top.
+Rebuilt around `CustomScrollView` with the app bar, countdown card, and
+filter row *all* packed into one `SliverAppBar`'s `bottom:` slot, with
+`floating: true, snap: true` -- the whole header now slides away
+together on scroll-down and snaps back on the very next scroll-up
+gesture (not needing a scroll all the way back to the top). App bar
+title is now "পার্সোনাল" with a small leading icon, replacing the
+placeholder English "Our Vault". Filter pills also got a much thinner
+selected-state border (was 1.5px, now 0.75px) and switched from a
+`Wrap` (which pushed overflow to a second line) to a horizontally-
+scrolling row, so a growing category list scrolls sideways instead of
+growing the header's height.
+
+**Video clip/trim feature removed entirely** (was added last release;
+explicitly not wanted) -- deleted `video_trim_screen.dart` and
+`video_clip_helper.dart`, dropped the `video_trimmer` package (and its
+transitive deps: `flutter_native_video_trimmer`, `archive`, `image`,
+`posix`, `transparent_image` -- a nice side-effect trim on APK size too),
+and removed the scissor button + `onTrimRequested` plumbing from
+`DecryptedVideoPlayer`, the entry detail screen, and Reel. Real playback
+controls (scrub bar, ±10s skip) from the same release stay -- only the
+trim/clip capability itself is gone.
+
+**Reel: fixed overlapping action icons.** The comment button (bottom
+overlay, pinned near the right edge) and the favorites-only toggle (a
+separately-positioned `FloatingActionButton`, default bottom-right) sat
+on top of each other in the same corner. Removed the FAB; both actions
+now live in one clean vertical column on the right side (Instagram-
+style) -- favorites-toggle above, comment below -- with the caption/
+reaction area on the left given a fixed right margin so it never reaches
+into that column's space.
+
+**Verified:** `flutter analyze` clean (no errors or warnings, only the
+same pre-existing style infos as before), backend imports cleanly with
+all new routes registered, and a `--split-per-abi` release build
+succeeded (`arm64-v8a` ~40MB, unchanged despite the net-new features --
+video_trimmer's removal offset the added code).
+
 ## 19. Add Device (peer-to-peer pairing)
 
 **Problem:** each role (`husband`/`wife`) can only be claimed once, ever

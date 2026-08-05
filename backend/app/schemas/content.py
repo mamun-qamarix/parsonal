@@ -49,6 +49,10 @@ class EditRequestCreate(EncPayloadIn):
     pass
 
 
+class VaultEntryEdit(EncPayloadIn):
+    category_id: uuid.UUID | None = None
+
+
 class ConsentRequestOut(ORMBase):
     id: uuid.UUID
     entry_id: uuid.UUID

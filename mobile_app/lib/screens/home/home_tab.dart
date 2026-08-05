@@ -57,8 +57,7 @@ class _HomeTabState extends State<HomeTab> {
   void _toggleFilter(Set<String> group, String value) {
     setState(() {
       if (group.contains(value)) {
-        if (group.length > 1)
-          group.remove(value); // always leave at least one on
+        if (group.length > 1) group.remove(value); // always leave at least one on
       } else {
         group.add(value);
       }
@@ -118,128 +117,159 @@ class _HomeTabState extends State<HomeTab> {
         )
         .toList();
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Our Vault'),
-        actions: [
-          IconButton(
-            icon: const Icon(Iconsax.clock),
-            tooltip: 'History',
-            onPressed: () => Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const HistoryScreen())),
-          ),
-          IconButton(
-            icon: const Icon(Iconsax.heart),
-            tooltip: 'Favorites',
-            onPressed: () => Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const FavoritesScreen())),
-          ),
-          IconButton(
-            icon: const Icon(Iconsax.sms_notification),
-            tooltip: 'Approvals',
-            onPressed: () => Navigator.of(context).push(
-              MaterialPageRoute(builder: (_) => const ConsentRequestsScreen()),
-            ),
-          ),
-          IconButton(
-            icon: const Icon(Iconsax.setting_2),
-            tooltip: 'Settings',
-            onPressed: () => Navigator.of(
-              context,
-            ).push(MaterialPageRoute(builder: (_) => const SettingsScreen())),
-          ),
-        ],
-      ),
       floatingActionButton: FloatingActionButton(
         onPressed: _createNew,
         child: const Icon(Iconsax.add),
       ),
-      body: Column(
-        children: [
-          const Padding(
-            padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
-            child: CountdownCard(),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-            child: Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _FilterPill(
-                  label: 'টেক্সট',
-                  icon: Iconsax.document_text,
-                  color: AppColors.halalGreen,
-                  selected: _typeFilter.contains('text'),
-                  onTap: () => _toggleFilter(_typeFilter, 'text'),
+      body: RefreshIndicator(
+        onRefresh: _load,
+        // Nothing stays pinned -- the app bar, countdown card, and filter
+        // row all live inside the SliverAppBar's `bottom`, so `floating` +
+        // `snap` slide the whole header away together on scroll-down and
+        // bring it right back on the very next scroll-up gesture (no need
+        // to scroll all the way back to the top). See DECISIONS.md.
+        child: CustomScrollView(
+          slivers: [
+            SliverAppBar(
+              floating: true,
+              snap: true,
+              title: const Row(
+                children: [
+                  Icon(Iconsax.heart_copy, size: 20, color: AppColors.halalGreen),
+                  SizedBox(width: 8),
+                  Text('পার্সোনাল'),
+                ],
+              ),
+              actions: [
+                IconButton(
+                  icon: const Icon(Iconsax.clock),
+                  tooltip: 'হিস্টরি',
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const HistoryScreen()),
+                  ),
                 ),
-                _FilterPill(
-                  label: 'ছবি',
-                  icon: Iconsax.image,
-                  color: AppColors.halalGreen,
-                  selected: _typeFilter.contains('photo'),
-                  onTap: () => _toggleFilter(_typeFilter, 'photo'),
+                IconButton(
+                  icon: const Icon(Iconsax.heart),
+                  tooltip: 'ফেভারিট',
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const FavoritesScreen()),
+                  ),
                 ),
-                _FilterPill(
-                  label: 'ভিডিও',
-                  icon: Iconsax.video,
-                  color: AppColors.halalGreen,
-                  selected: _typeFilter.contains('video'),
-                  onTap: () => _toggleFilter(_typeFilter, 'video'),
+                IconButton(
+                  icon: const Icon(Iconsax.sms_notification),
+                  tooltip: 'অনুমোদন',
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const ConsentRequestsScreen()),
+                  ),
                 ),
-                Container(
-                  width: 1,
-                  height: 28,
-                  color: Colors.grey.withValues(alpha: 0.3),
-                  margin: const EdgeInsets.symmetric(horizontal: 2),
-                ),
-                _FilterPill(
-                  label: 'স্বামী',
-                  icon: Iconsax.man,
-                  color: AppColors.husband,
-                  selected: _roleFilter.contains('husband'),
-                  onTap: () => _toggleFilter(_roleFilter, 'husband'),
-                ),
-                _FilterPill(
-                  label: 'স্ত্রী',
-                  icon: Iconsax.woman,
-                  color: AppColors.wife,
-                  selected: _roleFilter.contains('wife'),
-                  onTap: () => _toggleFilter(_roleFilter, 'wife'),
+                IconButton(
+                  icon: const Icon(Iconsax.setting_2),
+                  tooltip: 'সেটিংস',
+                  onPressed: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                  ),
                 ),
               ],
-            ),
-          ),
-          Expanded(
-            child: _loading
-                ? const ShimmerFeedList()
-                : list.isEmpty
-                ? const Center(child: Text('এখনো কিছু নেই'))
-                : RefreshIndicator(
-                    onRefresh: _load,
-                    child: ListView.builder(
-                      padding: const EdgeInsets.all(12),
-                      itemCount: list.length,
-                      itemBuilder: (context, i) => Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: VaultEntryCard(
-                          entry: list[i],
-                          onTap: () async {
-                            await Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    EntryDetailScreen(entryId: list[i].id),
-                              ),
-                            );
-                            _load();
-                          },
+              bottom: PreferredSize(
+                preferredSize: const Size.fromHeight(148),
+                child: Column(
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.fromLTRB(16, 16, 16, 0),
+                      child: CountdownCard(),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                      child: SizedBox(
+                        height: 40,
+                        child: ListView(
+                          scrollDirection: Axis.horizontal,
+                          children: [
+                            _FilterPill(
+                              label: 'টেক্সট',
+                              icon: Iconsax.document_text,
+                              color: AppColors.halalGreen,
+                              selected: _typeFilter.contains('text'),
+                              onTap: () => _toggleFilter(_typeFilter, 'text'),
+                            ),
+                            const SizedBox(width: 8),
+                            _FilterPill(
+                              label: 'ছবি',
+                              icon: Iconsax.image,
+                              color: AppColors.halalGreen,
+                              selected: _typeFilter.contains('photo'),
+                              onTap: () => _toggleFilter(_typeFilter, 'photo'),
+                            ),
+                            const SizedBox(width: 8),
+                            _FilterPill(
+                              label: 'ভিডিও',
+                              icon: Iconsax.video,
+                              color: AppColors.halalGreen,
+                              selected: _typeFilter.contains('video'),
+                              onTap: () => _toggleFilter(_typeFilter, 'video'),
+                            ),
+                            Container(
+                              width: 1,
+                              height: 28,
+                              color: Colors.grey.withValues(alpha: 0.3),
+                              margin: const EdgeInsets.symmetric(horizontal: 8),
+                            ),
+                            _FilterPill(
+                              label: 'স্বামী',
+                              icon: Iconsax.man,
+                              color: AppColors.husband,
+                              selected: _roleFilter.contains('husband'),
+                              onTap: () => _toggleFilter(_roleFilter, 'husband'),
+                            ),
+                            const SizedBox(width: 8),
+                            _FilterPill(
+                              label: 'স্ত্রী',
+                              icon: Iconsax.woman,
+                              color: AppColors.wife,
+                              selected: _roleFilter.contains('wife'),
+                              onTap: () => _toggleFilter(_roleFilter, 'wife'),
+                            ),
+                          ],
                         ),
                       ),
                     ),
+                  ],
+                ),
+              ),
+            ),
+            if (_loading)
+              const SliverFillRemaining(child: ShimmerFeedList())
+            else if (list.isEmpty)
+              const SliverFillRemaining(
+                child: Center(child: Text('এখনো কিছু নেই')),
+              )
+            else
+              SliverPadding(
+                padding: const EdgeInsets.all(12),
+                sliver: SliverList(
+                  delegate: SliverChildBuilderDelegate(
+                    (context, i) => Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: VaultEntryCard(
+                        entry: list[i],
+                        onChanged: _load,
+                        onTap: () async {
+                          await Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  EntryDetailScreen(entryId: list[i].id),
+                            ),
+                          );
+                          _load();
+                        },
+                      ),
+                    ),
+                    childCount: list.length,
                   ),
-          ),
-        ],
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -273,7 +303,7 @@ class _FilterPill extends StatelessWidget {
           borderRadius: BorderRadius.circular(999),
           border: Border.all(
             color: selected ? color : Colors.grey.withValues(alpha: 0.35),
-            width: selected ? 1.5 : 1,
+            width: 0.75,
           ),
         ),
         child: Row(

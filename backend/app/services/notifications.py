@@ -93,6 +93,8 @@ _NOTIFICATION_TEXT: dict[str, dict[str, str]] = {
         "video": "ভল্টে নতুন একটা ভিডিও যোগ হয়েছে।",
         "_default": "ভল্টে নতুন কিছু যোগ হয়েছে।",
     },
+    "content_edited": {"_default": "ভল্টের একটা এন্ট্রি এডিট হয়েছে।"},
+    "content_deleted": {"_default": "ভল্টের একটা এন্ট্রি মুছে ফেলা হয়েছে।"},
     "reaction": {"_default": "তোমার কিছুতে একটা রিঅ্যাকশন এসেছে।"},
     "comment": {"_default": "তোমার কিছুতে নতুন একটা মন্তব্য এসেছে।"},
     "consent_request": {"_default": "একটা অনুমোদনের অনুরোধ এসেছে।"},

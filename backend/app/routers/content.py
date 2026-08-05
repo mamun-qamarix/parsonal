@@ -15,7 +15,7 @@ from app.models.user import Spouse, Device, RoleEnum
 from app.models.common import utcnow
 from app.schemas.common import b64_to_bytes, bytes_to_b64
 from app.schemas.content import (
-    CategoryCreate, CategoryOut, VaultEntryCreate, VaultEntryOut, MediaAssetOut,
+    CategoryCreate, CategoryOut, VaultEntryCreate, VaultEntryEdit, VaultEntryOut, MediaAssetOut,
     EditRequestCreate, ConsentRequestOut, ConsentDecision,
 )
 from app.services.notifications import notify_spouse
@@ -162,6 +162,46 @@ async def get_entry(entry_id: uuid.UUID, spouse: Spouse = Depends(get_current_sp
     await db.commit()
 
     return await _entry_to_out(db, entry, spouse)
+
+
+@router.put("/vault/entries/{entry_id}", response_model=VaultEntryOut)
+async def edit_entry(entry_id: uuid.UUID, payload: VaultEntryEdit, spouse: Spouse = Depends(get_current_spouse), db: AsyncSession = Depends(get_db)):
+    """Edits an entry's text/category immediately -- no spouse approval,
+    unlike the older edit-request/consent flow below (kept for now but no
+    longer used by the client). The user explicitly asked for edit/delete
+    to not require the other spouse's sign-off, at least for now. See
+    DECISIONS.md."""
+    result = await db.execute(select(VaultEntry).where(VaultEntry.id == entry_id, VaultEntry.is_deleted == False))  # noqa: E712
+    entry = result.scalar_one_or_none()
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    entry.enc_payload = b64_to_bytes(payload.enc_payload)
+    if payload.category_id is not None:
+        entry.category_id = payload.category_id
+    db.add(AuditLogEntry(actor_id=spouse.id, action="content.edit", target_type="vault_entry", target_id=entry.id))
+    await db.commit()
+    await db.refresh(entry)
+
+    await _notify_other_spouse(db, _role_of(spouse), "content_edited", content_type=entry.content_type.value)
+    return await _entry_to_out(db, entry, spouse)
+
+
+@router.delete("/vault/entries/{entry_id}")
+async def delete_entry(entry_id: uuid.UUID, spouse: Spouse = Depends(get_current_spouse), db: AsyncSession = Depends(get_db)):
+    """Soft-deletes an entry immediately -- no spouse approval. See
+    edit_entry's note above and DECISIONS.md."""
+    result = await db.execute(select(VaultEntry).where(VaultEntry.id == entry_id, VaultEntry.is_deleted == False))  # noqa: E712
+    entry = result.scalar_one_or_none()
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    entry.is_deleted = True
+    db.add(AuditLogEntry(actor_id=spouse.id, action="content.delete", target_type="vault_entry", target_id=entry.id))
+    await db.commit()
+
+    await _notify_other_spouse(db, _role_of(spouse), "content_deleted")
+    return {"ok": True}
 
 
 @router.post("/vault/entries/{entry_id}/favorite")
