@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.deps import get_current_spouse
+from app.deps import get_current_spouse, get_current_spouse_and_device
 from app.models.audit import AuditLogEntry
 from app.models.user import Spouse, Device
 from app.schemas.device import DeviceOut
@@ -19,9 +19,16 @@ class PushTokenUpdate(BaseModel):
 
 
 @router.put("/device/push-token")
-async def update_push_token(payload: PushTokenUpdate, spouse: Spouse = Depends(get_current_spouse), db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Device).where(Device.spouse_id == spouse.id).order_by(Device.created_at.desc()))
-    device = result.scalars().first()
+async def update_push_token(
+    payload: PushTokenUpdate,
+    spouse_and_device: tuple[Spouse, Device | None] = Depends(get_current_spouse_and_device),
+    db: AsyncSession = Depends(get_db),
+):
+    """Registers the FCM token for the device THIS access token was issued
+    to (via its device_id claim) -- previously this updated whichever
+    device row was most recently created, which silently pointed pushes at
+    the wrong phone once a spouse had more than one device. See DECISIONS.md."""
+    _, device = spouse_and_device
     if device is None:
         return {"ok": False, "detail": "No device found for this session"}
     device.push_token = payload.push_token

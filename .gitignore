@@ -1,4 +1,5 @@
 .env
+backend/firebase-service-account.json
 deploy/nginx/*.conf
 backend/.venv/
 backend/__pycache__/

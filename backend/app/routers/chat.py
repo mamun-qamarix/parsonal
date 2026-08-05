@@ -77,7 +77,7 @@ async def send_message_rest(payload: ChatMessageCreate, spouse: Spouse = Depends
             await db.commit()
         tokens_result = await db.execute(select(Device.push_token).where(Device.spouse_id == target.id, Device.push_token.is_not(None)))
         tokens = [t for t in tokens_result.scalars().all() if t]
-        await notify_spouse(str(target.id), tokens, category="chat")
+        await notify_spouse(str(target.id), tokens, category="chat", content_type=payload.content_type)
 
     return await _msg_to_out(db, msg)
 
@@ -157,7 +157,7 @@ async def chat_ws(websocket: WebSocket, token: str = Query(...)):
                                 await db.commit()
                             tokens_result = await db.execute(select(Device.push_token).where(Device.spouse_id == target.id, Device.push_token.is_not(None)))
                             tokens = [t for t in tokens_result.scalars().all() if t]
-                            await notify_spouse(str(target.id), tokens, category="chat")
+                            await notify_spouse(str(target.id), tokens, category="chat", content_type=payload.content_type)
 
                         await websocket.send_text(json.dumps({"type": "chat_ack", "message": json.loads((await _msg_to_out(db, msg)).model_dump_json())}))
                 if msg_type == "typing":

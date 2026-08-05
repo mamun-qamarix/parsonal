@@ -87,6 +87,33 @@ If you skipped this question and need to switch later, set
 `COMPOSE_PROFILES=` (empty) in `.env`, run `docker compose up -d` again,
 and follow the same nginx steps.
 
+### Push notifications (optional)
+
+Notifications work over WebSocket while the app is open. To also wake the
+app when it's closed/backgrounded, wire up Firebase Cloud Messaging:
+
+1. In the [Firebase Console](https://console.firebase.google.com/), create
+   (or reuse) a project, add an Android app with package name
+   `com.couplevault.couple_vault`, and download `google-services.json` into
+   `mobile_app/android/app/google-services.json` (safe to commit — it holds
+   no secrets, just public app identifiers).
+2. Project settings → **Service accounts** → **Generate new private key**.
+   This JSON *is* a secret (it can send push to your project). On the VPS
+   only — never in git — save it as `backend/firebase-service-account.json`
+   (already gitignored).
+3. In `.env` on the VPS, set:
+   ```
+   FCM_SERVICE_ACCOUNT_PATH=/srv/firebase-service-account.json
+   ```
+   then `docker compose up -d --build backend`.
+
+If you don't want push notifications, skip all of this, comment out the
+`backend/firebase-service-account.json` volume line in `docker-compose.yml`,
+and leave `FCM_SERVICE_ACCOUNT_PATH` unset — `notify_spouse()` just skips
+sending a push and the app keeps working fully over WebSocket. Push bodies
+are always generic ("a text/photo/video message arrived") and never contain
+actual app content — see `backend/app/services/notifications.py`.
+
 ### Admin panel
 
 Visit `https://<your-domain>/admin`, set your admin password on first

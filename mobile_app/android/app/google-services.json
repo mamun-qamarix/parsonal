@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1047364498293",
+    "project_id": "parsonal-40d40",
+    "storage_bucket": "parsonal-40d40.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1047364498293:android:93b46fa4a549cff34d593c",
+        "android_client_info": {
+          "package_name": "com.couplevault.couple_vault"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCIOEXaEsbqCnUE32Zyl0rFRGHus1rZofs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -29,8 +29,12 @@ class Settings(BaseSettings):
     compreface_recognition_api_key: str = ""
     compreface_similarity_threshold: float = 0.85
 
-    fcm_server_key: str = ""
-    fcm_project_id: str = ""
+    # Path (inside the backend container) to the Firebase Admin SDK service
+    # account JSON used to send push notifications. Never committed to git --
+    # mounted read-only from a file that lives only on the VPS. See
+    # docker-compose.yml and DECISIONS.md. Empty by default: pushes are
+    # simply skipped (the app still works fully over WebSocket while open).
+    fcm_service_account_path: str = ""
 
     max_upload_mb: int = 1024
     max_chat_attachment_mb: int = 50

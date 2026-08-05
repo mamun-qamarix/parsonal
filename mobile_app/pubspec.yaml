@@ -39,6 +39,11 @@ dependencies:
   dio: ^5.7.0
   web_socket_channel: ^3.0.1
 
+  # Push notifications (background/killed-app wake-up only -- foreground
+  # updates already arrive over the WebSocket above). See DECISIONS.md.
+  firebase_core: ^3.8.0
+  firebase_messaging: ^15.1.6
+
   # State management
   provider: ^6.1.2
 

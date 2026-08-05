@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/network/api_client.dart';
 import '../core/network/ws_client.dart';
+import '../core/notifications/push_notification_service.dart';
 import '../core/storage/secure_storage_service.dart';
 
 enum SessionState {
@@ -94,6 +95,7 @@ class SessionProvider extends ChangeNotifier {
     vmk = base64Decode(vmkB64);
     state = SessionState.authenticated;
     WsClient.instance.connect();
+    PushNotificationService.instance.registerToken();
     resetAutoLockTimer();
     notifyListeners();
   }
@@ -140,6 +142,7 @@ class SessionProvider extends ChangeNotifier {
     _pendingFaceChallengeToken = null;
     state = SessionState.authenticated;
     WsClient.instance.connect();
+    PushNotificationService.instance.registerToken();
     resetAutoLockTimer();
     notifyListeners();
   }

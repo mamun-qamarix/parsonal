@@ -633,6 +633,86 @@ instantly hide the transcript from anyone glancing at that screen
 else); the other spouse's own chat view is completely unaffected unless
 they independently toggle their own icon.
 
+## 30. Push notifications made fully functional (real FCM credentials)
+
+**Problem:** `notify_spouse()` always sent a WebSocket ping (works only
+while the app is open) and *attempted* a Firebase push for the
+background/killed-app case, but `send_generic_push()` was calling
+`credentials.Certificate({})` -- an empty dict, not a real key -- so it
+silently failed every time. There was also no Flutter-side Firebase
+integration at all (no `firebase_core`/`firebase_messaging` packages, no
+`google-services.json`, nothing calling the already-existing
+`ProfileService.updatePushToken()`), so even a working backend would have
+had no token to send to.
+
+**Fixed, backend:** the user provided a real `google-services.json`
+(Android app config, not a secret -- committed to
+`mobile_app/android/app/`) and a real Firebase Admin service-account key
+(a genuine secret). The service-account JSON is stored ONLY at
+`backend/firebase-service-account.json`, gitignored, never committed, and
+mounted read-only into the backend container by `docker-compose.yml`; its
+container path is read from a new `FCM_SERVICE_ACCOUNT_PATH` setting
+(replacing the old, never-actually-usable `fcm_server_key`/
+`fcm_project_id` fields, which needed a legacy server-key model
+`firebase-admin` doesn't use). `_firebase()` lazily initializes the
+Admin SDK once from that file and caches the failure so a missing/invalid
+key degrades to "pushes silently skipped" rather than raising on every
+request that would otherwise trigger one. `messaging.send()` is a
+blocking call, so it's offloaded via `run_in_threadpool` (same pattern as
+the MinIO calls in `storage.py`) to avoid stalling the event loop.
+
+**Fixed, backend, privacy constraint:** the user was explicit that a push
+must never reveal anything from inside the app -- no message text, no
+names -- only a generic, category-level phrase ("a text/photo/video
+message arrived"). `notify_spouse()` gained an optional `content_type`
+param (the chat message's or vault entry's own already-generic kind:
+text/photo/video/voice) and a `_NOTIFICATION_TEXT` lookup table picks one
+of a small set of pre-written Bengali phrases from `category` +
+`content_type` -- never anything derived from the actual encrypted
+payload. Every `notify_spouse(...)` call site (`chat.py`, `content.py`,
+`social.py`, `phrase.py`) was audited; `chat` and `content_new` now pass
+their content_type through, everything else (reaction/comment/
+consent_request/consent_resolved/phrase) uses a fixed category-level
+phrase since there's nothing further to safely differentiate.
+
+**Fixed in passing, `PUT /device/push-token`:** this endpoint updated
+whichever of the calling spouse's device rows was most recently
+*created*, not the device the request actually came from -- harmless
+while nothing real depended on it, but silently wrong (and now directly
+user-facing) once tokens started actually being registered. Switched to
+`get_current_spouse_and_device`, which resolves the calling device from
+the access token's own `device_id` claim (same mechanism already used
+elsewhere for per-device state).
+
+**Flutter side:** added `firebase_core`/`firebase_messaging`, applied the
+`com.google.gms.google-services` Gradle plugin (Android-only integration
+-- no `firebase_options.dart`/FlutterFire CLI needed since the native
+`google-services.json` already supplies everything `Firebase.
+initializeApp()` needs on Android). `PushNotificationService.registerToken()`
+requests the OS notification permission and calls the existing
+`ProfileService.updatePushToken()`; it's invoked from every real
+authentication completion point in `SessionProvider` (fresh claim, fresh
+login, completed pairing) -- deliberately NOT from the biometric-unlock
+path, since that reuses an already-valid session and the token-refresh
+listener (`FirebaseMessaging.instance.onTokenRefresh`) already covers
+token rotation independently of login events. The background message
+handler is intentionally a no-op: every push is sent as a plain FCM
+"notification" message, which Android already renders in the system tray
+on its own with zero app code running; FCM just needs *something*
+registered to wake for. All of this only ever supplements the WebSocket
+channel, which still handles every foreground/open-app update exactly as
+before.
+
+**Verified:** `_firebase()` initializes successfully against the real
+service-account file (`project_id: parsonal-40d40` echoed back),
+`_notification_body()` produces the correct fully-generic Bengali text
+for every category/content_type combination with no content leakage,
+`flutter analyze` is clean, and a release APK built successfully with the
+Google Services plugin wired in. Actual end-to-end push delivery to a
+physical device could not be verified in this environment (no real device
+token available here) -- that's confirmed by the user field-testing the
+shipped APK.
+
 ## 19. Add Device (peer-to-peer pairing)
 
 **Problem:** each role (`husband`/`wife`) can only be claimed once, ever

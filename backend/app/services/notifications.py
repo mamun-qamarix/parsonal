@@ -1,3 +1,4 @@
+import logging
 import random
 
 from app.config import get_settings
@@ -69,35 +70,120 @@ def pick_daily_message(role: str) -> str:
     return random.choice(pool)
 
 
-GENERIC_UPDATE_MESSAGE = "You have a new update in the app."
+GENERIC_UPDATE_MESSAGE = "অ্যাপে একটা নতুন আপডেট এসেছে।"
+
+# Push notification bodies must NEVER reveal anything from inside the app --
+# no message text, no names, no counts that could hint at content. Only a
+# generic, category-level phrase ("a text/photo/video arrived") is allowed.
+# See DECISIONS.md and project.md §7. Keyed by notify_spouse's `category`,
+# then optionally narrowed by `content_type` for categories where the app
+# already knows that much (chat message kind, vault entry kind) without it
+# revealing anything about the actual content.
+_NOTIFICATION_TEXT: dict[str, dict[str, str]] = {
+    "chat": {
+        "text": "নতুন একটা মেসেজ এসেছে।",
+        "photo": "নতুন একটা ছবি এসেছে।",
+        "video": "নতুন একটা ভিডিও এসেছে।",
+        "voice": "নতুন একটা ভয়েস মেসেজ এসেছে।",
+        "_default": "নতুন একটা মেসেজ এসেছে।",
+    },
+    "content_new": {
+        "text": "ভল্টে নতুন একটা লেখা যোগ হয়েছে।",
+        "photo": "ভল্টে নতুন একটা ছবি যোগ হয়েছে।",
+        "video": "ভল্টে নতুন একটা ভিডিও যোগ হয়েছে।",
+        "_default": "ভল্টে নতুন কিছু যোগ হয়েছে।",
+    },
+    "reaction": {"_default": "তোমার কিছুতে একটা রিঅ্যাকশন এসেছে।"},
+    "comment": {"_default": "তোমার কিছুতে নতুন একটা মন্তব্য এসেছে।"},
+    "consent_request": {"_default": "একটা অনুমোদনের অনুরোধ এসেছে।"},
+    "consent_resolved": {"_default": "তোমার একটা অনুরোধের সিদ্ধান্ত হয়েছে।"},
+    "phrase": {"_default": "প্রিয় লাইনে নতুন কিছু যোগ হয়েছে।"},
+}
 
 
-async def notify_spouse(spouse_id_target: str, push_tokens: list[str], category: str = "update") -> None:
-    """Send a real-time WS ping (if connected) and queue generic pushes.
+def _notification_body(category: str, content_type: str | None) -> str:
+    bucket = _NOTIFICATION_TEXT.get(category)
+    if bucket is None:
+        return GENERIC_UPDATE_MESSAGE
+    if content_type and content_type in bucket:
+        return bucket[content_type]
+    return bucket.get("_default", GENERIC_UPDATE_MESSAGE)
 
-    `category` values (e.g. "reaction", "comment", "chat", "consent_request")
-    are used only to route/collapse the WS event client-side; the push
-    payload itself always stays generic per spec §7.
+
+async def notify_spouse(
+    spouse_id_target: str,
+    push_tokens: list[str],
+    category: str = "update",
+    content_type: str | None = None,
+) -> None:
+    """Send a real-time WS ping (if connected) and queue pushes for when the
+    app isn't open.
+
+    `category` (e.g. "reaction", "comment", "chat", "consent_request") and
+    the optional `content_type` (e.g. "text"/"photo"/"video"/"voice") pick a
+    pre-written, fully generic body from `_NOTIFICATION_TEXT` -- never the
+    actual message/entry content. `category` alone still routes/collapses
+    the WS event client-side same as before.
     """
     await ws_manager.send_to_spouse(spouse_id_target, {"type": category})
+    if not push_tokens:
+        return
+    body = _notification_body(category, content_type)
     for token in push_tokens:
-        await send_generic_push(token)
+        await send_generic_push(token, body=body)
+
+
+_firebase_app = None
+_firebase_unavailable = False
+
+
+def _firebase() -> "firebase_admin.App | None":  # noqa: F821 -- forward ref, imported lazily below
+    """Lazily initializes (once) the Firebase Admin app from the service
+    account file path in settings. Returns None -- silently -- if no path is
+    configured or initialization fails, so push notifications degrade
+    gracefully to "not sent" rather than ever breaking the request that
+    triggered them (chat send, new vault entry, etc.)."""
+    global _firebase_app, _firebase_unavailable
+    if _firebase_app is not None or _firebase_unavailable:
+        return _firebase_app
+    if not settings.fcm_service_account_path:
+        _firebase_unavailable = True
+        return None
+    try:
+        import firebase_admin
+        from firebase_admin import credentials
+
+        if firebase_admin._apps:
+            _firebase_app = firebase_admin.get_app()
+        else:
+            _firebase_app = firebase_admin.initialize_app(
+                credentials.Certificate(settings.fcm_service_account_path)
+            )
+    except Exception:
+        logging.getLogger(__name__).exception("Failed to initialize Firebase Admin SDK")
+        _firebase_unavailable = True
+        _firebase_app = None
+    return _firebase_app
 
 
 async def send_generic_push(device_push_token: str, body: str | None = None) -> None:
-    if not settings.fcm_server_key or not device_push_token:
+    if not device_push_token:
+        return
+    app = _firebase()
+    if app is None:
         return
     try:
-        import firebase_admin
-        from firebase_admin import messaging, credentials
+        from firebase_admin import messaging
+        from starlette.concurrency import run_in_threadpool
 
-        if not firebase_admin._apps:
-            firebase_admin.initialize_app(credentials.Certificate({}))
-        messaging.send(
-            messaging.Message(
-                notification=messaging.Notification(title="Vault", body=body or GENERIC_UPDATE_MESSAGE),
-                token=device_push_token,
-            )
+        message = messaging.Message(
+            notification=messaging.Notification(title="পার্সোনাল", body=body or GENERIC_UPDATE_MESSAGE),
+            token=device_push_token,
+            android=messaging.AndroidConfig(priority="high"),
         )
+        # messaging.send() is a blocking network call -- offload it so it
+        # never stalls the event loop, same pattern as storage.py's MinIO
+        # calls.
+        await run_in_threadpool(messaging.send, message, app=app)
     except Exception:
-        pass
+        logging.getLogger(__name__).warning("Push send failed for a device token", exc_info=True)

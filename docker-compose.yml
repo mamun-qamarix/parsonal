@@ -123,10 +123,26 @@ services:
       COMPREFACE_URL: http://compreface-api:8000
       COMPREFACE_RECOGNITION_API_KEY: ${COMPREFACE_RECOGNITION_API_KEY}
       ENVIRONMENT: production
+      # Only set (non-empty) when ./backend/firebase-service-account.json
+      # actually exists on the host -- see the volumes entry below and
+      # README.md "Push notifications". Left unset, notify_spouse() simply
+      # skips sending pushes; the app still works fully over WebSocket.
+      FCM_SERVICE_ACCOUNT_PATH: ${FCM_SERVICE_ACCOUNT_PATH:-}
     depends_on:
       postgres: { condition: service_healthy }
       minio: { condition: service_healthy }
     networks: [vault-internal]
+    volumes:
+      # Firebase Admin SDK service-account key -- a real secret, NEVER
+      # committed to git (see .gitignore). Create this file on the VPS only
+      # (e.g. `nano backend/firebase-service-account.json` and paste the
+      # JSON downloaded from Firebase Console > Project settings > Service
+      # accounts), then set FCM_SERVICE_ACCOUNT_PATH=/srv/firebase-service-account.json
+      # in .env. If the file doesn't exist, comment this volume out (or the
+      # bind mount will create an empty directory instead) and leave
+      # FCM_SERVICE_ACCOUNT_PATH unset -- push notifications are entirely
+      # optional. See README.md.
+      - ./backend/firebase-service-account.json:/srv/firebase-service-account.json:ro
     # Always published to localhost only, on BACKEND_HOST_PORT (default
     # 18000, set in .env to change it -- e.g. if that's also taken on a VPS
     # already running other projects). Harmless when Caddy (below) is used

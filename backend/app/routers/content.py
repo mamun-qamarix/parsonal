@@ -30,14 +30,14 @@ async def _push_tokens_for_role(db: AsyncSession, role: str) -> list[str]:
     return [t for t in result.scalars().all() if t]
 
 
-async def _notify_other_spouse(db: AsyncSession, my_role: str, category: str) -> None:
+async def _notify_other_spouse(db: AsyncSession, my_role: str, category: str, content_type: str | None = None) -> None:
     target_role = other_role(my_role)
     result = await db.execute(select(Spouse).where(Spouse.role == RoleEnum(target_role)))
     target = result.scalar_one_or_none()
     if target is None:
         return
     tokens = await _push_tokens_for_role(db, target_role)
-    await notify_spouse(str(target.id), tokens, category=category)
+    await notify_spouse(str(target.id), tokens, category=category, content_type=content_type)
 
 
 # ---------- Categories ----------
@@ -115,7 +115,7 @@ async def create_entry(payload: VaultEntryCreate, spouse: Spouse = Depends(get_c
     await db.commit()
     await db.refresh(entry)
 
-    await _notify_other_spouse(db, _role_of(spouse), "content_new")
+    await _notify_other_spouse(db, _role_of(spouse), "content_new", content_type=payload.content_type)
     return await _entry_to_out(db, entry, spouse)
 
 
