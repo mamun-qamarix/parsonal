@@ -9,13 +9,13 @@ class DecoyHomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Notes')),
+      appBar: AppBar(title: const Text('নোট')),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: const [
-          _DecoyNote('Grocery list', 'Milk, eggs, bread, rice...'),
-          _DecoyNote('Reminder', 'Pay the electricity bill'),
-          _DecoyNote('Ideas', 'Weekend plans'),
+          _DecoyNote('বাজারের তালিকা', 'দুধ, ডিম, রুটি, চাল...'),
+          _DecoyNote('রিমাইন্ডার', 'বিদ্যুৎ বিল দিতে হবে'),
+          _DecoyNote('পরিকল্পনা', 'সাপ্তাহিক ছুটির পরিকল্পনা'),
         ],
       ),
     );

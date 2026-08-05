@@ -12,7 +12,6 @@ import '../../widgets/vault_entry_card.dart';
 import '../favorites/favorites_screen.dart';
 import '../history/history_screen.dart';
 import '../settings/settings_screen.dart';
-import '../vault/consent_requests_screen.dart';
 import '../vault/create_entry_screen.dart';
 import '../vault/entry_detail_screen.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
@@ -50,8 +49,10 @@ class _HomeTabState extends State<HomeTab> {
       _service.listCategories(vmk, 'vault'),
     ]);
     if (!mounted) return;
+    final entries = results[0] as List<VaultEntry>;
+    entries.shuffle(); // fresh random order on every refresh, per request
     setState(() {
-      _entries = results[0] as List<VaultEntry>;
+      _entries = entries;
       _categories = results[1] as List<Category>;
       _loading = false;
     });
@@ -64,6 +65,14 @@ class _HomeTabState extends State<HomeTab> {
       } else {
         group.add(value);
       }
+    });
+  }
+
+  void _selectAll(Set<String> group, Set<String> everything) {
+    setState(() {
+      group
+        ..clear()
+        ..addAll(everything);
     });
   }
 
@@ -139,11 +148,11 @@ class _HomeTabState extends State<HomeTab> {
             SliverAppBar(
               floating: true,
               snap: true,
-              title: const Row(
+              title: Row(
                 children: [
-                  Icon(Iconsax.heart_copy, size: 20, color: AppColors.halalGreen),
-                  SizedBox(width: 8),
-                  Text('পার্সোনাল'),
+                  Icon(Iconsax.heart_copy, size: 20, color: Theme.of(context).colorScheme.primary),
+                  const SizedBox(width: 8),
+                  const Text('পার্সোনাল'),
                 ],
               ),
               actions: [
@@ -160,13 +169,6 @@ class _HomeTabState extends State<HomeTab> {
                   tooltip: 'ফেভারিট',
                   onPressed: () => Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => const FavoritesScreen()),
-                  ),
-                ),
-                IconButton(
-                  icon: const Icon(Iconsax.sms_notification),
-                  tooltip: 'অনুমোদন',
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const ConsentRequestsScreen()),
                   ),
                 ),
                 IconButton(
@@ -193,9 +195,17 @@ class _HomeTabState extends State<HomeTab> {
                         scrollDirection: Axis.horizontal,
                         children: [
                           _FilterPill(
+                            label: 'সব',
+                            icon: Iconsax.category,
+                            color: Theme.of(context).colorScheme.primary,
+                            selected: _typeFilter.length == 3,
+                            onTap: () => _selectAll(_typeFilter, {'text', 'photo', 'video'}),
+                          ),
+                          const SizedBox(width: 8),
+                          _FilterPill(
                             label: 'টেক্সট',
                             icon: Iconsax.document_text,
-                            color: AppColors.halalGreen,
+                            color: Theme.of(context).colorScheme.primary,
                             selected: _typeFilter.contains('text'),
                             onTap: () => _toggleFilter(_typeFilter, 'text'),
                           ),
@@ -203,7 +213,7 @@ class _HomeTabState extends State<HomeTab> {
                           _FilterPill(
                             label: 'ছবি',
                             icon: Iconsax.image,
-                            color: AppColors.halalGreen,
+                            color: Theme.of(context).colorScheme.primary,
                             selected: _typeFilter.contains('photo'),
                             onTap: () => _toggleFilter(_typeFilter, 'photo'),
                           ),
@@ -211,7 +221,7 @@ class _HomeTabState extends State<HomeTab> {
                           _FilterPill(
                             label: 'ভিডিও',
                             icon: Iconsax.video,
-                            color: AppColors.halalGreen,
+                            color: Theme.of(context).colorScheme.primary,
                             selected: _typeFilter.contains('video'),
                             onTap: () => _toggleFilter(_typeFilter, 'video'),
                           ),
@@ -221,6 +231,14 @@ class _HomeTabState extends State<HomeTab> {
                             color: Colors.grey.withValues(alpha: 0.3),
                             margin: const EdgeInsets.symmetric(horizontal: 8),
                           ),
+                          _FilterPill(
+                            label: 'সব',
+                            icon: Iconsax.category,
+                            color: Theme.of(context).colorScheme.primary,
+                            selected: _roleFilter.length == 2,
+                            onTap: () => _selectAll(_roleFilter, {'husband', 'wife'}),
+                          ),
+                          const SizedBox(width: 8),
                           _FilterPill(
                             label: 'স্বামী',
                             icon: Iconsax.man,
@@ -251,7 +269,7 @@ class _HomeTabState extends State<HomeTab> {
                             _FilterPill(
                               label: 'সব',
                               icon: Iconsax.category,
-                              color: AppColors.halalGreen,
+                              color: Theme.of(context).colorScheme.primary,
                               selected: _categoryFilter == null,
                               onTap: () => setState(() => _categoryFilter = null),
                             ),
@@ -260,7 +278,7 @@ class _HomeTabState extends State<HomeTab> {
                               _FilterPill(
                                 label: c.decryptedName ?? '...',
                                 icon: Iconsax.tag,
-                                color: AppColors.halalGreen,
+                                color: Theme.of(context).colorScheme.primary,
                                 selected: _categoryFilter == c.id,
                                 onTap: () => setState(() => _categoryFilter = c.id),
                               ),

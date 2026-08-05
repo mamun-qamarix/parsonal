@@ -54,7 +54,7 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
-            isFav ? 'Added to favorites' : 'Removed from favorites',
+            isFav ? 'ফেভারিটে যোগ করা হয়েছে' : 'ফেভারিট থেকে সরানো হয়েছে',
           ),
           duration: const Duration(seconds: 1),
         ),

@@ -158,16 +158,16 @@ class _DevicesScreenState extends State<DevicesScreen> {
                                             vertical: 2,
                                           ),
                                           decoration: BoxDecoration(
-                                            color: AppColors.halalGreen
+                                            color: Theme.of(context).colorScheme.primary
                                                 .withValues(alpha: 0.15),
                                             borderRadius: BorderRadius.circular(
                                               999,
                                             ),
                                           ),
-                                          child: const Text(
+                                          child: Text(
                                             'এই ডিভাইস',
                                             style: TextStyle(
-                                              color: AppColors.halalGreen,
+                                              color: Theme.of(context).colorScheme.primary,
                                               fontSize: 11,
                                               fontWeight: FontWeight.w600,
                                             ),

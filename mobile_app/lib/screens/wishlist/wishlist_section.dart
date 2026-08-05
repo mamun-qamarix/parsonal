@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/theme/app_theme.dart';
 import '../../models/models.dart';
 import '../../providers/session_provider.dart';
 import '../../services/vault_service.dart';
@@ -123,9 +122,9 @@ class _WishlistSectionState extends State<WishlistSection> {
             const Spacer(),
             if (_isMine)
               IconButton(
-                icon: const Icon(
+                icon: Icon(
                   Iconsax.add_circle,
-                  color: AppColors.halalGreen,
+                  color: Theme.of(context).colorScheme.primary,
                 ),
                 onPressed: _add,
               ),
@@ -146,7 +145,7 @@ class _WishlistSectionState extends State<WishlistSection> {
             final categoryName = _categoryName(item.categoryId);
             return Card(
               child: ListTile(
-                leading: const Icon(Iconsax.gift, color: AppColors.halalGreen),
+                leading: Icon(Iconsax.gift, color: Theme.of(context).colorScheme.primary),
                 title: Text(item.decryptedText ?? ''),
                 subtitle: categoryName != null
                     ? Text(categoryName, style: const TextStyle(fontSize: 12))

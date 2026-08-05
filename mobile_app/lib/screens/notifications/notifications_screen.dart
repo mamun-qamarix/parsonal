@@ -3,7 +3,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../../core/theme/app_theme.dart';
 import '../../models/models.dart';
 import '../../services/notification_service.dart';
 import '../../widgets/shimmer_loading.dart';
@@ -84,11 +83,11 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 return ListTile(
                   leading: CircleAvatar(
                     backgroundColor: wasUnread
-                        ? AppColors.halalGreen.withValues(alpha: 0.15)
+                        ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.15)
                         : Colors.grey.withValues(alpha: 0.1),
                     child: Icon(
                       _iconFor(n.category),
-                      color: wasUnread ? AppColors.halalGreen : Colors.grey,
+                      color: wasUnread ? Theme.of(context).colorScheme.primary : Colors.grey,
                       size: 20,
                     ),
                   ),

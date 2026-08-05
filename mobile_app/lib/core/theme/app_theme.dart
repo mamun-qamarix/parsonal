@@ -4,6 +4,15 @@ import 'package:flutter/material.dart';
 class AppColors {
   static const Color halalGreen = Color(0xFF2F9E63);
   static const Color halalGreenDark = Color(0xFF7ED9A8);
+  // "Intimate mode" -- either spouse can toggle the whole app's accent from
+  // green to this blue from the chat screen, as a shared, at-a-glance
+  // signal that "this is when we're talking about something private". See
+  // DECISIONS.md. Screens that show the accent via Theme.of(context)
+  // .colorScheme.primary pick this up automatically; a handful of purely
+  // pre-login/disabled-feature screens intentionally keep the static green
+  // above since intimate mode can never be on before a real login exists.
+  static const Color intimateBlue = Color(0xFF3E7BE0);
+  static const Color intimateBlueDark = Color(0xFF8FB4F5);
   static const Color husband = Color(0xFF3B7DD8);
   static const Color wife = Color(0xFFD86BA0);
   static const Color pending = Color(0xFFD8B34A);
@@ -12,17 +21,17 @@ class AppColors {
 }
 
 class AppTheme {
-  static ThemeData light() {
+  static ThemeData light({bool intimate = false}) {
     final scheme = ColorScheme.fromSeed(
-      seedColor: AppColors.halalGreen,
+      seedColor: intimate ? AppColors.intimateBlue : AppColors.halalGreen,
       brightness: Brightness.light,
     );
     return _base(scheme, Brightness.light);
   }
 
-  static ThemeData dark() {
+  static ThemeData dark({bool intimate = false}) {
     final scheme = ColorScheme.fromSeed(
-      seedColor: AppColors.halalGreenDark,
+      seedColor: intimate ? AppColors.intimateBlueDark : AppColors.halalGreenDark,
       brightness: Brightness.dark,
     );
     return _base(scheme, Brightness.dark);
@@ -62,7 +71,7 @@ class AppTheme {
       ),
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.halalGreen,
+          backgroundColor: scheme.primary,
           foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(vertical: 16),
           shape: RoundedRectangleBorder(
@@ -73,7 +82,7 @@ class AppTheme {
       ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: isDark ? const Color(0xFF17211C) : Colors.white,
-        indicatorColor: AppColors.halalGreen.withValues(alpha: 0.18),
+        indicatorColor: scheme.primary.withValues(alpha: 0.18),
         labelBehavior: NavigationDestinationLabelBehavior.alwaysHide,
         elevation: 0,
       ),

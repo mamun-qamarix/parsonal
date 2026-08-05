@@ -26,7 +26,7 @@ class PhraseService {
       try {
         p.decryptedText = await VaultCrypto.decryptText(vmk, p.encPayload);
       } catch (_) {
-        p.decryptedText = '[unable to decrypt]';
+        p.decryptedText = '[ডিক্রিপ্ট করা যায়নি]';
       }
     }
     return phrases;

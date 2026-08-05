@@ -39,13 +39,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('History')),
+      appBar: AppBar(title: const Text('হিস্টরি')),
       body: _loading
           ? const ShimmerFeedList()
           : RefreshIndicator(
               onRefresh: _load,
               child: _entries.isEmpty
-                  ? const Center(child: Text('No activity yet'))
+                  ? const Center(child: Text('এখনো কোনো কার্যক্রম নেই'))
                   : ListView.builder(
                       padding: const EdgeInsets.all(12),
                       itemCount: _entries.length,

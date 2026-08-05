@@ -12,6 +12,7 @@ from app.models.user import Spouse, RoleEnum
 from app.models.common import utcnow
 from app.schemas.common import b64_to_bytes, bytes_to_b64
 from app.schemas.profile import ProfileUpdate, ProfileOut, CountdownSet, CountdownOut, AppSettingOut, AppSettingUpdate
+from app.ws.manager import ws_manager
 
 router = APIRouter(tags=["profile"])
 
@@ -141,4 +142,14 @@ async def set_setting(key: str, payload: AppSettingUpdate, db: AsyncSession = De
         row = AppSetting(key=key, value=payload.value)
         db.add(row)
     await db.commit()
+
+    # Broadcast to BOTH spouses (not just "the other one") so every
+    # connected device on either side picks up the change live -- e.g.
+    # "intimate mode" (see ChatScreen) needs to flip in real time on the
+    # phone that toggled it too, in case it has more than one open
+    # connection, and definitely on the other spouse's. See DECISIONS.md.
+    both = await db.execute(select(Spouse.id))
+    for (spouse_id,) in both.all():
+        await ws_manager.send_to_spouse(str(spouse_id), {"type": "app_setting", "key": key, "value": payload.value})
+
     return AppSettingOut(key=key, value=payload.value)

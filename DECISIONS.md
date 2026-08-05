@@ -1026,6 +1026,119 @@ routes registered), and a `--split-per-abi` release build succeeded
 (`arm64-v8a` still ~40MB despite this being the largest single batch of
 UI changes yet).
 
+## 35. Home randomization, Bengali-only pass, "সব" filters, face verify fully off, countdown redesign, comment preview, intimate mode
+
+**Home feed order is now shuffled on every load.** `_load()` calls
+`entries.shuffle()` right after fetching, per explicit request -- a
+fresh, non-chronological mix each time the screen opens or refreshes,
+rather than the same newest-first order.
+
+**Approval Request screen removed entirely.** It was already dead in
+spirit once vault edit/delete and profile edits went no-consent (#33,
+#34) -- `consent_requests_screen.dart` deleted, its app-bar entry point
+and import removed from `home_tab.dart`. The old consent-request
+endpoints stay on the backend, just unreferenced by the client.
+
+**Face verification fully disabled, client AND server.** Previously
+only "optional" -- now cut at the root: `login_password()` in
+`backend/app/routers/auth.py` no longer branches on
+`spouse.face_verification_enabled` at all and always issues a full
+login (catches a real correctness risk: if only the client had stopped
+checking `requires_face`, a spouse who'd left the old toggle on would
+still get back a tokenless challenge response and crash). Client-side,
+`SettingsScreen`'s toggle UI, `LoginScreen`'s branch, and their now-
+unused imports are gone. To be rebuilt properly later, per the user.
+
+**"সব" (All) pills, default-selected, on both home filter groups.** The
+type filter (টেক্সট/ছবি/ভিডিও) and role filter (স্বামী/স্ত্রী) rows each
+gained an explicit "সব" pill up front, selected whenever every option in
+that group is already on -- tapping it calls a new `_selectAll()` helper
+that fills the whole `Set` at once, rather than the previous "start with
+everything on but no way to visibly represent or return to that state"
+behavior.
+
+**Countdown card redesigned to a standard digital-countdown look.** The
+old single running line of text ("X days Y hours...") is now four
+boxed digits (দিন/ঘণ্টা/মিনিট/সেকেন্ড) separated by colons, `_CountdownBoxes`
+built from a small `_CountdownBox`/`_Colon` pair, with a leading
+`Iconsax.profile_2user_copy` (two-people) icon per the user's specific
+ask for something that visually reads as "the two of us coming
+together."
+
+**Home card action order + inline comment preview.** Per-card action row
+is now emoji-add -> comment -> view count (was reversed before). New
+`CommentPreview` widget shows up to the 2 most recent comments directly
+under a post with no tap required (tapping the header still opens the
+full thread), mirroring the pattern Reel already used.
+
+**Quick-tap emoji suggestions alongside free keyboard entry.** The add-
+emoji sheet now offers a `Wrap` of 8 common emoji for one-tap adding, on
+top of the existing free-text field (native keyboard emoji picker) from
+#33 -- typing to find an emoji on a phone keyboard is real friction for
+the common cases, and this doesn't remove the ability to pick anything.
+
+**"আমাদের প্রিয় লাইন" (Phrases) now requires a fresh fingerprint every
+single entry**, independent of the app's normal hourly password/
+biometric window. `BiometricService.authenticate()` gained an optional
+`reason` string (still defaults to the normal unlock prompt everywhere
+else); a new `openPhrasesScreen(context)` helper gates the push behind
+its own `authenticate(reason: 'প্রিয় লাইন দেখতে যাচাই করুন')` call and both
+places that used to push `PhrasesScreen()` directly now go through it.
+
+**Bengali-only pass.** Beyond translating the leftover English strings
+this turned up (a stray SnackBar in `entry_detail_screen.dart`, the
+`[unable to decrypt]` fallback repeated across every service that
+decrypts text, an `"It's a match!"` celebration overlay, `"💚 match"` on
+Reel, a quoted English feature name in Settings, a `daily_reminder`
+push fallback), the bigger fix was systemic: nothing in the app ever set
+an Intl locale, so every `DateFormat` call (chat timestamps and date
+dividers, the audit log, devices screen, notification list, search
+results) was silently rendering English month names in Western digits
+regardless of what the surrounding Bengali text said, and `showDatePicker`
+/`showTimePicker`'s own chrome (CANCEL/OK, month grid) was English too
+since no `MaterialApp.locale`/`supportedLocales` were set. Fixed at the
+root instead of per-callsite: `flutter_localizations` added,
+`initializeDateFormatting('bn', null)` + `Intl.defaultLocale = 'bn'` set
+once in `main()` before `runApp`, and `MaterialApp` now pins
+`locale: Locale('bn')` with `supportedLocales: [Locale('bn')]` and the
+three `GlobalXLocalizations.delegate`s. Every existing unlocalized
+`DateFormat.xxx()` call site picks this up automatically (Intl resolves
+locale from `Intl.defaultLocale` when none is passed) -- no call site
+needed touching.
+
+**"Intimate mode" -- shared green/blue theme toggle.** New moon-icon
+button in the chat app bar either spouse can tap to flip the *entire
+app's* accent color from green to blue on **both** phones at once, as
+an at-a-glance private signal ("we're talking about something just
+between us right now"). Backed by the existing generic `AppSetting`
+key/value table (key `intimate_mode_enabled`) rather than a new model;
+`PUT /settings/{key}` now additionally broadcasts
+`{type: "app_setting", key, value}` over the WS connection to *both*
+spouse roles (not just "the other one," so a phone with more than one
+open connection also stays in sync). `SessionProvider` owns the single
+global listener for this (a WS event, not per-screen, since it's one
+app-wide flag) plus `loadIntimateMode()`/`toggleIntimateMode()`;
+`AppTheme.light()/dark()` take an `intimate` flag that swaps the
+`ColorScheme.fromSeed` seed color, and `main.dart`'s `MaterialApp` is
+now built inside a `Consumer<SessionProvider>` so the theme rebuild
+propagates through Flutter's own `Theme` InheritedWidget mechanism --
+every screen reading `Theme.of(context).colorScheme.primary` updates in
+place, live, without losing any widget state (unlike keying/rebuilding
+the whole subtree). About 20 widgets across chat, home, the countdown
+card, comments, reactions, the reel match overlay, wishlist, and the
+notification list were switched from the old hardcoded
+`AppColors.halalGreen` constant to `Theme.of(context).colorScheme.
+primary` for this to actually show up where it matters; a handful of
+screens that can only ever be seen *before* a real login exists
+(onboarding, login, biometric-unlock, password-reset approval) or that
+belong to the already-disabled face-verification flow were deliberately
+left on the static green constant, since intimate mode can never
+logically be "on" there.
+
+**Verified:** `flutter analyze` clean (only the same pre-existing
+info-level lints), backend imports cleanly (80 routes registered), and
+a `--split-per-abi` release build succeeded.
+
 ## 19. Add Device (peer-to-peer pairing)
 
 **Problem:** each role (`husband`/`wife`) can only be claimed once, ever

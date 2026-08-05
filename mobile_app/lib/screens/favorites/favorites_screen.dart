@@ -38,13 +38,13 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Favorites')),
+      appBar: AppBar(title: const Text('ফেভারিট')),
       body: _loading
           ? const ShimmerFeedList()
           : RefreshIndicator(
               onRefresh: _load,
               child: _entries.isEmpty
-                  ? const Center(child: Text('Nothing favorited yet'))
+                  ? const Center(child: Text('এখনো কিছু ফেভারিটে যোগ করা হয়নি'))
                   : ListView.builder(
                       padding: const EdgeInsets.all(12),
                       itemCount: _entries.length,

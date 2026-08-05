@@ -9,7 +9,6 @@ import 'package:provider/provider.dart';
 import 'package:video_player/video_player.dart';
 
 import '../core/media/video_thumbnail_helper.dart';
-import '../core/theme/app_theme.dart';
 import '../providers/session_provider.dart';
 import '../services/media_service.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
@@ -422,7 +421,7 @@ class _DecryptedVoicePlayerState extends State<DecryptedVoicePlayer> {
 
   @override
   Widget build(BuildContext context) {
-    final color = widget.color ?? AppColors.halalGreen;
+    final color = widget.color ?? Theme.of(context).colorScheme.primary;
     if (_loading)
       return const SizedBox(
         height: 36,

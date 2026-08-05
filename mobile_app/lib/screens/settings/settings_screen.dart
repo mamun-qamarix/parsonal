@@ -1,16 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../../core/network/error_helper.dart';
 import '../../core/security/duress_service.dart';
 import '../../core/security/icon_disguise_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../providers/session_provider.dart';
 import '../../services/auth_service.dart';
 import '../../services/profile_service.dart';
-import '../../widgets/error_message_box.dart';
 import '../../widgets/password_field.dart';
-import '../auth/face_capture_screen.dart';
 import '../onboarding/welcome_screen.dart';
 import 'add_device_screen.dart';
 import 'approve_password_reset_screen.dart';
@@ -31,9 +28,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String _identity = 'real';
   final _duressPinController = TextEditingController();
   bool _loading = true;
-  bool _faceEnrolled = false;
-  bool _faceVerificationEnabled = false;
-  bool _faceToggleBusy = false;
 
   @override
   void initState() {
@@ -47,55 +41,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
       fallback: 'true',
     );
     final identity = await IconDisguiseService.getCurrentIdentity();
-    Map<String, dynamic>? me;
-    try {
-      me = await _authService.getMe();
-    } catch (_) {
-      // Non-fatal: the face toggle just won't reflect server state until reload.
-    }
     if (mounted) {
       setState(() {
         _favoriteLinesEnabled = value == 'true';
         _identity = identity;
-        if (me != null) {
-          _faceEnrolled = me['face_enrolled'] == true;
-          _faceVerificationEnabled = me['face_verification_enabled'] == true;
-        }
         _loading = false;
       });
-    }
-  }
-
-  Future<void> _toggleFaceVerification(bool value) async {
-    setState(() => _faceToggleBusy = true);
-    try {
-      if (value) {
-        if (_faceEnrolled) {
-          await _authService.enableFace();
-        } else {
-          final bytes = await Navigator.of(context).push<dynamic>(
-            MaterialPageRoute(
-              builder: (_) => const FaceCaptureScreen(
-                title: 'মুখ রেজিস্ট্রেশন',
-                instructions: 'ক্যামেরার দিকে তাকান, তারপর চোখের পলক ফেলুন',
-              ),
-            ),
-          );
-          if (bytes == null) {
-            setState(() => _faceToggleBusy = false);
-            return;
-          }
-          await _authService.enrollFace(bytes);
-          _faceEnrolled = true;
-        }
-      } else {
-        await _authService.disableFace();
-      }
-      if (mounted) setState(() => _faceVerificationEnabled = value);
-    } catch (e) {
-      if (mounted) showCopyableErrorSnackBar(context, describeApiError(e));
-    } finally {
-      if (mounted) setState(() => _faceToggleBusy = false);
     }
   }
 
@@ -171,7 +122,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               children: [
                 const _SectionTitle('চেহারা'),
                 SwitchListTile(
-                  title: const Text('"Favorite Lines" স্ক্রিন দেখান'),
+                  title: const Text('"প্রিয় লাইন" স্ক্রিন দেখান'),
                   subtitle: const Text(
                     'স্বামী-স্ত্রীর একে অপরকে লেখা বিশেষ লাইনগুলোর জন্য আলাদা স্ক্রিন',
                     style: TextStyle(fontSize: 12),
@@ -181,22 +132,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ),
                 const SizedBox(height: 12),
                 const _SectionTitle('নিরাপত্তা'),
-                SwitchListTile(
-                  title: const Text('মুখ ভেরিফিকেশন (ঐচ্ছিক)'),
-                  subtitle: const Text(
-                    'অন করলে পাসওয়ার্ডের পাশাপাশি প্রতিবার লগইনে মুখ দিয়েও যাচাই করতে হবে — বাড়তি নিরাপত্তার জন্য',
-                    style: TextStyle(fontSize: 12),
-                  ),
-                  value: _faceVerificationEnabled,
-                  onChanged: _faceToggleBusy ? null : _toggleFaceVerification,
-                  secondary: _faceToggleBusy
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : null,
-                ),
                 ListTile(
                   title: const Text('নিষ্ক্রিয় থাকলে অটো-লক'),
                   subtitle: Column(
@@ -281,9 +216,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const SizedBox(height: 24),
                 const _SectionTitle('অ্যাকাউন্ট'),
                 ListTile(
-                  leading: const Icon(
+                  leading: Icon(
                     Iconsax.devices,
-                    color: AppColors.halalGreen,
+                    color: Theme.of(context).colorScheme.primary,
                   ),
                   title: const Text('ডিভাইসসমূহ'),
                   subtitle: const Text(
@@ -295,9 +230,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ),
                 ListTile(
-                  leading: const Icon(
+                  leading: Icon(
                     Iconsax.scan_barcode,
-                    color: AppColors.halalGreen,
+                    color: Theme.of(context).colorScheme.primary,
                   ),
                   title: const Text('নতুন ডিভাইস যোগ করুন'),
                   subtitle: const Text(
@@ -309,9 +244,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                 ),
                 ListTile(
-                  leading: const Icon(
+                  leading: Icon(
                     Iconsax.shield_tick,
-                    color: AppColors.halalGreen,
+                    color: Theme.of(context).colorScheme.primary,
                   ),
                   title: const Text('পাসওয়ার্ড রিসেট অনুমোদন করুন'),
                   subtitle: const Text(
@@ -348,9 +283,9 @@ class _SectionTitle extends StatelessWidget {
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Text(
         title,
-        style: const TextStyle(
+        style: TextStyle(
           fontWeight: FontWeight.bold,
-          color: AppColors.halalGreen,
+          color: Theme.of(context).colorScheme.primary,
         ),
       ),
     );

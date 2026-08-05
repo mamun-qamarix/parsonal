@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
-import '../core/theme/app_theme.dart';
 import '../models/models.dart';
 import '../providers/session_provider.dart';
 import '../services/profile_cache.dart';
@@ -112,12 +111,11 @@ class _CommentSectionState extends State<CommentSection> {
         padding: EdgeInsets.all(12),
         child: LinearProgressIndicator(),
       );
-    final myRole = context.watch<SessionProvider>().role;
     final myId = context.watch<SessionProvider>().spouseId;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text('Comments', style: TextStyle(fontWeight: FontWeight.w600)),
+        const Text('মন্তব্য', style: TextStyle(fontWeight: FontWeight.w600)),
         const SizedBox(height: 8),
         ..._comments.map(
           (c) => Padding(
@@ -177,16 +175,12 @@ class _CommentSectionState extends State<CommentSection> {
             Expanded(
               child: TextField(
                 controller: _controller,
-                decoration: InputDecoration(
-                  hintText: myRole == null
-                      ? 'Add a comment'
-                      : 'Comment as $myRole...',
-                ),
+                decoration: const InputDecoration(hintText: 'মন্তব্য লিখুন...'),
                 onSubmitted: (_) => _send(),
               ),
             ),
             IconButton(
-              icon: const Icon(Iconsax.send, color: AppColors.halalGreen),
+              icon: Icon(Iconsax.send, color: Theme.of(context).colorScheme.primary),
               onPressed: _send,
             ),
           ],

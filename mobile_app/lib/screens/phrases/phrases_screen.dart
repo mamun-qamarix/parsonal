@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/security/biometric_service.dart';
 import '../../core/theme/app_theme.dart';
 import '../../models/models.dart';
 import '../../providers/session_provider.dart';
@@ -9,6 +10,20 @@ import '../../widgets/comment_section.dart';
 import '../../widgets/reaction_bar.dart';
 import '../../widgets/shimmer_loading.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
+
+/// Opens the phrases screen, but only after a fresh fingerprint/biometric
+/// check every single time -- unlike the rest of the app, this doesn't
+/// piggyback on the hourly password window at all, since this is
+/// specifically the couple's most intimate content. See DECISIONS.md.
+Future<void> openPhrasesScreen(BuildContext context) async {
+  final ok = await BiometricService.authenticate(
+    reason: 'প্রিয় লাইন দেখতে যাচাই করুন',
+  );
+  if (!ok || !context.mounted) return;
+  Navigator.of(
+    context,
+  ).push(MaterialPageRoute(builder: (_) => const PhrasesScreen()));
+}
 
 class PhrasesScreen extends StatefulWidget {
   const PhrasesScreen({super.key});

@@ -25,7 +25,7 @@ class ChatService {
         try {
           m.decryptedText = await VaultCrypto.decryptText(vmk, m.encPayload!);
         } catch (_) {
-          m.decryptedText = '[unable to decrypt]';
+          m.decryptedText = '[ডিক্রিপ্ট করা যায়নি]';
         }
       }
     }

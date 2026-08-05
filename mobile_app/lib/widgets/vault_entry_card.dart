@@ -6,6 +6,7 @@ import '../models/models.dart';
 import '../providers/session_provider.dart';
 import '../services/vault_service.dart';
 import 'author_badge.dart';
+import 'comment_preview.dart';
 import 'decrypted_media.dart';
 import 'media_viewer_screen.dart';
 import 'reaction_bar.dart';
@@ -223,8 +224,25 @@ class _VaultEntryCardState extends State<VaultEntryCard> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Order per request: react (the add-emoji button lives
+                  // inside ReactionBar itself), then comment (header +
+                  // up to 2 comments shown inline, no click needed), then
+                  // views.
                   ReactionBar(targetType: 'vault_entry', targetId: entry.id),
-                  const SizedBox(height: 8),
+                  CommentPreview(targetType: 'vault_entry', targetId: entry.id),
+                  Row(
+                    children: [
+                      const Icon(Iconsax.eye, size: 14, color: Colors.grey),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${entry.viewCount}',
+                        style: Theme.of(
+                          context,
+                        ).textTheme.bodySmall?.copyWith(color: Colors.grey),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
                   if (caption != null && caption.isNotEmpty) ...[
                     Text(
                       caption,
@@ -260,19 +278,6 @@ class _VaultEntryCardState extends State<VaultEntryCard> {
                         ),
                       ],
                     ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      const Icon(Iconsax.eye, size: 14, color: Colors.grey),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${entry.viewCount}',
-                        style: Theme.of(
-                          context,
-                        ).textTheme.bodySmall?.copyWith(color: Colors.grey),
-                      ),
-                    ],
-                  ),
                 ],
               ),
             ),
