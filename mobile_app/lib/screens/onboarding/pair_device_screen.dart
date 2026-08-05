@@ -10,7 +10,7 @@ import '../../widgets/error_message_box.dart';
 /// Scans (or accepts pasted text for) the pairing code shown by
 /// AddDeviceScreen on an already-authenticated device, then hands
 /// role+VMK to SessionProvider.beginPairing so the normal
-/// password->TOTP->(face) login screens can finish the job.
+/// password->(face) login screen can finish the job.
 class PairDeviceScreen extends StatefulWidget {
   const PairDeviceScreen({super.key});
 

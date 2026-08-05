@@ -67,8 +67,6 @@ class _ClaimRoleScreenState extends State<ClaimRoleScreen> {
             accessToken: result['access_token'],
             refreshToken: result['refresh_token'],
             vmkB64: result['vmk_b64'],
-            totpSecret: result['totp_secret'],
-            totpProvisioningUri: result['totp_provisioning_uri'],
           );
     } catch (e) {
       if (_isAlreadyRegistered(e)) {
@@ -108,8 +106,6 @@ class _ClaimRoleScreenState extends State<ClaimRoleScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const _StepIndicator(step: 1, total: 2, label: 'ধাপ ১/২ — পরিচয় ও পাসওয়ার্ড'),
-              const SizedBox(height: 20),
               const Icon(Icons.person_add_alt_1_outlined, size: 48, color: AppColors.halalGreen),
               const SizedBox(height: 12),
               const Text(
@@ -172,7 +168,7 @@ class _ClaimRoleScreenState extends State<ClaimRoleScreen> {
               ),
               const SizedBox(height: 12),
               const Text(
-                'এই পাসওয়ার্ড আর একটা অথেন্টিকেটর কোড — দুটোই লাগবে প্রতিবার অ্যাপ খুলতে (পরের ধাপে সেটআপ করবেন)। মনে রাখার মতো একটা পাসওয়ার্ড দিন।',
+                'ঘণ্টায় একবার এই পাসওয়ার্ড দিতে হবে; মাঝের সময়টায় শুধু ফিঙ্গারপ্রিন্ট দিলেই চলবে। মনে রাখার মতো একটা পাসওয়ার্ড দিন।',
                 textAlign: TextAlign.center,
                 style: TextStyle(color: Colors.grey, fontSize: 12),
               ),
@@ -180,7 +176,7 @@ class _ClaimRoleScreenState extends State<ClaimRoleScreen> {
               if (_error != null) Padding(padding: const EdgeInsets.only(bottom: 12), child: ErrorMessageBox(_error!)),
               ElevatedButton(
                 onPressed: _loading ? null : _submit,
-                child: _loading ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('পরবর্তী ধাপ'),
+                child: _loading ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('ভল্টে প্রবেশ করুন'),
               ),
             ],
           ),
@@ -221,41 +217,6 @@ class _RoleCard extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _StepIndicator extends StatelessWidget {
-  final int step;
-  final int total;
-  final String label;
-
-  const _StepIndicator({required this.step, required this.total, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: List.generate(total, (i) {
-            final active = i < step;
-            return Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 3),
-              child: Container(
-                width: i == step - 1 ? 22 : 8,
-                height: 8,
-                decoration: BoxDecoration(
-                  color: active ? AppColors.halalGreen : Colors.grey.withValues(alpha: 0.3),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-              ),
-            );
-          }),
-        ),
-        const SizedBox(height: 6),
-        Text(label, style: const TextStyle(color: Colors.grey, fontSize: 11)),
-      ],
     );
   }
 }

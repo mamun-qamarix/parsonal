@@ -19,6 +19,7 @@ class SecureStorageService {
   static const _kDeviceId = 'device_id';
   static const _kDuressPin = 'duress_pin_local_hash';
   static const _kFaceEnrolled = 'face_enrolled';
+  static const _kLastPasswordAuthAt = 'last_password_auth_at';
 
   Future<void> saveSession({
     required String server,
@@ -55,6 +56,16 @@ class SecureStorageService {
 
   Future<void> setDuressPinHash(String hash) => _storage.write(key: _kDuressPin, value: hash);
   Future<String?> get duressPinHash => _storage.read(key: _kDuressPin);
+
+  /// Timestamp of the last successful PASSWORD login (not biometric
+  /// unlock) -- drives the "password once an hour, biometric in between"
+  /// policy. See DECISIONS.md #27.
+  Future<void> setLastPasswordAuthAt(DateTime value) => _storage.write(key: _kLastPasswordAuthAt, value: value.toIso8601String());
+  Future<DateTime?> get lastPasswordAuthAt async {
+    final raw = await _storage.read(key: _kLastPasswordAuthAt);
+    if (raw == null) return null;
+    return DateTime.tryParse(raw);
+  }
 
   Future<bool> get hasSession async => (await accessToken) != null && (await vmkB64) != null;
 

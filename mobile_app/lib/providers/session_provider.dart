@@ -7,22 +7,25 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../core/network/api_client.dart';
 import '../core/network/ws_client.dart';
 import '../core/storage/secure_storage_service.dart';
-import '../services/auth_service.dart';
 
 enum SessionState {
   unknown,
   needsSetup,
-  needsTotpSetup,
-  locked,
-  needsTotpVerify,
-  needsLoginTotpSetup,
-  needsFaceVerify,
+  locked, // needs the PASSWORD (>1hr since last password entry, or never entered on this device yet)
+  needsBiometric, // needs just a fingerprint/face/device-PIN tap (<1hr since last password entry)
+  needsFaceVerify, // optional extra CompreFace step, only if the spouse turned it on
   authenticated,
   decoy,
 }
 
 class SessionProvider extends ChangeNotifier {
   static const _kAutoLockMinutesPref = 'auto_lock_minutes';
+
+  // Password is required again once this long has passed since the last
+  // successful password entry; a biometric tap covers every re-entry in
+  // between (cold start, background resume, or idle auto-lock). See
+  // DECISIONS.md #27.
+  static const passwordWindow = Duration(hours: 1);
 
   SessionState state = SessionState.unknown;
   String? role;
@@ -32,26 +35,23 @@ class SessionProvider extends ChangeNotifier {
   Timer? _autoLockTimer;
   int autoLockMinutes = 5;
 
-  // Set right after claim, consumed by TotpSetupScreen, then cleared.
-  String? pendingTotpSecret;
-  String? pendingTotpProvisioningUri;
-
-  String? _pendingTotpChallengeToken;
   String? _pendingFaceChallengeToken;
-
-  // Set when /auth/login/password comes back in "setup" mode -- this
-  // device has never confirmed its own authenticator entry yet (new
-  // install, or newly paired onto an already-claimed role). See
-  // DECISIONS.md #21.
-  String? _pendingLoginTotpSetupChallengeToken;
-  String? pendingLoginTotpSetupSecret;
-  String? pendingLoginTotpSetupUri;
 
   set autoLockMinutesAndPersist(int value) {
     autoLockMinutes = value;
     SharedPreferences.getInstance().then((prefs) => prefs.setInt(_kAutoLockMinutesPref, value));
     notifyListeners();
   }
+
+  Future<SessionState> _decideReentryState() async {
+    final lastAuth = await SecureStorageService.instance.lastPasswordAuthAt;
+    if (lastAuth != null && DateTime.now().difference(lastAuth) < passwordWindow) {
+      return SessionState.needsBiometric;
+    }
+    return SessionState.locked;
+  }
+
+  Future<void> _recordPasswordAuth() => SecureStorageService.instance.setLastPasswordAuthAt(DateTime.now());
 
   Future<void> bootstrap() async {
     final prefs = await SharedPreferences.getInstance();
@@ -70,26 +70,7 @@ class SessionProvider extends ChangeNotifier {
     final vmkB64 = await SecureStorageService.instance.vmkB64;
     if (vmkB64 != null) vmk = base64Decode(vmkB64);
 
-    // Recover an onboarding that was interrupted (e.g. backgrounded to
-    // install/open an authenticator app) before TOTP was confirmed --
-    // otherwise this would land on a login screen that can never succeed.
-    // See DECISIONS.md #14.
-    try {
-      final me = await AuthService().getMe();
-      if (me['totp_confirmed'] != true) {
-        final info = await AuthService().getTotpSetupInfo();
-        pendingTotpSecret = info['totp_secret'];
-        pendingTotpProvisioningUri = info['totp_provisioning_uri'];
-        state = SessionState.needsTotpSetup;
-        notifyListeners();
-        return;
-      }
-    } catch (_) {
-      // Server unreachable or token issue -- fall through to the normal
-      // locked screen; login will surface any real problem specifically.
-    }
-
-    state = SessionState.locked;
+    state = await _decideReentryState();
     notifyListeners();
   }
 
@@ -101,65 +82,19 @@ class SessionProvider extends ChangeNotifier {
     required String accessToken,
     required String refreshToken,
     required String vmkB64,
-    required String totpSecret,
-    required String totpProvisioningUri,
   }) async {
     await ApiClient.instance.configureBaseUrl(server);
     await SecureStorageService.instance.saveSession(
       server: server, accessToken: accessToken, refreshToken: refreshToken, vmkB64: vmkB64, role: role, spouseId: spouseId, deviceId: deviceId,
     );
+    await _recordPasswordAuth();
     this.role = role;
     this.spouseId = spouseId;
     this.deviceId = deviceId;
     vmk = base64Decode(vmkB64);
-    pendingTotpSecret = totpSecret;
-    pendingTotpProvisioningUri = totpProvisioningUri;
-    state = SessionState.needsTotpSetup;
-    notifyListeners();
-  }
-
-  /// Called once /auth/totp/setup-confirm succeeds during onboarding --
-  /// the access/refresh tokens from claim are already valid, so this goes
-  /// straight to the home screen (matches the old face-enroll-then-home
-  /// behavior, just with TOTP as the confirmed factor).
-  void completeTotpSetup() {
-    pendingTotpSecret = null;
-    pendingTotpProvisioningUri = null;
     state = SessionState.authenticated;
     WsClient.instance.connect();
     resetAutoLockTimer();
-    notifyListeners();
-  }
-
-  void setPendingTotpChallenge(String token) {
-    _pendingTotpChallengeToken = token;
-    state = SessionState.needsTotpVerify;
-    notifyListeners();
-  }
-
-  String? get pendingTotpChallengeToken => _pendingTotpChallengeToken;
-
-  void cancelTotpVerify() {
-    _pendingTotpChallengeToken = null;
-    state = SessionState.locked;
-    notifyListeners();
-  }
-
-  void setPendingLoginTotpSetup({required String challengeToken, required String secret, required String uri}) {
-    _pendingLoginTotpSetupChallengeToken = challengeToken;
-    pendingLoginTotpSetupSecret = secret;
-    pendingLoginTotpSetupUri = uri;
-    state = SessionState.needsLoginTotpSetup;
-    notifyListeners();
-  }
-
-  String? get pendingLoginTotpSetupChallengeToken => _pendingLoginTotpSetupChallengeToken;
-
-  void cancelLoginTotpSetup() {
-    _pendingLoginTotpSetupChallengeToken = null;
-    pendingLoginTotpSetupSecret = null;
-    pendingLoginTotpSetupUri = null;
-    state = SessionState.locked;
     notifyListeners();
   }
 
@@ -177,6 +112,15 @@ class SessionProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Manual escape hatch from the biometric-unlock screen (fingerprint
+  /// not working, not enrolled, etc.) -- falls back to typing the
+  /// password even though the hourly window would otherwise have allowed
+  /// just a biometric tap.
+  void useFallbackPassword() {
+    state = SessionState.locked;
+    notifyListeners();
+  }
+
   Future<void> completeLogin({
     required String accessToken,
     required String refreshToken,
@@ -189,14 +133,23 @@ class SessionProvider extends ChangeNotifier {
     await SecureStorageService.instance.saveSession(
       server: server ?? '', accessToken: accessToken, refreshToken: refreshToken, vmkB64: vmkB64 ?? '', role: role, spouseId: spouseId, deviceId: deviceId,
     );
+    await _recordPasswordAuth();
     this.role = role;
     this.spouseId = spouseId;
     if (deviceId != null) this.deviceId = deviceId;
-    _pendingTotpChallengeToken = null;
     _pendingFaceChallengeToken = null;
-    _pendingLoginTotpSetupChallengeToken = null;
-    pendingLoginTotpSetupSecret = null;
-    pendingLoginTotpSetupUri = null;
+    state = SessionState.authenticated;
+    WsClient.instance.connect();
+    resetAutoLockTimer();
+    notifyListeners();
+  }
+
+  /// A successful biometric tap authenticates purely locally -- the tokens
+  /// are already valid in secure storage from the last real password
+  /// login (or the normal Dio refresh-token flow will silently renew the
+  /// access token on the next API call if it's since expired). This never
+  /// touches the server and does NOT reset the hourly password clock.
+  void completeBiometricUnlock() {
     state = SessionState.authenticated;
     WsClient.instance.connect();
     resetAutoLockTimer();
@@ -206,7 +159,7 @@ class SessionProvider extends ChangeNotifier {
   /// Starts a device-pairing login: another already-authenticated device
   /// handed us its role+VMK peer-to-peer (QR/paste, never through the
   /// server). We stash them locally right away so that by the time the
-  /// normal password->TOTP->(face) flow finishes and calls completeLogin,
+  /// normal password->(face) flow finishes and calls completeLogin,
   /// server/vmkB64 are already on disk for it to read. See DECISIONS.md.
   Future<void> beginPairing({
     required String server,
@@ -232,13 +185,13 @@ class SessionProvider extends ChangeNotifier {
 
   /// Only actually locks an already-authenticated session. Backgrounding
   /// the app mid-onboarding or mid-login must NOT force a jump to the
-  /// locked screen -- there'd be no way back into TOTP setup / the
-  /// in-progress login step. See DECISIONS.md #14.
-  void lock() {
+  /// locked screen -- there'd be no way back into the in-progress login
+  /// step. See DECISIONS.md #14.
+  Future<void> lock() async {
     if (state != SessionState.authenticated) return;
     _autoLockTimer?.cancel();
     WsClient.instance.disconnect();
-    state = SessionState.locked;
+    state = await _decideReentryState();
     notifyListeners();
   }
 

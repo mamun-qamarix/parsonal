@@ -9,21 +9,19 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.database import get_db
-from app.deps import get_current_spouse, get_current_spouse_and_device
+from app.deps import get_current_spouse
 from app.models.setup import SetupCode
 from app.models.user import Spouse, Device, RoleEnum
 from app.models.reset_session import PasswordResetSession
 from app.models.audit import AuditLogEntry
 from app.schemas.auth import (
     ClaimRoleRequest, ClaimRoleResponse,
-    TotpSetupConfirmRequest,
     LoginPasswordRequest, LoginPasswordResponse,
-    LoginTotpRequest, LoginTotpResponse,
     LoginFaceRequest, LoginFaceResponse,
     RefreshRequest, RefreshResponse,
     FaceEnrollRequest,
     DuressSetRequest,
-    PasswordResetInitiateRequest, PasswordResetVerifyRequest, PasswordResetCompleteRequest,
+    PasswordResetInitiateRequest, PasswordResetApproveRequest, PasswordResetStatusRequest, PasswordResetCompleteRequest,
     SpouseOut,
 )
 from app.services.security import (
@@ -31,7 +29,6 @@ from app.services.security import (
     decode_token_safe, TokenError,
 )
 from app.services.face_verify import face_verify_service
-from app.services import totp as totp_service
 from app.services.rate_limit import rate_limit
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -136,14 +133,10 @@ async def claim_role(payload: ClaimRoleRequest, db: AsyncSession = Depends(get_d
     db.add(spouse)
     await db.flush()
 
-    # TOTP is per-device (see DECISIONS.md): this first device gets its own
-    # secret here; a later device paired onto this same role sets up its own.
-    totp_secret = totp_service.generate_secret()
     device = Device(
         spouse_id=spouse.id,
         device_name=payload.device_name,
         device_uuid=payload.device_uuid,
-        totp_secret=totp_secret,
         refresh_token_hash="",
     )
     db.add(device)
@@ -164,55 +157,12 @@ async def claim_role(payload: ClaimRoleRequest, db: AsyncSession = Depends(get_d
         refresh_token=refresh_token,
         vmk_b64=base64.b64encode(vmk).decode(),
         server=f"https://{settings.domain}",
-        totp_secret=totp_secret,
-        totp_provisioning_uri=totp_service.provisioning_uri(totp_secret, f"{payload.role}@couplevault"),
     )
 
 
 @router.get("/me", response_model=SpouseOut)
-async def get_me(ctx: tuple[Spouse, Device | None] = Depends(get_current_spouse_and_device)):
-    spouse, device = ctx
-    return SpouseOut.from_spouse(spouse, device)
-
-
-@router.get("/totp/setup-info")
-async def totp_setup_info(ctx: tuple[Spouse, Device | None] = Depends(get_current_spouse_and_device)):
-    """Lets the app recover the QR/secret if the user was interrupted
-    mid-onboarding (e.g. backgrounded the app to install/open their
-    authenticator app) before confirming -- see DECISIONS.md #14. TOTP is
-    per-device (DECISIONS.md #21), so this reflects THIS device's secret."""
-    spouse, device = ctx
-    if device is None:
-        raise HTTPException(status_code=409, detail="No device associated with this session")
-    if device.totp_confirmed:
-        raise HTTPException(status_code=409, detail="Authenticator app already confirmed for this device")
-    if device.totp_secret is None:
-        raise HTTPException(status_code=409, detail="No TOTP secret on file for this device")
-    return {
-        "totp_secret": device.totp_secret,
-        "totp_provisioning_uri": totp_service.provisioning_uri(device.totp_secret, f"{spouse.role.value}@couplevault"),
-    }
-
-
-@router.post("/totp/setup-confirm")
-async def totp_setup_confirm(
-    payload: TotpSetupConfirmRequest,
-    ctx: tuple[Spouse, Device | None] = Depends(get_current_spouse_and_device),
-    db: AsyncSession = Depends(get_db),
-):
-    """Proves this device actually saved the TOTP secret into an
-    authenticator app before we start requiring it at every login on it."""
-    spouse, device = ctx
-    if device is None:
-        raise HTTPException(status_code=409, detail="No device associated with this session")
-    if device.totp_secret is None:
-        raise HTTPException(status_code=409, detail="No TOTP secret on file for this device")
-    if not totp_service.verify_code(device.totp_secret, payload.code):
-        raise HTTPException(status_code=401, detail="Invalid authenticator code")
-    device.totp_confirmed = True
-    db.add(AuditLogEntry(actor_id=spouse.id, action="auth.totp_setup_confirm", target_type="spouse", target_id=spouse.id))
-    await db.commit()
-    return {"totp_confirmed": True}
+async def get_me(spouse: Spouse = Depends(get_current_spouse)):
+    return SpouseOut.from_spouse(spouse)
 
 
 @router.post("/face/enroll")
@@ -251,6 +201,13 @@ async def enable_face(spouse: Spouse = Depends(get_current_spouse), db: AsyncSes
 
 @router.post("/login/password", response_model=LoginPasswordResponse, dependencies=[Depends(rate_limit("login_password", max_attempts=10, window_seconds=300))])
 async def login_password(payload: LoginPasswordRequest, db: AsyncSession = Depends(get_db)):
+    """Password is now the only server-verified factor (DECISIONS.md #27
+    removed the mandatory authenticator-code step) -- a correct password
+    issues real tokens directly, or a face challenge first for spouses who
+    opted into that extra step. Fast re-entry within an hour is handled
+    entirely on-device via biometric unlock; the server is never involved
+    in that at all, since the tokens are already sitting in secure storage
+    from this call."""
     if payload.role not in ("husband", "wife"):
         raise HTTPException(status_code=400, detail="Invalid role")
     result = await db.execute(select(Spouse).where(Spouse.role == RoleEnum(payload.role)))
@@ -258,124 +215,17 @@ async def login_password(payload: LoginPasswordRequest, db: AsyncSession = Depen
     if spouse is None or not verify_secret(payload.password, spouse.password_hash):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    # Password is shared across a spouse's devices; the authenticator code
-    # is per-device (DECISIONS.md #21). A device we've never seen confirm
-    # one before (new install, or newly paired onto this role) needs to set
-    # up its OWN authenticator entry first, instead of being asked for a
-    # code that only exists on a different phone.
-    device = await _find_device(db, spouse.id, payload.device_uuid)
-    if device is not None and device.totp_confirmed:
-        challenge = _create_challenge_token(
-            str(spouse.id), payload.role, payload.device_name, "totp_challenge",
-            device_uuid=payload.device_uuid, device_id=str(device.id),
-        )
-        return LoginPasswordResponse(mode="verify", challenge_token=challenge)
-
-    if device is None:
-        device = Device(
-            spouse_id=spouse.id, device_name=payload.device_name, device_uuid=payload.device_uuid,
-            totp_secret=totp_service.generate_secret(), refresh_token_hash="",
-        )
-        db.add(device)
-        await db.flush()
-    elif device.totp_secret is None:
-        device.totp_secret = totp_service.generate_secret()
-    # else: device exists, unconfirmed, already has a pending secret --
-    # reuse it so a resumed setup (e.g. backgrounded to install an
-    # authenticator app) shows the SAME QR, same resumability precedent as
-    # DECISIONS.md #14.
-    device.device_name = payload.device_name
-    await db.commit()
-
-    setup_challenge = _create_challenge_token(
-        str(spouse.id), payload.role, payload.device_name, "totp_setup_challenge", minutes=15,
-        device_uuid=payload.device_uuid, device_id=str(device.id),
-    )
-    return LoginPasswordResponse(
-        mode="setup",
-        setup_challenge_token=setup_challenge,
-        totp_secret=device.totp_secret,
-        totp_provisioning_uri=totp_service.provisioning_uri(device.totp_secret, f"{payload.role}@couplevault"),
-    )
-
-
-async def _after_totp_verified(db: AsyncSession, spouse: Spouse, device: Device, device_name: str, device_uuid: str | None) -> LoginTotpResponse:
     if spouse.face_verification_enabled:
         face_challenge = _create_challenge_token(
-            str(spouse.id), spouse.role.value, device_name, "face_challenge",
-            device_uuid=device_uuid, device_id=str(device.id),
+            str(spouse.id), payload.role, payload.device_name, "face_challenge",
+            device_uuid=payload.device_uuid,
         )
-        db.add(AuditLogEntry(actor_id=spouse.id, action="auth.totp_verify_ok", target_type="spouse", target_id=spouse.id))
+        db.add(AuditLogEntry(actor_id=spouse.id, action="auth.password_ok", target_type="spouse", target_id=spouse.id))
         await db.commit()
-        return LoginTotpResponse(requires_face=True, face_challenge_token=face_challenge)
+        return LoginPasswordResponse(requires_face=True, face_challenge_token=face_challenge)
 
-    result_data = await _issue_full_login(db, spouse, device_name, device_uuid, existing_device=device)
-    return LoginTotpResponse(requires_face=False, **result_data)
-
-
-@router.post("/login/totp-setup-confirm", response_model=LoginTotpResponse, dependencies=[Depends(rate_limit("login_totp", max_attempts=10, window_seconds=300))])
-async def login_totp_setup_confirm(payload: LoginTotpRequest, db: AsyncSession = Depends(get_db)):
-    """Confirms a NEW device's own authenticator entry mid-login (device
-    was paired onto an already-claimed role, or is a fresh install) --
-    counterpart to /auth/totp/setup-confirm, which is only reachable with a
-    real access token and is used for the very first device at claim time.
-    See DECISIONS.md #21."""
-    try:
-        claims = decode_token_safe(payload.challenge_token)
-    except TokenError:
-        raise HTTPException(status_code=401, detail="Invalid or expired challenge token")
-    if claims.get("type") != "totp_setup_challenge":
-        raise HTTPException(status_code=401, detail="Invalid challenge token")
-
-    spouse_id = uuid.UUID(claims["sub"])
-    result = await db.execute(select(Spouse).where(Spouse.id == spouse_id))
-    spouse = result.scalar_one_or_none()
-    if spouse is None:
-        raise HTTPException(status_code=404, detail="Spouse not found")
-
-    device_id = claims.get("device_id")
-    device = await db.get(Device, uuid.UUID(device_id)) if device_id else None
-    if device is None or device.totp_secret is None:
-        raise HTTPException(status_code=404, detail="Device not found")
-
-    if not totp_service.verify_code(device.totp_secret, payload.code):
-        raise HTTPException(status_code=401, detail="Invalid authenticator code")
-
-    device.totp_confirmed = True
-    db.add(AuditLogEntry(actor_id=spouse.id, action="auth.totp_setup_confirm", target_type="spouse", target_id=spouse.id))
-    await db.commit()
-
-    return await _after_totp_verified(db, spouse, device, claims.get("device_name", "device"), claims.get("device_uuid"))
-
-
-@router.post("/login/totp", response_model=LoginTotpResponse, dependencies=[Depends(rate_limit("login_totp", max_attempts=10, window_seconds=300))])
-async def login_totp(payload: LoginTotpRequest, db: AsyncSession = Depends(get_db)):
-    try:
-        claims = decode_token_safe(payload.challenge_token)
-    except TokenError:
-        raise HTTPException(status_code=401, detail="Invalid or expired challenge token")
-    if claims.get("type") != "totp_challenge":
-        raise HTTPException(status_code=401, detail="Invalid challenge token")
-
-    spouse_id = uuid.UUID(claims["sub"])
-    result = await db.execute(select(Spouse).where(Spouse.id == spouse_id))
-    spouse = result.scalar_one_or_none()
-    if spouse is None:
-        raise HTTPException(status_code=404, detail="Spouse not found")
-
-    device_id = claims.get("device_id")
-    device = await db.get(Device, uuid.UUID(device_id)) if device_id else None
-    if device is None or device.totp_secret is None or not device.totp_confirmed:
-        raise HTTPException(status_code=404, detail="Device not found")
-
-    if not totp_service.verify_code(device.totp_secret, payload.code):
-        db.add(AuditLogEntry(actor_id=spouse.id, action="auth.totp_verify_failed", target_type="spouse", target_id=spouse.id))
-        await db.commit()
-        raise HTTPException(status_code=401, detail="Invalid authenticator code")
-
-    device_name = claims.get("device_name", "device")
-    device_uuid = claims.get("device_uuid")
-    return await _after_totp_verified(db, spouse, device, device_name, device_uuid)
+    result_data = await _issue_full_login(db, spouse, payload.device_name, payload.device_uuid)
+    return LoginPasswordResponse(requires_face=False, **result_data)
 
 
 @router.post("/login/face", response_model=LoginFaceResponse, dependencies=[Depends(rate_limit("login_face", max_attempts=10, window_seconds=300))])
@@ -467,35 +317,40 @@ async def password_reset_initiate(payload: PasswordResetInitiateRequest, db: Asy
     return {"reset_token": session.reset_token, "expires_at": session.expires_at}
 
 
-@router.post("/password-reset/verify", dependencies=[Depends(rate_limit("password_reset", max_attempts=10, window_seconds=600))])
-async def password_reset_verify(payload: PasswordResetVerifyRequest, db: AsyncSession = Depends(get_db)):
+@router.post("/password-reset/approve", dependencies=[Depends(rate_limit("password_reset", max_attempts=10, window_seconds=600))])
+async def password_reset_approve(payload: PasswordResetApproveRequest, spouse: Spouse = Depends(get_current_spouse), db: AsyncSession = Depends(get_db)):
+    """Replaces the old TOTP-code verification step (DECISIONS.md #27):
+    since there's no authenticator code anymore, a password reset is
+    approved by tapping a button on an ALREADY-AUTHENTICATED device --
+    either spouse's, matching the app's existing full-mutual-trust model
+    (either spouse can already revoke any device). Only one approval is
+    required, not both."""
     result = await db.execute(select(PasswordResetSession).where(PasswordResetSession.reset_token == payload.reset_token))
     session = result.scalar_one_or_none()
     if session is None or session.used or session.expires_at < datetime.now(timezone.utc):
         raise HTTPException(status_code=404, detail="Reset session not found or expired")
 
-    spouse_result = await db.execute(select(Spouse).where(Spouse.role == RoleEnum(payload.role)))
-    spouse = spouse_result.scalar_one_or_none()
-    if spouse is None:
-        raise HTTPException(status_code=404, detail="Spouse not found")
-
-    # TOTP is per-device (DECISIONS.md #21) and password reset doesn't know
-    # which of a spouse's devices they're holding, so a code from ANY of
-    # that spouse's confirmed devices counts as that spouse verifying.
-    devices_result = await db.execute(
-        select(Device).where(Device.spouse_id == spouse.id, Device.totp_confirmed == True)  # noqa: E712
-    )
-    devices = devices_result.scalars().all()
-    if not devices or not any(d.totp_secret and totp_service.verify_code(d.totp_secret, payload.code) for d in devices):
-        raise HTTPException(status_code=401, detail="Invalid authenticator code")
-
     now = datetime.now(timezone.utc)
-    if payload.role == "husband":
+    if spouse.role == RoleEnum.husband:
         session.husband_verified_at = now
     else:
         session.wife_verified_at = now
+    db.add(AuditLogEntry(actor_id=spouse.id, action="auth.password_reset_approve", target_type="spouse", target_id=spouse.id))
     await db.commit()
-    return {"husband_verified": session.husband_verified_at is not None, "wife_verified": session.wife_verified_at is not None}
+    return {"approved": True}
+
+
+@router.post("/password-reset/status")
+async def password_reset_status(payload: PasswordResetStatusRequest, db: AsyncSession = Depends(get_db)):
+    """Polled by the locked device waiting for an already-authenticated
+    device to approve -- no push notifications involved (see
+    DECISIONS.md's known limitation on those)."""
+    result = await db.execute(select(PasswordResetSession).where(PasswordResetSession.reset_token == payload.reset_token))
+    session = result.scalar_one_or_none()
+    if session is None or session.used or session.expires_at < datetime.now(timezone.utc):
+        raise HTTPException(status_code=404, detail="Reset session not found or expired")
+    approved = session.husband_verified_at is not None or session.wife_verified_at is not None
+    return {"approved": approved}
 
 
 @router.post("/password-reset/complete")
@@ -504,8 +359,8 @@ async def password_reset_complete(payload: PasswordResetCompleteRequest, db: Asy
     session = result.scalar_one_or_none()
     if session is None or session.used or session.expires_at < datetime.now(timezone.utc):
         raise HTTPException(status_code=404, detail="Reset session not found or expired")
-    if session.husband_verified_at is None or session.wife_verified_at is None:
-        raise HTTPException(status_code=409, detail="Both spouses must pass authenticator verification first")
+    if session.husband_verified_at is None and session.wife_verified_at is None:
+        raise HTTPException(status_code=409, detail="An already-logged-in device must approve this reset first")
 
     spouse_result = await db.execute(select(Spouse).where(Spouse.role == RoleEnum(session.target_role)))
     spouse = spouse_result.scalar_one_or_none()

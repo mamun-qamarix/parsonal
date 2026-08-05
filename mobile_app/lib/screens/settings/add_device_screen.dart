@@ -14,8 +14,8 @@ import '../../providers/session_provider.dart';
 /// spouse's own devices) without ever re-claiming that role -- claiming
 /// is a one-time, whole-account action. The QR carries role+VMK
 /// peer-to-peer (never through the server, keeping the E2E design
-/// intact); the new device still has to pass a normal password+TOTP
-/// (+face) login to get real tokens. See DECISIONS.md.
+/// intact); the new device still has to pass a normal password (+face)
+/// login to get real tokens. See DECISIONS.md.
 class AddDeviceScreen extends StatefulWidget {
   const AddDeviceScreen({super.key});
 
@@ -79,7 +79,7 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
                     ),
                     const SizedBox(height: 20),
                     const Text(
-                      'নতুন ফোনে অ্যাপ ইনস্টল করে "ইতিমধ্যে অ্যাকাউন্ট আছে? এই ডিভাইসটা যোগ করুন" এ চেপে নিচের কোডটা স্ক্যান করুন। এরপর সেই ফোনেই পাসওয়ার্ড ও অথেন্টিকেটর কোড দিয়ে ঢুকতে হবে।',
+                      'নতুন ফোনে অ্যাপ ইনস্টল করে "ইতিমধ্যে অ্যাকাউন্ট আছে? এই ডিভাইসটা যোগ করুন" এ চেপে নিচের কোডটা স্ক্যান করুন। এরপর সেই ফোনেই পাসওয়ার্ড দিয়ে ঢুকতে হবে।',
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 20),

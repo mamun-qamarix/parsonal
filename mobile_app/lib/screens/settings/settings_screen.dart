@@ -13,6 +13,7 @@ import '../../widgets/password_field.dart';
 import '../auth/face_capture_screen.dart';
 import '../onboarding/welcome_screen.dart';
 import 'add_device_screen.dart';
+import 'approve_password_reset_screen.dart';
 import 'devices_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -152,7 +153,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 SwitchListTile(
                   title: const Text('মুখ ভেরিফিকেশন (ঐচ্ছিক)'),
                   subtitle: const Text(
-                    'অন করলে পাসওয়ার্ড ও অথেন্টিকেটর কোডের পাশাপাশি প্রতিবার লগইনে মুখ দিয়েও যাচাই করতে হবে — বাড়তি নিরাপত্তার জন্য',
+                    'অন করলে পাসওয়ার্ডের পাশাপাশি প্রতিবার লগইনে মুখ দিয়েও যাচাই করতে হবে — বাড়তি নিরাপত্তার জন্য',
                     style: TextStyle(fontSize: 12),
                   ),
                   value: _faceVerificationEnabled,
@@ -232,6 +233,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   title: const Text('নতুন ডিভাইস যোগ করুন'),
                   subtitle: const Text('আপনার নতুন বা দ্বিতীয় ফোনে এই অ্যাকাউন্টটাই যোগ করুন', style: TextStyle(fontSize: 12)),
                   onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const AddDeviceScreen())),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.verified_user_outlined, color: AppColors.halalGreen),
+                  title: const Text('পাসওয়ার্ড রিসেট অনুমোদন করুন'),
+                  subtitle: const Text('অন্য ডিভাইসে পাসওয়ার্ড রিসেট শুরু হলে এখান থেকে অনুমোদন দিন', style: TextStyle(fontSize: 12)),
+                  onTap: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ApprovePasswordResetScreen())),
                 ),
                 ListTile(
                   leading: const Icon(Icons.logout, color: AppColors.rejected),

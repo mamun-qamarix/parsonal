@@ -30,15 +30,6 @@ class AuthService {
     return res.data as Map<String, dynamic>;
   }
 
-  Future<Map<String, dynamic>> getTotpSetupInfo() async {
-    final res = await _dio.get('/auth/totp/setup-info');
-    return res.data as Map<String, dynamic>;
-  }
-
-  Future<void> totpSetupConfirm(String code) async {
-    await _dio.post('/auth/totp/setup-confirm', data: {'code': code});
-  }
-
   Future<void> enrollFace(Uint8List jpegBytes) async {
     await _dio.post('/auth/face/enroll', data: {
       'face_image_b64': base64Encode(jpegBytes),
@@ -53,12 +44,11 @@ class AuthService {
     await _dio.post('/auth/face/disable');
   }
 
-  /// Returns the raw response: {mode: "verify", challenge_token} when this
-  /// device already has a confirmed authenticator entry, or
-  /// {mode: "setup", setup_challenge_token, totp_secret,
-  /// totp_provisioning_uri} when it needs to set up its own first (new
-  /// install, or a device newly paired onto an already-claimed role). See
-  /// DECISIONS.md #21.
+  /// Password is now the only server-verified factor -- returns either
+  /// {requires_face: false, access_token, refresh_token, role, spouse_id,
+  /// device_id} directly, or {requires_face: true, face_challenge_token}
+  /// for spouses who opted into the extra face-verification step. See
+  /// DECISIONS.md #27.
   Future<Map<String, dynamic>> loginPassword({required String role, required String password, required String deviceName}) async {
     final res = await _dio.post('/auth/login/password', data: {
       'role': role,
@@ -66,16 +56,6 @@ class AuthService {
       'device_name': deviceName,
       'device_uuid': await DeviceIdentityService.getOrCreate(),
     });
-    return res.data as Map<String, dynamic>;
-  }
-
-  Future<Map<String, dynamic>> loginTotp({required String challengeToken, required String code}) async {
-    final res = await _dio.post('/auth/login/totp', data: {'challenge_token': challengeToken, 'code': code});
-    return res.data as Map<String, dynamic>;
-  }
-
-  Future<Map<String, dynamic>> loginTotpSetupConfirm({required String challengeToken, required String code}) async {
-    final res = await _dio.post('/auth/login/totp-setup-confirm', data: {'challenge_token': challengeToken, 'code': code});
     return res.data as Map<String, dynamic>;
   }
 
@@ -96,13 +76,13 @@ class AuthService {
     return res.data as Map<String, dynamic>;
   }
 
-  Future<Map<String, dynamic>> passwordResetVerify({required String resetToken, required String role, required String code}) async {
-    final res = await _dio.post('/auth/password-reset/verify', data: {
-      'reset_token': resetToken,
-      'role': role,
-      'code': code,
-    });
-    return res.data as Map<String, dynamic>;
+  Future<void> passwordResetApprove(String resetToken) async {
+    await _dio.post('/auth/password-reset/approve', data: {'reset_token': resetToken});
+  }
+
+  Future<bool> passwordResetStatus(String resetToken) async {
+    final res = await _dio.post('/auth/password-reset/status', data: {'reset_token': resetToken});
+    return res.data['approved'] as bool;
   }
 
   Future<void> passwordResetComplete({required String resetToken, required String newPassword}) async {

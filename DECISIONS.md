@@ -501,6 +501,60 @@ by noticing a bare icon. Also translated the whole screen to Bengali
 add-line dialog, empty state, sort tooltip. No functional changes; the
 tabs + per-spouse rating already worked exactly as originally requested.
 
+## 27. Authenticator (TOTP) removed; password + biometric, hourly window
+
+**Request:** the mandatory-TOTP model (DECISIONS.md #13, #21) was found
+not to work well in practice -- too much friction for a two-person
+private app. Replacement, exactly as specified: password required once
+an hour; a fingerprint (device biometric) covers every app entry in
+between, for that whole hour, regardless of how many times the app is
+backgrounded/reopened. No authenticator/TOTP anywhere anymore.
+
+**Decision:**
+- **Server side**, password is now the only server-verified factor.
+  `/auth/login/password` issues real tokens directly (or a face
+  challenge first, for spouses who opted into that separate optional
+  step) instead of returning a TOTP challenge/setup token.
+  `/auth/setup/claim` no longer generates a TOTP secret. The
+  `/auth/totp/*` and `/auth/login/totp*` endpoints are gone.
+  `Device.totp_secret`/`totp_confirmed` columns are left in place, just
+  unused, rather than dropped (avoids yet another destructive
+  migration).
+- **Client side**, a successful password login also records a local
+  `lastPasswordAuthAt` timestamp (secure storage). Every re-entry point
+  -- cold start, resuming from background, or the idle auto-lock timer
+  firing -- checks the elapsed time: under an hour gets
+  `SessionState.needsBiometric` (a fingerprint/face/device-PIN OS prompt
+  via `local_auth`, `biometricOnly: false` so a phone with no biometric
+  hardware still has a fallback), an hour or more gets `locked` (the
+  password screen again). Biometric unlock is **purely local** -- it
+  never calls the server at all, since the tokens are already valid in
+  secure storage from the last real login (and the existing Dio
+  refresh-token interceptor transparently renews an expired 15-minute
+  access token on the next API call regardless). It does NOT reset the
+  hourly clock; only a real password entry does.
+- `MainActivity` changed from `FlutterActivity` to
+  `FlutterFragmentActivity` (`local_auth`'s biometric prompt needs a
+  FragmentActivity host), and `USE_BIOMETRIC` was added to the manifest.
+- **Password reset** could no longer ask for a TOTP code from each
+  spouse (DECISIONS.md #13's original dual-verification design). It's
+  now: an already-authenticated device (either spouse's, or the same
+  person's other paired device -- matching the app's existing
+  full-mutual-trust model) approves the reset by pasting its code into
+  a new Settings screen and tapping Approve, no code entry required on
+  their end beyond that. The locked/forgotten-password device polls
+  `/auth/password-reset/status` every few seconds (no push
+  notifications involved -- those don't work yet regardless, see the
+  code-review findings) and reveals the new-password field once
+  approved. Only one approval is required now, not both spouses.
+
+Verified against a local Postgres: claim and login both issue tokens
+directly with no TOTP step or fields in the response; two different
+devices sharing the same role's password both log straight in with no
+per-device setup; the old TOTP endpoints 404; the new approve/status/
+complete password-reset sequence works end-to-end and rejects
+completion before approval.
+
 ## 19. Add Device (peer-to-peer pairing)
 
 **Problem:** each role (`husband`/`wife`) can only be claimed once, ever

@@ -28,12 +28,6 @@ class ClaimRoleResponse(BaseModel):
     refresh_token: str
     vmk_b64: str
     server: str
-    totp_secret: str
-    totp_provisioning_uri: str
-
-
-class TotpSetupConfirmRequest(BaseModel):
-    code: str
 
 
 class LoginPasswordRequest(BaseModel):
@@ -44,27 +38,12 @@ class LoginPasswordRequest(BaseModel):
 
 
 class LoginPasswordResponse(BaseModel):
-    mode: str  # "verify" (this device already has a confirmed authenticator) | "setup" (this device needs one)
-    # Present when mode == "verify":
-    challenge_token: str | None = None
-    # Present when mode == "setup": this device has never confirmed an
-    # authenticator app before (new install, or a newly-paired device) --
-    # each device gets its own independent TOTP secret. See DECISIONS.md.
-    setup_challenge_token: str | None = None
-    totp_secret: str | None = None
-    totp_provisioning_uri: str | None = None
-
-
-class LoginTotpRequest(BaseModel):
-    challenge_token: str
-    code: str
-
-
-class LoginTotpResponse(BaseModel):
+    """Password is the only server-verified factor now (device biometric
+    unlock, DECISIONS.md #27, is a local-only gate on the already-issued
+    tokens -- it never talks to the server). requires_face is True only
+    for spouses who opted into the extra face-verification step."""
     requires_face: bool
-    # Present when requires_face is True: pass this to /auth/login/face.
     face_challenge_token: str | None = None
-    # Present when requires_face is False: login is already complete.
     access_token: str | None = None
     refresh_token: str | None = None
     spouse_id: uuid.UUID | None = None
@@ -105,10 +84,12 @@ class PasswordResetInitiateRequest(BaseModel):
     role: str
 
 
-class PasswordResetVerifyRequest(BaseModel):
+class PasswordResetApproveRequest(BaseModel):
     reset_token: str
-    role: str
-    code: str  # TOTP code, not face -- see DECISIONS.md
+
+
+class PasswordResetStatusRequest(BaseModel):
+    reset_token: str
 
 
 class PasswordResetCompleteRequest(BaseModel):
@@ -121,7 +102,6 @@ class SpouseOut(BaseModel):
     role: str
     face_enrolled: bool
     face_verification_enabled: bool
-    totp_confirmed: bool
 
     @classmethod
     def from_spouse(cls, spouse, device=None) -> "SpouseOut":
@@ -130,5 +110,4 @@ class SpouseOut(BaseModel):
             role=spouse.role.value,
             face_enrolled=spouse.face_enrolled,
             face_verification_enabled=spouse.face_verification_enabled,
-            totp_confirmed=device.totp_confirmed if device is not None else False,
         )

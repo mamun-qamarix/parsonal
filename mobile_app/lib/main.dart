@@ -5,12 +5,10 @@ import 'core/app_globals.dart';
 import 'core/security/app_lock_guard.dart';
 import 'core/theme/app_theme.dart';
 import 'providers/session_provider.dart';
+import 'screens/auth/biometric_unlock_screen.dart';
 import 'screens/auth/decoy_home_screen.dart';
 import 'screens/auth/face_verify_screen.dart';
 import 'screens/auth/login_screen.dart';
-import 'screens/auth/login_totp_setup_screen.dart';
-import 'screens/auth/totp_setup_screen.dart';
-import 'screens/auth/totp_verify_screen.dart';
 import 'screens/home/home_shell.dart';
 import 'screens/onboarding/welcome_screen.dart';
 
@@ -59,14 +57,10 @@ class AuthGate extends StatelessWidget {
         return const _Splash();
       case SessionState.needsSetup:
         return const WelcomeScreen();
-      case SessionState.needsTotpSetup:
-        return const TotpSetupScreen();
       case SessionState.locked:
         return const LoginScreen();
-      case SessionState.needsTotpVerify:
-        return const TotpVerifyScreen();
-      case SessionState.needsLoginTotpSetup:
-        return const LoginTotpSetupScreen();
+      case SessionState.needsBiometric:
+        return const BiometricUnlockScreen();
       case SessionState.needsFaceVerify:
         return const FaceVerifyScreen();
       case SessionState.authenticated:

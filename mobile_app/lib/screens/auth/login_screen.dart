@@ -41,14 +41,16 @@ class _LoginScreenState extends State<LoginScreen> {
       }
       final deviceName = await DeviceNameService.detect();
       final result = await AuthService().loginPassword(role: role, password: _password.text, deviceName: deviceName);
-      if (result['mode'] == 'setup') {
-        session.setPendingLoginTotpSetup(
-          challengeToken: result['setup_challenge_token'],
-          secret: result['totp_secret'],
-          uri: result['totp_provisioning_uri'],
-        );
+      if (result['requires_face'] == true) {
+        session.setPendingFaceChallenge(result['face_challenge_token']);
       } else {
-        session.setPendingTotpChallenge(result['challenge_token']);
+        await session.completeLogin(
+          accessToken: result['access_token'],
+          refreshToken: result['refresh_token'],
+          role: result['role'],
+          spouseId: result['spouse_id'],
+          deviceId: result['device_id'],
+        );
       }
     } catch (e) {
       setState(() => _error = describeApiError(e));
@@ -76,7 +78,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 style: Theme.of(context).textTheme.titleLarge,
               ),
               const SizedBox(height: 4),
-              const Text('আপনার পাসওয়ার্ড দিন, এরপর অথেন্টিকেটর কোড দিতে হবে', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
+              const Text('আপনার পাসওয়ার্ড দিন', textAlign: TextAlign.center, style: TextStyle(color: Colors.grey)),
               const SizedBox(height: 24),
               PasswordField(
                 controller: _password,

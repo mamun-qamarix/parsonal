@@ -67,6 +67,7 @@ dependencies:
   permission_handler: ^11.3.1
   shimmer: ^3.0.0
   device_info_plus: ^12.4.0
+  local_auth: ^3.0.2
 
 dev_dependencies:
   flutter_test:

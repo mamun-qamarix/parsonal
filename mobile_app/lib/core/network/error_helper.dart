@@ -16,8 +16,9 @@ const Map<String, String> _knownBackendErrors = {
   'Admin login required': 'অ্যাডমিন লগইন করা লাগবে।',
   'Invalid admin password': 'অ্যাডমিন পাসওয়ার্ড সঠিক নয়।',
   'Reset session not found or expired': 'রিসেট কোডটি খুঁজে পাওয়া যায়নি বা মেয়াদ শেষ হয়ে গেছে।',
-  'Both spouses must pass face verification first': 'নতুন পাসওয়ার্ড সেট করার আগে দুজনকেই মুখ দিয়ে যাচাই করতে হবে।',
+  'An already-logged-in device must approve this reset first': 'নতুন পাসওয়ার্ড সেট করার আগে অন্য কোনো লগইন করা ডিভাইস থেকে এই রিসেট অনুমোদন করাতে হবে।',
   'Target spouse not found': 'যার পাসওয়ার্ড পরিবর্তন করতে চাইছেন তাকে খুঁজে পাওয়া যায়নি।',
+  'Too many attempts. Please wait a few minutes and try again.': 'অনেকবার চেষ্টা করা হয়েছে — কিছুক্ষণ অপেক্ষা করে আবার চেষ্টা করুন।',
 };
 
 /// Turns any error thrown from an API call into a specific, user-facing

@@ -4,11 +4,14 @@ import android.content.ComponentName
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.WindowManager
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
-class MainActivity : FlutterActivity() {
+// FlutterFragmentActivity (not plain FlutterActivity) -- the local_auth
+// plugin's biometric prompt needs a FragmentActivity host. See
+// DECISIONS.md #27.
+class MainActivity : FlutterFragmentActivity() {
     private val channelName = "couple_vault/icon_disguise"
 
     override fun onCreate(savedInstanceState: Bundle?) {
