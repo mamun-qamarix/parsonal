@@ -88,6 +88,22 @@ class SocialService {
     return comments;
   }
 
+  Future<CommentModel> updateComment(
+    Uint8List vmk,
+    String commentId,
+    String text,
+  ) async {
+    final enc = await VaultCrypto.encryptText(vmk, text);
+    final res = await _dio.put('/comments/$commentId', data: {'enc_payload': enc});
+    final comment = CommentModel.fromJson(res.data);
+    comment.decryptedText = text;
+    return comment;
+  }
+
+  Future<void> deleteComment(String commentId) async {
+    await _dio.delete('/comments/$commentId');
+  }
+
   Future<bool> toggleFavoriteGeneric(String targetType, String targetId) async {
     final res = await _dio.post(
       '/favorites/toggle',

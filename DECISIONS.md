@@ -797,6 +797,72 @@ via `ItemScrollController.scrollTo(index:)`.
 release APK built successfully with `video_trimmer`'s native trim plugin,
 the Iconsax font, and Kohinoor all packaged in.
 
+## 32. Video thumbnail self-heal, edit/delete everywhere, --split-per-abi builds
+
+**Video thumbnails still weren't showing.** #31's fix only generates a
+thumbnail at *upload* time -- every video already in the vault from
+before that change (or any where on-device generation had silently
+thrown, since there's no way to see a phone's logs from here) still had
+no thumbnail and rendered as an identical blank box, exactly what the
+user was still seeing. Rather than a one-off migration script,
+`DecryptedThumbnail` now self-heals: given a video asset with no
+thumbnail, it downloads the video once, generates a thumbnail on-device,
+uploads it via a new `PUT /media/{asset_id}/thumbnail` endpoint (so
+every later view of that asset is instant, server-side thumbnail and
+all), and displays it immediately -- no visible difference to the user
+beyond "it just works now," self-healing the first time anyone actually
+looks at each old video. `vault_entry_card.dart` also stopped skipping
+`DecryptedThumbnail` entirely for thumbnail-less videos (it used to fall
+straight to a flat placeholder box without even trying).
+
+**Edit + delete, everywhere content gets added:** audited every place
+the app lets a spouse add something and checked whether removing/
+changing it afterward actually worked:
+- **Vault entries** already had this (consent-based edit/delete,
+  requiring the other spouse's approval, per the original spec) -- no
+  change needed.
+- **Wishlist items** already had a working `PATCH` endpoint for editing
+  server-side; it was just never called from the UI, which only exposed
+  delete. Added an edit button reusing the existing add-item dialog in
+  edit mode.
+- **Phrases ("favorite lines")** had a working `DELETE` endpoint that
+  was, again, never wired to any UI control. Added an edit endpoint
+  (author-only, matches the existing delete's author check) and wired
+  both into the phrase card via a menu. Editing a phrase's text clears
+  its existing ratings -- they were given for the old wording and would
+  misleadingly carry over otherwise.
+- **Comments** had neither edit nor delete anywhere, client or server.
+  Added both (author-only), including cleaning up any heart reactions on
+  a deleted comment, which have no DB-level cascade (reactions are
+  polymorphic -- `target_type`/`target_id`, not a real foreign key).
+
+All of the above follow the same **immediate, author/owner-only**
+pattern already established by wishlist's delete -- no consent/approval
+step, unlike vault entries, since these are lower-stakes than vault
+content, which already has its own (unchanged) consent flow. Category
+edit/delete was left out of this pass (organizational metadata, not
+"content" in the sense the request was about) -- worth a follow-up if
+actually wanted.
+
+**APK size: always build `--split-per-abi` from now on.** The user asked
+why the APK had crossed 100MB; breaking down the archive by file size
+showed ~88% of it was native `.so` libraries -- and specifically, the
+*same* libraries (Flutter's own engine, the compiled Dart app code,
+Google ML Kit's face-detection and barcode-scanning native libraries)
+duplicated three times over, once per CPU architecture (`arm64-v8a`,
+`armeabi-v7a`, `x86_64`), because a plain `flutter build apk --release`
+bundles all of them into one "fat" universal APK. Since this app is
+sideloaded (never distributed through the Play Store, which would
+otherwise handle per-device delivery automatically via an .aab), that
+tripling is pure waste for literally every real installer -- any actual
+phone only ever uses one architecture (`arm64-v8a` for anything from the
+last several years). Switched to `flutter build apk --release
+--split-per-abi`, which produces three separate APKs instead of one; the
+`arm64-v8a` one dropped from ~105MB to ~40MB. This is now the **standing
+build method** for every future release of this app (saved to memory,
+not just this file) -- README.md's build section and every future
+release/USER_GUIDE.md link should use the `arm64-v8a` split artifact.
+
 ## 19. Add Device (peer-to-peer pairing)
 
 **Problem:** each role (`husband`/`wife`) can only be claimed once, ever

@@ -10,7 +10,7 @@ from app.models.social import Reaction, Comment, Favorite, MatchCelebrationSeen
 from app.models.user import Spouse, Device, RoleEnum
 from app.models.audit import AuditLogEntry
 from app.schemas.common import b64_to_bytes, bytes_to_b64, ReactionBreakdown
-from app.schemas.social import ReactionCreate, CommentCreate, CommentOut, FavoriteToggle
+from app.schemas.social import ReactionCreate, CommentCreate, CommentEdit, CommentOut, FavoriteToggle
 from app.services.notifications import notify_spouse
 
 router = APIRouter(tags=["social"])
@@ -181,6 +181,48 @@ async def list_comments(target_type: str, target_id: uuid.UUID, spouse: Spouse =
             heart_count=len(hearts), hearted_by_me=any(h.spouse_id == spouse.id for h in hearts),
         ))
     return out
+
+
+@router.put("/comments/{comment_id}", response_model=CommentOut)
+async def edit_comment(comment_id: uuid.UUID, payload: CommentEdit, spouse: Spouse = Depends(get_current_spouse), db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Comment).where(Comment.id == comment_id))
+    comment = result.scalar_one_or_none()
+    if comment is None:
+        raise HTTPException(status_code=404, detail="Not found")
+    if comment.author_id != spouse.id:
+        raise HTTPException(status_code=403, detail="Only the author can edit this comment")
+    comment.enc_payload = b64_to_bytes(payload.enc_payload)
+    await db.commit()
+    await db.refresh(comment)
+
+    heart_result = await db.execute(
+        select(Reaction).where(Reaction.target_type == "comment", Reaction.target_id == comment.id, Reaction.emoji.in_(["❤️", "❤"]))
+    )
+    hearts = heart_result.scalars().all()
+    return CommentOut(
+        id=comment.id, target_type=comment.target_type, target_id=comment.target_id, author_id=comment.author_id,
+        author_role=_role_of(spouse), enc_payload=bytes_to_b64(comment.enc_payload), created_at=comment.created_at,
+        heart_count=len(hearts), hearted_by_me=any(h.spouse_id == spouse.id for h in hearts),
+    )
+
+
+@router.delete("/comments/{comment_id}")
+async def delete_comment(comment_id: uuid.UUID, spouse: Spouse = Depends(get_current_spouse), db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Comment).where(Comment.id == comment_id))
+    comment = result.scalar_one_or_none()
+    if comment is None:
+        raise HTTPException(status_code=404, detail="Not found")
+    if comment.author_id != spouse.id:
+        raise HTTPException(status_code=403, detail="Only the author can delete this comment")
+    # Reactions (hearts) on this comment have no DB-level cascade -- they're
+    # polymorphic (target_type/target_id, not a real FK) -- so clean them
+    # up explicitly rather than leaving orphan rows behind.
+    hearts_result = await db.execute(select(Reaction).where(Reaction.target_type == "comment", Reaction.target_id == comment_id))
+    for r in hearts_result.scalars().all():
+        await db.delete(r)
+    await db.delete(comment)
+    await db.commit()
+    return {"ok": True}
 
 
 # ---------- Favorites (generic, e.g. for phrases; vault entries use /vault/entries/{id}/favorite) ----------

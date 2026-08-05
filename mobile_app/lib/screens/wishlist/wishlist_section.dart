@@ -85,6 +85,30 @@ class _WishlistSectionState extends State<WishlistSection> {
     _load();
   }
 
+  Future<void> _edit(WishlistItemModel item) async {
+    final result = await showDialog<_NewWishlistItem>(
+      context: context,
+      builder: (_) => _AddWishlistItemDialog(
+        categories: _categories,
+        initialText: item.decryptedText ?? '',
+        initialCategoryId: item.categoryId,
+      ),
+    );
+    if (result == null || result.text.isEmpty) return;
+    final vmk = context.read<SessionProvider>().vmk!;
+    var categoryId = result.categoryId;
+    if (result.newCategoryName != null) {
+      final cat = await VaultService().createCategory(
+        vmk,
+        'wishlist',
+        result.newCategoryName!,
+      );
+      categoryId = cat.id;
+    }
+    await _service.update(vmk, item.id, result.text, categoryId: categoryId);
+    _load();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -128,12 +152,21 @@ class _WishlistSectionState extends State<WishlistSection> {
                     ? Text(categoryName, style: const TextStyle(fontSize: 12))
                     : null,
                 trailing: _isMine
-                    ? IconButton(
-                        icon: const Icon(Iconsax.trash, size: 20),
-                        onPressed: () async {
-                          await _service.delete(item.id);
-                          _load();
-                        },
+                    ? Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          IconButton(
+                            icon: const Icon(Iconsax.edit_2, size: 20),
+                            onPressed: () => _edit(item),
+                          ),
+                          IconButton(
+                            icon: const Icon(Iconsax.trash, size: 20),
+                            onPressed: () async {
+                              await _service.delete(item.id);
+                              _load();
+                            },
+                          ),
+                        ],
                       )
                     : null,
               ),
@@ -153,22 +186,30 @@ class _NewWishlistItem {
 
 class _AddWishlistItemDialog extends StatefulWidget {
   final List<Category> categories;
-  const _AddWishlistItemDialog({required this.categories});
+  final String? initialText;
+  final String? initialCategoryId;
+  const _AddWishlistItemDialog({
+    required this.categories,
+    this.initialText,
+    this.initialCategoryId,
+  });
+
+  bool get isEdit => initialText != null;
 
   @override
   State<_AddWishlistItemDialog> createState() => _AddWishlistItemDialogState();
 }
 
 class _AddWishlistItemDialogState extends State<_AddWishlistItemDialog> {
-  final _textController = TextEditingController();
+  late final _textController = TextEditingController(text: widget.initialText ?? '');
   final _newCategoryController = TextEditingController();
-  String? _categoryId;
+  late String? _categoryId = widget.initialCategoryId;
   bool _creatingCategory = false;
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('উইশলিস্টে যোগ করুন'),
+      title: Text(widget.isEdit ? 'উইশলিস্ট আইটেম এডিট করুন' : 'উইশলিস্টে যোগ করুন'),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -249,7 +290,7 @@ class _AddWishlistItemDialogState extends State<_AddWishlistItemDialog> {
               ),
             );
           },
-          child: const Text('যোগ করুন'),
+          child: Text(widget.isEdit ? 'সংরক্ষণ করুন' : 'যোগ করুন'),
         ),
       ],
     );

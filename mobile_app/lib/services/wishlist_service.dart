@@ -47,6 +47,22 @@ class WishlistService {
     await _dio.patch('/wishlist/$id', data: {'is_fulfilled': fulfilled});
   }
 
+  Future<WishlistItemModel> update(
+    Uint8List vmk,
+    String id,
+    String text, {
+    String? categoryId,
+  }) async {
+    final enc = await VaultCrypto.encryptText(vmk, text);
+    final res = await _dio.patch(
+      '/wishlist/$id',
+      data: {'enc_payload': enc, if (categoryId != null) 'category_id': categoryId},
+    );
+    final item = WishlistItemModel.fromJson(res.data);
+    item.decryptedText = text;
+    return item;
+  }
+
   Future<void> delete(String id) async {
     await _dio.delete('/wishlist/$id');
   }

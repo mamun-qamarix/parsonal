@@ -680,6 +680,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                           child: DecryptedThumbnail(
                                             assetId: msg.mediaAssetId!,
                                             hasThumbnail: msg.mediaHasThumbnail,
+                                            isVideo: true,
                                             fit: BoxFit.cover,
                                           ),
                                         ),

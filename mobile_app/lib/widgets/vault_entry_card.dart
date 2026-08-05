@@ -108,15 +108,11 @@ class _VaultEntryCardState extends State<VaultEntryCard> {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    if (entry.contentType == 'photo' || asset.hasThumbnail)
-                      DecryptedThumbnail(
-                        assetId: asset.id,
-                        hasThumbnail: asset.hasThumbnail,
-                      )
-                    else
-                      Container(
-                        color: AppColors.halalGreen.withValues(alpha: 0.08),
-                      ),
+                    DecryptedThumbnail(
+                      assetId: asset.id,
+                      hasThumbnail: asset.hasThumbnail,
+                      isVideo: entry.contentType == 'video',
+                    ),
                     if (entry.contentType == 'video')
                       Container(
                         color: Colors.black26,

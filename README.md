@@ -126,13 +126,24 @@ expires after 24 hours.
 ```bash
 cd mobile_app
 flutter pub get
-flutter build apk --release
+flutter build apk --release --split-per-abi
 ```
 
-Install the resulting APK (`build/app/outputs/flutter-apk/app-release.apk`)
-on each spouse's phone (`adb install ...`, or transfer and sideload
-directly — you'll need to allow "install from unknown sources" since this
-is not distributed via any app store).
+**Always build with `--split-per-abi`.** Without it, `flutter build apk`
+bundles native code for every CPU architecture into one "fat" APK --
+~3x larger than any single phone needs (the app crossed 100MB this way).
+`--split-per-abi` produces three separate, much smaller APKs instead:
+
+```
+build/app/outputs/flutter-apk/app-arm64-v8a-release.apk    <- virtually every phone since ~2019
+build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk  <- old 32-bit phones only
+build/app/outputs/flutter-apk/app-x86_64-release.apk       <- emulators only, never a real phone
+```
+
+Distribute **`app-arm64-v8a-release.apk`** — install it on each spouse's
+phone (`adb install ...`, or transfer and sideload directly — you'll need
+to allow "install from unknown sources" since this is not distributed via
+any app store).
 
 On first launch, each spouse scans (or manually enters) the setup code from
 the admin panel, picks their role, sets a password, and registers their

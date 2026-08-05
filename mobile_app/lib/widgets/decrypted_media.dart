@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -7,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:video_player/video_player.dart';
 
+import '../core/media/video_thumbnail_helper.dart';
 import '../core/theme/app_theme.dart';
 import '../providers/session_provider.dart';
 import '../services/media_service.dart';
@@ -30,16 +32,53 @@ class _DecryptedMediaCache {
 /// Downloads + decrypts a media asset thumbnail (or full image if no
 /// thumbnail exists) and displays it. Results are cached in-memory for the
 /// life of the app session.
-class DecryptedThumbnail extends StatelessWidget {
+///
+/// For a video with [isVideo] set and no thumbnail yet -- an entry from
+/// before client-side thumbnail generation existed, or one where
+/// generation silently failed on upload -- this self-heals the first time
+/// it's displayed: downloads the video once, generates a thumbnail
+/// locally, uploads it (so every future view is instant server-side too),
+/// and shows it immediately. Previously such videos showed as an
+/// identical blank placeholder with no way to tell them apart. See
+/// DECISIONS.md.
+class DecryptedThumbnail extends StatefulWidget {
   final String assetId;
   final bool hasThumbnail;
+  final bool isVideo;
   final BoxFit fit;
   const DecryptedThumbnail({
     super.key,
     required this.assetId,
     required this.hasThumbnail,
+    this.isVideo = false,
     this.fit = BoxFit.cover,
   });
+
+  @override
+  State<DecryptedThumbnail> createState() => _DecryptedThumbnailState();
+}
+
+class _DecryptedThumbnailState extends State<DecryptedThumbnail> {
+  Future<Uint8List> _load(Uint8List vmk, MediaService service) async {
+    if (widget.hasThumbnail) {
+      return service.downloadThumbnail(vmk, widget.assetId);
+    }
+    if (!widget.isVideo) {
+      // A photo without a pre-generated thumbnail: just show the original.
+      return service.downloadRaw(vmk, widget.assetId);
+    }
+    final videoBytes = await service.downloadRaw(vmk, widget.assetId);
+    final dir = await getTemporaryDirectory();
+    final tempFile = File('${dir.path}/thumb_src_${widget.assetId}.mp4');
+    await tempFile.writeAsBytes(videoBytes, flush: true);
+    final thumb = await generateVideoThumbnail(tempFile.path);
+    await tempFile.delete().catchError((_) => tempFile);
+    if (thumb == null) throw Exception('thumbnail generation failed');
+    // Best-effort -- if this upload fails, the same backfill just runs
+    // again next time this asset is displayed.
+    unawaited(service.attachThumbnail(vmk, widget.assetId, thumb).catchError((_) {}));
+    return thumb;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -47,10 +86,8 @@ class DecryptedThumbnail extends StatelessWidget {
     final service = MediaService();
     return FutureBuilder<Uint8List>(
       future: _DecryptedMediaCache.get(
-        'thumb:$assetId',
-        () => hasThumbnail
-            ? service.downloadThumbnail(vmk, assetId)
-            : service.downloadRaw(vmk, assetId),
+        'thumb:${widget.assetId}',
+        () => _load(vmk, service),
       ),
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
@@ -64,10 +101,10 @@ class DecryptedThumbnail extends StatelessWidget {
         if (snapshot.hasError || !snapshot.hasData) {
           return Container(
             color: Colors.grey.withValues(alpha: 0.15),
-            child: const Icon(Iconsax.gallery_slash),
+            child: Icon(widget.isVideo ? Iconsax.video : Iconsax.gallery_slash),
           );
         }
-        return Image.memory(snapshot.data!, fit: fit);
+        return Image.memory(snapshot.data!, fit: widget.fit);
       },
     );
   }

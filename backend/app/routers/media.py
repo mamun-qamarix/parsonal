@@ -59,6 +59,33 @@ async def upload_media(
     return MediaAssetOut(id=asset.id, kind=asset.kind.value, size_bytes=asset.size_bytes, has_thumbnail=thumb_key is not None)
 
 
+@router.put("/{asset_id}/thumbnail", response_model=MediaAssetOut)
+async def attach_thumbnail(
+    asset_id: str,
+    thumbnail: UploadFile = File(...),
+    spouse: Spouse = Depends(get_current_spouse),
+    db: AsyncSession = Depends(get_db),
+):
+    """Backfills a thumbnail onto an already-uploaded video asset that
+    doesn't have one yet -- either an entry from before client-side
+    thumbnail generation existed, or one where generation silently failed
+    on-device the first time. Called lazily by the client whenever it's
+    about to display such a video, so old entries self-heal the first
+    time anyone actually looks at them instead of needing a one-off
+    migration. See DECISIONS.md."""
+    result = await db.execute(select(MediaAsset).where(MediaAsset.id == asset_id))
+    asset = result.scalar_one_or_none()
+    if asset is None:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    thumb_size = _upload_size(thumbnail)
+    thumb_key = await storage.put_object(thumbnail.file, length=thumb_size, content_type="application/octet-stream")
+    asset.thumbnail_object_key = thumb_key
+    await db.commit()
+    await db.refresh(asset)
+    return MediaAssetOut(id=asset.id, kind=asset.kind.value, size_bytes=asset.size_bytes, has_thumbnail=True)
+
+
 async def _stream_object(object_key: str):
     try:
         data = await storage.get_object(object_key)

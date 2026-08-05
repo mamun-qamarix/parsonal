@@ -55,6 +55,54 @@ class _CommentSectionState extends State<CommentSection> {
     _load();
   }
 
+  Future<void> _edit(CommentModel c) async {
+    final controller = TextEditingController(text: c.decryptedText ?? '');
+    final text = await showDialog<String>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('মন্তব্য এডিট করুন'),
+        content: TextField(controller: controller, autofocus: true, maxLines: 3),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('বাতিল'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('সংরক্ষণ'),
+          ),
+        ],
+      ),
+    );
+    if (text == null || text.isEmpty || !mounted) return;
+    final vmk = context.read<SessionProvider>().vmk!;
+    await _service.updateComment(vmk, c.id, text);
+    _load();
+  }
+
+  Future<void> _delete(CommentModel c) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('মন্তব্যটা মুছে ফেলবেন?'),
+        content: const Text('এটা আর ফেরত আনা যাবে না।'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('বাতিল'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('মুছে ফেলুন'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    await _service.deleteComment(c.id);
+    _load();
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading)
@@ -63,6 +111,7 @@ class _CommentSectionState extends State<CommentSection> {
         child: LinearProgressIndicator(),
       );
     final myRole = context.watch<SessionProvider>().role;
+    final myId = context.watch<SessionProvider>().spouseId;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -106,6 +155,19 @@ class _CommentSectionState extends State<CommentSection> {
                   color: c.heartedByMe ? Colors.red : Colors.grey,
                 ),
                 Text('${c.heartCount}', style: const TextStyle(fontSize: 11)),
+                if (c.authorId == myId)
+                  PopupMenuButton<String>(
+                    padding: EdgeInsets.zero,
+                    icon: const Icon(Iconsax.more, size: 16),
+                    onSelected: (v) {
+                      if (v == 'edit') _edit(c);
+                      if (v == 'delete') _delete(c);
+                    },
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(value: 'edit', child: Text('এডিট করুন')),
+                      PopupMenuItem(value: 'delete', child: Text('মুছে ফেলুন')),
+                    ],
+                  ),
               ],
             ),
           ),

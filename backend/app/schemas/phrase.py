@@ -14,6 +14,10 @@ class PhraseRate(BaseModel):
     rating: int  # 1-5
 
 
+class PhraseEdit(BaseModel):
+    enc_payload: str
+
+
 class PhraseOut(ORMBase):
     id: uuid.UUID
     direction: str

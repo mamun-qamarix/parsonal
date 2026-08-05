@@ -51,6 +51,14 @@ class PhraseService {
     await _dio.post('/phrases/$id/rate', data: {'rating': rating});
   }
 
+  Future<PhraseModel> update(Uint8List vmk, String id, String text) async {
+    final enc = await VaultCrypto.encryptText(vmk, text);
+    final res = await _dio.put('/phrases/$id', data: {'enc_payload': enc});
+    final phrase = PhraseModel.fromJson(res.data);
+    phrase.decryptedText = text;
+    return phrase;
+  }
+
   Future<void> delete(String id) async {
     await _dio.delete('/phrases/$id');
   }

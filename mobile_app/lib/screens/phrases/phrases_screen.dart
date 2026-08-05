@@ -150,9 +150,58 @@ class _PhraseListState extends State<_PhraseList> {
     _load();
   }
 
+  Future<void> _edit(PhraseModel p) async {
+    final controller = TextEditingController(text: p.decryptedText ?? '');
+    final text = await showDialog<String>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('লাইনটা এডিট করুন'),
+        content: TextField(controller: controller, autofocus: true, maxLines: 3),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('বাতিল'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('সংরক্ষণ'),
+          ),
+        ],
+      ),
+    );
+    if (text == null || text.isEmpty || !mounted) return;
+    final vmk = context.read<SessionProvider>().vmk!;
+    await _service.update(vmk, p.id, text);
+    _load();
+  }
+
+  Future<void> _delete(PhraseModel p) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('লাইনটা মুছে ফেলবেন?'),
+        content: const Text('এটা আর ফেরত আনা যাবে না।'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('বাতিল'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('মুছে ফেলুন'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    await _service.delete(p.id);
+    _load();
+  }
+
   @override
   Widget build(BuildContext context) {
     final myRole = context.watch<SessionProvider>().role;
+    final myId = context.watch<SessionProvider>().spouseId;
     if (_loading) return const ShimmerTileList();
     if (_phrases.isEmpty) return const Center(child: Text('এখনো কিছু নেই'));
     return RefreshIndicator(
@@ -169,9 +218,29 @@ class _PhraseListState extends State<_PhraseList> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    p.decryptedText ?? '',
-                    style: const TextStyle(fontSize: 15),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: Text(
+                          p.decryptedText ?? '',
+                          style: const TextStyle(fontSize: 15),
+                        ),
+                      ),
+                      if (p.authorId == myId)
+                        PopupMenuButton<String>(
+                          padding: EdgeInsets.zero,
+                          icon: const Icon(Iconsax.more, size: 18),
+                          onSelected: (v) {
+                            if (v == 'edit') _edit(p);
+                            if (v == 'delete') _delete(p);
+                          },
+                          itemBuilder: (_) => const [
+                            PopupMenuItem(value: 'edit', child: Text('এডিট করুন')),
+                            PopupMenuItem(value: 'delete', child: Text('মুছে ফেলুন')),
+                          ],
+                        ),
+                    ],
                   ),
                   const SizedBox(height: 8),
                   Row(

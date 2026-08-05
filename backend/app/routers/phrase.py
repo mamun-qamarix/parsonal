@@ -9,7 +9,7 @@ from app.deps import get_current_spouse, other_role
 from app.models.phrase import Phrase, DirectionEnum
 from app.models.user import Spouse, Device, RoleEnum
 from app.schemas.common import b64_to_bytes, bytes_to_b64
-from app.schemas.phrase import PhraseCreate, PhraseRate, PhraseOut
+from app.schemas.phrase import PhraseCreate, PhraseRate, PhraseEdit, PhraseOut
 from app.services.notifications import notify_spouse
 
 router = APIRouter(prefix="/phrases", tags=["phrases"])
@@ -61,6 +61,24 @@ async def list_phrases(direction: str | None = None, sort_by_rating: bool = Fals
     else:
         phrases = sorted(phrases, key=lambda p: p.created_at, reverse=True)
     return [_out(p) for p in phrases]
+
+
+@router.put("/{phrase_id}", response_model=PhraseOut)
+async def edit_phrase(phrase_id: uuid.UUID, payload: PhraseEdit, spouse: Spouse = Depends(get_current_spouse), db: AsyncSession = Depends(get_db)):
+    result = await db.execute(select(Phrase).where(Phrase.id == phrase_id))
+    phrase = result.scalar_one_or_none()
+    if phrase is None:
+        raise HTTPException(status_code=404, detail="Not found")
+    if phrase.author_id != spouse.id:
+        raise HTTPException(status_code=403, detail="Only the author can edit this phrase")
+    phrase.enc_payload = b64_to_bytes(payload.enc_payload)
+    # The old ratings were given for the old text -- keeping them would
+    # misleadingly attribute a rating to wording that no longer exists.
+    phrase.rating_husband = None
+    phrase.rating_wife = None
+    await db.commit()
+    await db.refresh(phrase)
+    return _out(phrase)
 
 
 @router.post("/{phrase_id}/rate", response_model=PhraseOut)

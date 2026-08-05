@@ -48,6 +48,20 @@ class MediaService {
     return MediaAsset.fromJson(res.data);
   }
 
+  /// Backfills a thumbnail onto an already-uploaded video asset that
+  /// doesn't have one yet. See DECISIONS.md.
+  Future<void> attachThumbnail(
+    Uint8List vmk,
+    String assetId,
+    Uint8List thumbnailBytes,
+  ) async {
+    final encThumb = await VaultCrypto.encryptBytes(vmk, thumbnailBytes);
+    final form = FormData.fromMap({
+      'thumbnail': MultipartFile.fromBytes(encThumb, filename: 'thumb.enc'),
+    });
+    await _dio.put('/media/$assetId/thumbnail', data: form);
+  }
+
   Future<Uint8List> downloadRaw(Uint8List vmk, String assetId) async {
     final res = await _dio.get<List<int>>(
       '/media/$assetId/raw',

@@ -17,6 +17,10 @@ class CommentCreate(EncPayloadIn):
     target_id: uuid.UUID
 
 
+class CommentEdit(BaseModel):
+    enc_payload: str
+
+
 class CommentOut(ORMBase):
     id: uuid.UUID
     target_type: str
