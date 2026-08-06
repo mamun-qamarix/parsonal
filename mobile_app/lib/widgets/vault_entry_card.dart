@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -26,11 +28,16 @@ class VaultEntryCard extends StatefulWidget {
   /// Called after an edit/delete/favorite change so the parent list can
   /// refresh itself without waiting for a full navigation round-trip.
   final VoidCallback? onChanged;
+  /// Home screen's privacy toggle (see DECISIONS.md) -- blurs media and
+  /// masks caption text with dots when on. Purely visual on this device;
+  /// doesn't touch the actual decrypted bytes/text underneath.
+  final bool privacyMask;
   const VaultEntryCard({
     super.key,
     required this.entry,
     required this.onTap,
     this.onChanged,
+    this.privacyMask = false,
   });
 
   @override
@@ -208,14 +215,19 @@ class _VaultEntryCardState extends State<VaultEntryCard> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(
-                caption,
-                maxLines: _captionExpanded ? null : 3,
-                overflow: _captionExpanded
-                    ? TextOverflow.visible
-                    : TextOverflow.ellipsis,
-              ),
-              if (captionIsLong)
+              widget.privacyMask
+                  ? const Text(
+                      '● ● ● ●',
+                      style: TextStyle(letterSpacing: 2),
+                    )
+                  : Text(
+                      caption,
+                      maxLines: _captionExpanded ? null : 3,
+                      overflow: _captionExpanded
+                          ? TextOverflow.visible
+                          : TextOverflow.ellipsis,
+                    ),
+              if (captionIsLong && !widget.privacyMask)
                 GestureDetector(
                   onTap: () =>
                       setState(() => _captionExpanded = !_captionExpanded),
@@ -284,34 +296,55 @@ class _VaultEntryCardState extends State<VaultEntryCard> {
           ),
           if (asset != null)
             GestureDetector(
-              onTap: () => Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => MediaViewerScreen(
-                    assetId: asset.id,
-                    contentType: entry.contentType,
-                  ),
-                ),
-              ),
+              // Blurred means "don't actually let anyone tap through to
+              // full-screen it either" -- the point is nothing readable
+              // shows up on this screen at all right now.
+              onTap: widget.privacyMask
+                  ? null
+                  : () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => MediaViewerScreen(
+                          assetId: asset.id,
+                          contentType: entry.contentType,
+                        ),
+                      ),
+                    ),
               child: AspectRatio(
                 aspectRatio: _aspectRatio,
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    DecryptedThumbnail(
-                      assetId: asset.id,
-                      hasThumbnail: asset.hasThumbnail,
-                      isVideo: entry.contentType == 'video',
-                      onAspectRatio: (r) => setState(
-                        () => _aspectRatio = r < 0.5 ? 0.5 : r,
+                    ImageFiltered(
+                      imageFilter: widget.privacyMask
+                          ? ui.ImageFilter.blur(sigmaX: 22, sigmaY: 22)
+                          : ui.ImageFilter.blur(sigmaX: 0, sigmaY: 0),
+                      child: DecryptedThumbnail(
+                        assetId: asset.id,
+                        hasThumbnail: asset.hasThumbnail,
+                        isVideo: entry.contentType == 'video',
+                        onAspectRatio: (r) => setState(
+                          () => _aspectRatio = r < 0.5 ? 0.5 : r,
+                        ),
                       ),
                     ),
-                    if (entry.contentType == 'video')
+                    if (entry.contentType == 'video' && !widget.privacyMask)
                       Container(
                         color: Colors.black26,
                         child: const Center(
                           child: Icon(
                             Iconsax.play_circle_copy,
                             size: 56,
+                            color: Colors.white,
+                          ),
+                        ),
+                      ),
+                    if (widget.privacyMask)
+                      Container(
+                        color: Colors.black38,
+                        child: const Center(
+                          child: Icon(
+                            Iconsax.eye_slash,
+                            size: 32,
                             color: Colors.white,
                           ),
                         ),

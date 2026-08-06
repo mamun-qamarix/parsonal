@@ -1205,6 +1205,32 @@ part of the layout wasn't the complaint.
 **Verified:** `flutter analyze` clean (same pre-existing info-level
 lints only), and a `--split-per-abi` release build succeeded.
 
+## 37. Explicit button colors, home privacy mask (blur images + mask text)
+
+**Dialog buttons ("সংরক্ষণ", "মুছে ফেলুন", etc.) were rendering grey.**
+`AppTheme._base()` never declared a `filledButtonTheme`/`textButtonTheme`,
+so every `FilledButton`/`TextButton` in the app (used throughout for
+dialog confirm/cancel actions) fell back to Flutter's own Material-3
+default color resolution instead of our `ColorScheme.primary` reliably.
+Now explicit: `filledButtonTheme` forces `backgroundColor: scheme.
+primary` (white text), `textButtonTheme` forces `foregroundColor:
+scheme.primary` -- no longer implicit/ambiguous.
+
+**Home screen privacy mask.** New eye-icon toggle in the home app bar
+(next to ফেভারিট) -- same idea as chat's existing privacy-mask toggle,
+but for the whole feed: turning it on blurs every image/video thumbnail
+(`ImageFiltered` + `ImageFilter.blur`, tap-to-fullscreen disabled while
+blurred so there's no way to see it clearly) and replaces every text
+caption with `'● ● ● ●'`. Unlike chat's mask (session-only, resets on
+restart, per #39), this one is persisted locally via `SharedPreferences`
+(`home_privacy_mask_enabled`) -- explicitly requested to survive app
+restarts, since the whole point is being able to leave it on. Purely a
+per-device rendering toggle, same as chat's -- never touches the actual
+decrypted bytes/text or syncs to the other spouse.
+
+**Verified:** `flutter analyze` clean (same pre-existing info-level
+lints only), and a `--split-per-abi` release build succeeded.
+
 ## 19. Add Device (peer-to-peer pairing)
 
 **Problem:** each role (`husband`/`wife`) can only be claimed once, ever

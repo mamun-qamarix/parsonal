@@ -89,6 +89,19 @@ class AppTheme {
           textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
         ),
       ),
+      // Explicit, rather than relying on Material 3's own default color
+      // resolution for these -- dialog "সংরক্ষণ"/"মুছে ফেলুন"/etc. buttons
+      // were showing up grey instead of the accent color. See DECISIONS.md.
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: scheme.primary,
+          foregroundColor: Colors.white,
+          disabledBackgroundColor: scheme.primary.withValues(alpha: 0.35),
+        ),
+      ),
+      textButtonTheme: TextButtonThemeData(
+        style: TextButton.styleFrom(foregroundColor: scheme.primary),
+      ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: isDark ? const Color(0xFF17211C) : Colors.white,
         indicatorColor: scheme.primary.withValues(alpha: 0.18),
