@@ -1489,6 +1489,35 @@ the broadcast payload.
 lints only), backend imports cleanly (80 routes), and a `--split-per-abi`
 release build succeeded (after fixing the XML comment issue above).
 
+## 43. Home filters single-select, privacy mask extended to categories/reactions/profile
+
+**Home type/role filters: single-select, not multi-select.** Every
+individual pill (টেক্সট/ছবি/ভিডিও, স্বামী/স্ত্রী) used to stay visually
+"selected" alongside "সব" whenever the underlying `Set` happened to
+contain everything -- functionally correct (showed everything) but
+read as cluttered, every pill lit up at once for no reason. `_typeFilter`
+and `_roleFilter` changed from `Set<String>` (`_toggleFilter`/
+`_selectAll` helpers) to a single nullable `String?`, mirroring the
+category filter's existing pattern (`null` = "সব", already implemented
+that way from #77) -- "সব" is the only one selected by default, tapping
+any specific pill replaces the filter with exactly that one value
+(exclusive, not additive).
+
+**Privacy mask extended to three more spots that still leaked content:**
+- **Category filter pill labels** -- these are user-created custom
+  category names (decrypted text), not fixed app labels like "সব"/
+  "টেক্সট", so they're masked to `'●●●'` when the global privacy mask
+  is on, same as everything else user-written.
+- **Reaction emoji** -- `ReactionList` now masks each emoji to a single
+  `'●'` when the global flag is on (previously showed real emoji
+  regardless -- content, even though small, still content).
+- **Profile name/bio** -- the passive *display* (not the edit form --
+  tapping "এডিট করুন" is an explicit request to see/change it) now shows
+  `'● ● ●'`/`'● ● ● ●'` instead of the real decrypted name/bio.
+
+**Verified:** `flutter analyze` clean (same pre-existing info-level
+lints only), and a `--split-per-abi` release build succeeded.
+
 ## 19. Add Device (peer-to-peer pairing)
 
 **Problem:** each role (`husband`/`wife`) can only be claimed once, ever

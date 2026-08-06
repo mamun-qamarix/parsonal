@@ -181,6 +181,11 @@ class _ProfileViewState extends State<_ProfileView> {
         ? AppColors.husband
         : AppColors.wife;
     final photoId = _profile?.profilePhotoAssetId;
+    // Name/bio are decrypted user text same as anything else -- masked
+    // the same way when the app-wide privacy toggle is on. Only the
+    // passive display, not the edit fields -- tapping "এডিট করুন" is an
+    // explicit "I want to see/change this" action. See DECISIONS.md.
+    final privacyMask = context.watch<SessionProvider>().privacyMask;
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
@@ -302,15 +307,20 @@ class _ProfileViewState extends State<_ProfileView> {
           Column(
             children: [
               Text(
-                _profile?.decryptedName?.isNotEmpty == true
-                    ? _profile!.decryptedName!
-                    : (widget.role == 'husband' ? 'স্বামী' : 'স্ত্রী'),
+                privacyMask
+                    ? '● ● ●'
+                    : (_profile?.decryptedName?.isNotEmpty == true
+                          ? _profile!.decryptedName!
+                          : (widget.role == 'husband' ? 'স্বামী' : 'স্ত্রী')),
                 style: Theme.of(context).textTheme.titleLarge,
                 textAlign: TextAlign.center,
               ),
               if (_profile?.decryptedBio?.isNotEmpty == true) ...[
                 const SizedBox(height: 6),
-                Text(_profile!.decryptedBio!, textAlign: TextAlign.center),
+                Text(
+                  privacyMask ? '● ● ● ●' : _profile!.decryptedBio!,
+                  textAlign: TextAlign.center,
+                ),
               ],
               TextButton.icon(
                   onPressed: () => setState(() => _editing = true),

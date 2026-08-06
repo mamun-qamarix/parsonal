@@ -31,9 +31,13 @@ class _HomeTabState extends State<HomeTab> {
   List<VaultEntry> _entries = [];
   List<Category> _categories = [];
   bool _loading = true;
-  final Set<String> _typeFilter = {'text', 'photo', 'video'};
-  final Set<String> _roleFilter = {'husband', 'wife'};
-  // null = "সব" (all categories) -- the default.
+  // null = "সব" -- the default for all three filter rows. Single-select,
+  // not multi-select: previously every individual pill stayed visually
+  // "selected" alongside "সব" itself, which read as cluttered/wrong.
+  // Tapping "সব" clears back to showing everything; tapping any specific
+  // pill filters to exactly that one. See DECISIONS.md.
+  String? _typeFilter;
+  String? _roleFilter;
   String? _categoryFilter;
 
   @override
@@ -55,24 +59,6 @@ class _HomeTabState extends State<HomeTab> {
       _entries = entries;
       _categories = results[1] as List<Category>;
       _loading = false;
-    });
-  }
-
-  void _toggleFilter(Set<String> group, String value) {
-    setState(() {
-      if (group.contains(value)) {
-        if (group.length > 1) group.remove(value); // always leave at least one on
-      } else {
-        group.add(value);
-      }
-    });
-  }
-
-  void _selectAll(Set<String> group, Set<String> everything) {
-    setState(() {
-      group
-        ..clear()
-        ..addAll(everything);
     });
   }
 
@@ -125,8 +111,8 @@ class _HomeTabState extends State<HomeTab> {
     final list = _entries
         .where(
           (e) =>
-              _typeFilter.contains(e.contentType) &&
-              _roleFilter.contains(e.authorRole) &&
+              (_typeFilter == null || e.contentType == _typeFilter) &&
+              (_roleFilter == null || e.authorRole == _roleFilter) &&
               (_categoryFilter == null || e.categoryId == _categoryFilter),
         )
         .toList();
@@ -206,32 +192,32 @@ class _HomeTabState extends State<HomeTab> {
                             label: 'সব',
                             icon: Iconsax.category,
                             color: Theme.of(context).colorScheme.primary,
-                            selected: _typeFilter.length == 3,
-                            onTap: () => _selectAll(_typeFilter, {'text', 'photo', 'video'}),
+                            selected: _typeFilter == null,
+                            onTap: () => setState(() => _typeFilter = null),
                           ),
                           const SizedBox(width: 8),
                           _FilterPill(
                             label: 'টেক্সট',
                             icon: Iconsax.document_text,
                             color: Theme.of(context).colorScheme.primary,
-                            selected: _typeFilter.contains('text'),
-                            onTap: () => _toggleFilter(_typeFilter, 'text'),
+                            selected: _typeFilter == 'text',
+                            onTap: () => setState(() => _typeFilter = 'text'),
                           ),
                           const SizedBox(width: 8),
                           _FilterPill(
                             label: 'ছবি',
                             icon: Iconsax.image,
                             color: Theme.of(context).colorScheme.primary,
-                            selected: _typeFilter.contains('photo'),
-                            onTap: () => _toggleFilter(_typeFilter, 'photo'),
+                            selected: _typeFilter == 'photo',
+                            onTap: () => setState(() => _typeFilter = 'photo'),
                           ),
                           const SizedBox(width: 8),
                           _FilterPill(
                             label: 'ভিডিও',
                             icon: Iconsax.video,
                             color: Theme.of(context).colorScheme.primary,
-                            selected: _typeFilter.contains('video'),
-                            onTap: () => _toggleFilter(_typeFilter, 'video'),
+                            selected: _typeFilter == 'video',
+                            onTap: () => setState(() => _typeFilter = 'video'),
                           ),
                           Container(
                             width: 1,
@@ -243,24 +229,24 @@ class _HomeTabState extends State<HomeTab> {
                             label: 'সব',
                             icon: Iconsax.category,
                             color: Theme.of(context).colorScheme.primary,
-                            selected: _roleFilter.length == 2,
-                            onTap: () => _selectAll(_roleFilter, {'husband', 'wife'}),
+                            selected: _roleFilter == null,
+                            onTap: () => setState(() => _roleFilter = null),
                           ),
                           const SizedBox(width: 8),
                           _FilterPill(
                             label: 'স্বামী',
                             icon: Iconsax.man,
                             color: AppColors.husband,
-                            selected: _roleFilter.contains('husband'),
-                            onTap: () => _toggleFilter(_roleFilter, 'husband'),
+                            selected: _roleFilter == 'husband',
+                            onTap: () => setState(() => _roleFilter = 'husband'),
                           ),
                           const SizedBox(width: 8),
                           _FilterPill(
                             label: 'স্ত্রী',
                             icon: Iconsax.woman,
                             color: AppColors.wife,
-                            selected: _roleFilter.contains('wife'),
-                            onTap: () => _toggleFilter(_roleFilter, 'wife'),
+                            selected: _roleFilter == 'wife',
+                            onTap: () => setState(() => _roleFilter = 'wife'),
                           ),
                         ],
                       ),
@@ -284,7 +270,9 @@ class _HomeTabState extends State<HomeTab> {
                             for (final c in _categories) ...[
                               const SizedBox(width: 8),
                               _FilterPill(
-                                label: c.decryptedName ?? '...',
+                                label: session.privacyMask
+                                    ? '●●●'
+                                    : (c.decryptedName ?? '...'),
                                 icon: Iconsax.tag,
                                 color: Theme.of(context).colorScheme.primary,
                                 selected: _categoryFilter == c.id,

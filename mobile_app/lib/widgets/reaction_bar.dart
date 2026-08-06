@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../models/models.dart';
+import '../providers/session_provider.dart';
 import '../services/social_service.dart';
 import 'author_badge.dart';
 import 'match_celebration_overlay.dart';
@@ -87,6 +89,10 @@ class ReactionListState extends State<ReactionList> {
   @override
   Widget build(BuildContext context) {
     if (_loading || _groups.isEmpty) return const SizedBox.shrink();
+    // Reaction emoji are content too -- masked the same as any other
+    // decrypted text/media when the app-wide privacy mask is on. See
+    // DECISIONS.md.
+    final masked = context.watch<SessionProvider>().privacyMask;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
@@ -102,7 +108,10 @@ class ReactionListState extends State<ReactionList> {
                   ...g.emojis.map(
                     (e) => GestureDetector(
                       onTap: g.isMe ? () => _removeMine(e) : null,
-                      child: Text(e, style: const TextStyle(fontSize: 18)),
+                      child: Text(
+                        masked ? '●' : e,
+                        style: const TextStyle(fontSize: 18),
+                      ),
                     ),
                   ),
                 ],
