@@ -511,6 +511,10 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Widget _seenTick(ChatMessageModel msg) {
+    // Always sits on top of "mine"'s primary-colored bubble -- must use
+    // onPrimary, not a hardcoded white, or it goes near-invisible in dark
+    // mode where primary is a deliberately pale color. See DECISIONS.md.
+    final onPrimary = Theme.of(context).colorScheme.onPrimary;
     IconData icon;
     Color color;
     if (msg.readAt != null) {
@@ -518,28 +522,29 @@ class _ChatScreenState extends State<ChatScreen> {
       color = Colors.lightBlueAccent;
     } else if (msg.deliveredAt != null) {
       icon = Iconsax.tick_circle_copy;
-      color = Colors.white70;
+      color = onPrimary.withValues(alpha: 0.7);
     } else {
       icon = Iconsax.tick_circle;
-      color = Colors.white70;
+      color = onPrimary.withValues(alpha: 0.7);
     }
     return Icon(icon, size: 14, color: color);
   }
 
   Widget _hiddenPlaceholder(bool mine) {
+    final onPrimary = Theme.of(context).colorScheme.onPrimary;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Icon(
           Iconsax.lock,
           size: 13,
-          color: mine ? Colors.white70 : Colors.grey,
+          color: mine ? onPrimary.withValues(alpha: 0.7) : Colors.grey,
         ),
         const SizedBox(width: 5),
         Text(
           '★ ★ ★ ★',
           style: TextStyle(
-            color: mine ? Colors.white : Colors.grey.shade700,
+            color: mine ? onPrimary : Colors.grey.shade700,
             letterSpacing: 2,
             fontSize: 13,
           ),
@@ -656,7 +661,9 @@ class _ChatScreenState extends State<ChatScreen> {
                                 Text(
                                   msg.decryptedText ?? '',
                                   style: TextStyle(
-                                    color: mine ? Colors.white : null,
+                                    color: mine
+                                        ? Theme.of(context).colorScheme.onPrimary
+                                        : null,
                                   ),
                                 )
                               else if (msg.contentType == 'photo' &&
@@ -723,14 +730,16 @@ class _ChatScreenState extends State<ChatScreen> {
                                 DecryptedVoicePlayer(
                                   assetId: msg.mediaAssetId!,
                                   color: mine
-                                      ? Colors.white
+                                      ? Theme.of(context).colorScheme.onPrimary
                                       : Theme.of(context).colorScheme.primary,
                                 )
                               else
                                 Text(
                                   '[${msg.contentType}]',
                                   style: TextStyle(
-                                    color: mine ? Colors.white : null,
+                                    color: mine
+                                        ? Theme.of(context).colorScheme.onPrimary
+                                        : null,
                                     fontStyle: FontStyle.italic,
                                   ),
                                 ),
@@ -745,7 +754,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                     style: TextStyle(
                                       fontSize: 10,
                                       color: mine && !isMedia
-                                          ? Colors.white70
+                                          ? Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.7)
                                           : Colors.grey,
                                     ),
                                   ),

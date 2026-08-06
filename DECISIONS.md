@@ -1274,6 +1274,54 @@ now", a personal-situation toggle, not a shared mood signal.
 **Verified:** `flutter analyze` clean (same pre-existing info-level
 lints only), and a `--split-per-abi` release build succeeded.
 
+## 39. Real root cause of "green looks white everywhere": hardcoded white foreground in dark mode
+
+#37/#38's button-color fixes weren't wrong, but they weren't the actual
+root cause either -- the user came back angry, correctly insisting the
+problem was systemic ("everywhere the brand color is used, the green
+looks whitish") and asked for it to be found properly rather than
+patched spot by spot again.
+
+**Root cause:** `AppColors.halalGreenDark` (`0xFF7ED9A8`) is a
+*deliberately* light pastel green -- it exists so accent text/icons
+stay legible against a near-black dark-mode background, the same role
+`AppColors.husband`'s blue or any other accent-on-dark color plays.
+It was never meant to be used as a solid *fill* color with light text
+on top. But `elevatedButtonTheme`, `filledButtonTheme`, and
+`floatingActionButtonTheme` all hardcoded `foregroundColor: Colors.
+white` -- fine in light mode (`scheme.primary` = the solid, darker
+`0xFF2F9E63`), but in dark mode `scheme.primary` becomes that pale
+mint, and **white text on a pale mint fill has almost no contrast** --
+the button doesn't look "muted green", it looks like a near-white
+blob with barely-legible white-on-white text. Chat's "mine" bubble had
+the identical bug independently hardcoded (`color: mine ? Colors.white
+: ...` for message text, timestamp, seen-tick, voice-player tint, and
+the hidden-placeholder lock/stars) against the same primary-colored
+background. This explains why the report was systemic and not
+localized to one screen: every filled button *and* every chat bubble
+you send shares the same broken pattern, and any phone with system
+dark mode on (increasingly the Android default) would see it
+everywhere at once.
+
+**Fix:** replaced every hardcoded `Colors.white`/`Colors.white70` used
+as foreground-on-primary with `scheme.onPrimary` (theme-level) /
+`Theme.of(context).colorScheme.onPrimary` (chat bubble, computed once
+per build) -- `onPrimary` is what Material 3 itself already computes as
+the correctly-contrasting color for whatever `primary` actually is, so
+it's white-on-dark-green in light mode and dark-on-pale-mint in dark
+mode automatically, no manual light/dark branching needed anywhere.
+
+**Also fixed while auditing:** `NavigationBarThemeData.iconTheme` was
+never set at all -- the bottom nav's *selected* tab icon was falling
+back to M3's own `onSecondaryContainer` default, completely unrelated
+to the app's green/blue branding. Now explicit: `scheme.primary` when
+selected, grey otherwise.
+
+**Verified:** `flutter analyze` clean (same pre-existing info-level
+lints only), and a `--split-per-abi` release build succeeded. Not yet
+independently verified on a real dark-mode device by the user -- next
+report should confirm whether this was the actual complete fix.
+
 ## 19. Add Device (peer-to-peer pairing)
 
 **Problem:** each role (`husband`/`wife`) can only be claimed once, ever

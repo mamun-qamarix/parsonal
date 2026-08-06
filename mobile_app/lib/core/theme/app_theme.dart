@@ -81,7 +81,13 @@ class AppTheme {
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: scheme.primary,
-          foregroundColor: Colors.white,
+          // scheme.onPrimary, NOT hardcoded white -- in dark mode
+          // scheme.primary is the deliberately pale AppColors.
+          // halalGreenDark; white text on that pale a fill has almost no
+          // contrast and reads as a washed-out, near-white blob. onPrimary
+          // is whatever M3 computed as the correctly-contrasting color
+          // for that primary, light or dark. See DECISIONS.md.
+          foregroundColor: scheme.onPrimary,
           padding: const EdgeInsets.symmetric(vertical: 16),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(14),
@@ -95,7 +101,7 @@ class AppTheme {
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           backgroundColor: scheme.primary,
-          foregroundColor: Colors.white,
+          foregroundColor: scheme.onPrimary, // see elevatedButtonTheme above
           disabledBackgroundColor: scheme.primary.withValues(alpha: 0.35),
         ),
       ),
@@ -116,6 +122,17 @@ class AppTheme {
         // No labels shown -- the default M3 height (80) leaves a lot of
         // dead vertical space under just an icon. See DECISIONS.md.
         height: 58,
+        // Was never set at all -- the selected tab's icon fell back to
+        // M3's own onSecondaryContainer default (unrelated to our green/
+        // blue branding entirely) instead of the accent color. See
+        // DECISIONS.md.
+        iconTheme: WidgetStateProperty.resolveWith(
+          (states) => IconThemeData(
+            color: states.contains(WidgetState.selected)
+                ? scheme.primary
+                : Colors.grey,
+          ),
+        ),
       ),
       dialogTheme: DialogThemeData(
         elevation: 0,
@@ -141,7 +158,7 @@ class AppTheme {
       // reduced opacity" on the home screen's "+" button. See DECISIONS.md.
       floatingActionButtonTheme: FloatingActionButtonThemeData(
         backgroundColor: scheme.primary,
-        foregroundColor: Colors.white,
+        foregroundColor: scheme.onPrimary, // see elevatedButtonTheme above
         elevation: 0,
         focusElevation: 0,
         hoverElevation: 0,
