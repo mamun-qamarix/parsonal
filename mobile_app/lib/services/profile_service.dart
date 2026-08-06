@@ -1,15 +1,32 @@
+import 'dart:async';
 import 'dart:typed_data';
+
+import 'package:dio/dio.dart';
 
 import '../core/crypto/vault_crypto.dart';
 import '../core/network/api_client.dart';
+import '../core/network/connectivity_status.dart';
+import '../core/storage/local_cache.dart';
 import '../models/models.dart';
 
 class ProfileService {
   final _dio = ApiClient.instance.dio;
 
   Future<ProfileModel> get(Uint8List vmk, String role) async {
-    final res = await _dio.get('/profile/$role');
-    final profile = ProfileModel.fromJson(res.data);
+    final cacheKey = 'profile_$role';
+    dynamic data;
+    try {
+      final res = await _dio.get('/profile/$role');
+      data = res.data;
+      ConnectivityStatus.instance.offline.value = false;
+      unawaited(LocalCache.instance.putJson(cacheKey, data));
+    } on DioException {
+      final cached = await LocalCache.instance.getJson(cacheKey);
+      if (cached == null) rethrow;
+      data = cached;
+      ConnectivityStatus.instance.offline.value = true;
+    }
+    final profile = ProfileModel.fromJson(data);
     if (profile.encDisplayName != null) {
       try {
         profile.decryptedName = await VaultCrypto.decryptText(

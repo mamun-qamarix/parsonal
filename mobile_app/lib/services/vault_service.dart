@@ -1,7 +1,12 @@
+import 'dart:async';
 import 'dart:typed_data';
+
+import 'package:dio/dio.dart';
 
 import '../core/crypto/vault_crypto.dart';
 import '../core/network/api_client.dart';
+import '../core/network/connectivity_status.dart';
+import '../core/storage/local_cache.dart';
 import '../models/models.dart';
 
 class VaultService {
@@ -23,15 +28,38 @@ class VaultService {
   }
 
   Future<List<Category>> listCategories(Uint8List vmk, String scope) async {
-    final res = await _dio.get(
-      '/categories',
-      queryParameters: {'scope': scope},
+    final cacheKey = 'categories_$scope';
+    final raw = await _getWithOfflineFallback(
+      cacheKey,
+      () => _dio.get('/categories', queryParameters: {'scope': scope}),
     );
-    final cats = (res.data as List).map((e) => Category.fromJson(e)).toList();
+    final cats = (raw as List).map((e) => Category.fromJson(e)).toList();
     for (final c in cats) {
       c.decryptedName = await VaultCrypto.decryptText(vmk, c.encName);
     }
     return cats;
+  }
+
+  /// Runs [request], caching the raw (still-encrypted-where-applicable)
+  /// response under [cacheKey] on success. On a network failure, falls
+  /// back to whatever was last cached for [cacheKey] so read screens keep
+  /// working offline -- if nothing's cached yet, the original error is
+  /// rethrown as before. See DECISIONS.md and [LocalCache].
+  Future<dynamic> _getWithOfflineFallback(
+    String cacheKey,
+    Future<Response> Function() request,
+  ) async {
+    try {
+      final res = await request();
+      ConnectivityStatus.instance.offline.value = false;
+      unawaited(LocalCache.instance.putJson(cacheKey, res.data));
+      return res.data;
+    } on DioException {
+      final cached = await LocalCache.instance.getJson(cacheKey);
+      if (cached == null) rethrow;
+      ConnectivityStatus.instance.offline.value = true;
+      return cached;
+    }
   }
 
   Future<VaultEntry> createEntry(
@@ -63,16 +91,21 @@ class VaultService {
     String? categoryId,
     bool favoritesOnly = false,
   }) async {
-    final res = await _dio.get(
-      '/vault/entries',
-      queryParameters: {
-        if (authorRole != null) 'author_role': authorRole,
-        if (contentType != null) 'content_type': contentType,
-        if (categoryId != null) 'category_id': categoryId,
-        'favorites_only': favoritesOnly,
-      },
+    final cacheKey =
+        'vault_entries_${authorRole ?? '_'}_${contentType ?? '_'}_${categoryId ?? '_'}_$favoritesOnly';
+    final raw = await _getWithOfflineFallback(
+      cacheKey,
+      () => _dio.get(
+        '/vault/entries',
+        queryParameters: {
+          if (authorRole != null) 'author_role': authorRole,
+          if (contentType != null) 'content_type': contentType,
+          if (categoryId != null) 'category_id': categoryId,
+          'favorites_only': favoritesOnly,
+        },
+      ),
     );
-    final entries = (res.data as List)
+    final entries = (raw as List)
         .map((e) => VaultEntry.fromJson(e))
         .toList();
     for (final entry in entries) {

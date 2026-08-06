@@ -1533,6 +1533,59 @@ independent authority" decision.
 **Verified:** `flutter analyze` clean (same pre-existing info-level
 lints only), and a `--split-per-abi` release build succeeded.
 
+## 45. Offline support (Phase 1: read-only), zero security compromise
+
+User asked for the whole app to keep working offline, with an explicit
+"no compromise on security" condition. Scoped as **Phase 1: read-only
+offline** -- browsing previously-loaded content works with no
+connection; composing/sending new content still requires a live
+connection, same as today. Explicitly deferred, not built:
+offline-write queuing for new vault entries/chat messages/reactions/
+comments, and caching for comments/reactions/phrases/wishlist/
+notifications (secondary content -- these still show empty/error
+offline, matching today's behaviour on any network failure).
+
+**How the security condition is met:** every read-path service already
+receives ciphertext for anything sensitive (vault entry text, chat
+text, profile name/bio, media bytes) and decrypts it client-side with
+the VMK, which lives only in memory for the unlocked session -- that
+was already true before this change. The new local cache
+(`core/storage/local_cache.dart`, `LocalCache`) stores **exactly the
+same bytes the API already returned**, before any decryption happens --
+JSON responses as-is (still containing `enc_payload` etc.) on disk as
+plain files under the app's own sandboxed documents directory, and raw
+encrypted media bytes (never decrypted bytes) in a separate blob cache
+keyed by asset id. The VMK itself is never written anywhere. Reading a
+cached response and decrypting it is therefore exactly as secure as
+reading a fresh one from the server -- the only difference is
+possible staleness, not confidentiality. No new dependency was needed
+(`path_provider`, already used for temp media files, covers this) --
+deliberately skipped `sqflite`/a real database given the actual need is
+just a handful of named JSON blobs and binary blobs, not queries.
+
+**Pattern applied consistently:** each of `VaultService.listEntries`,
+`.listCategories`, `ChatService.getHistory` (newest page only --
+scrolling further back offline is out of scope), `ProfileService.get`,
+and `MediaService.downloadRaw`/`.downloadThumbnail` now try the network
+call first; on success they cache the raw response/bytes and clear the
+offline flag; on a `DioException` they fall back to whatever's cached
+under that key, setting the offline flag, and only rethrow the original
+error if nothing's cached yet (first-ever load with no connection --
+unavoidable, was already the behaviour before).
+
+**User-visible signal:** a new `ConnectivityStatus.instance.offline`
+`ValueNotifier<bool>`, flipped by the fallback above, drives a thin
+"অফলাইন — সংরক্ষিত তথ্য দেখানো হচ্ছে" strip rendered once in
+`HomeShell` (covers every tab, including chat, since all four tabs
+live in the same `IndexedStack`) so the couple knows they're looking at
+saved data, not a live feed, and it clears itself the moment a call
+succeeds again.
+
+**Verified:** `flutter analyze` clean (same pre-existing info-level
+lint count, 41, only, two of which are new but same category as
+existing ones elsewhere), and a `--split-per-abi` release build
+succeeded. No backend changes -- this feature is entirely client-side.
+
 ## 19. Add Device (peer-to-peer pairing)
 
 **Problem:** each role (`husband`/`wife`) can only be claimed once, ever

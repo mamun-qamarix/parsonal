@@ -1,9 +1,12 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 
 import '../core/crypto/vault_crypto.dart';
 import '../core/network/api_client.dart';
+import '../core/network/connectivity_status.dart';
+import '../core/storage/local_cache.dart';
 import '../models/models.dart';
 
 // Big media (up to 1GB, see DECISIONS.md) can take a long time on a slow
@@ -62,21 +65,46 @@ class MediaService {
     await _dio.put('/media/$assetId/thumbnail', data: form);
   }
 
+  /// Both download methods cache the ENCRYPTED bytes exactly as received
+  /// -- same ciphertext the server holds -- keyed by asset id, and fall
+  /// back to that disk cache on a network failure. Previously-viewed
+  /// media therefore keeps working offline with no change to what's ever
+  /// stored at rest. See DECISIONS.md and [LocalCache].
   Future<Uint8List> downloadRaw(Uint8List vmk, String assetId) async {
-    final res = await _dio.get<List<int>>(
-      '/media/$assetId/raw',
-      options: _transferOptions.copyWith(responseType: ResponseType.bytes),
-    );
-    final encBytes = Uint8List.fromList(res.data!);
+    Uint8List encBytes;
+    try {
+      final res = await _dio.get<List<int>>(
+        '/media/$assetId/raw',
+        options: _transferOptions.copyWith(responseType: ResponseType.bytes),
+      );
+      encBytes = Uint8List.fromList(res.data!);
+      ConnectivityStatus.instance.offline.value = false;
+      unawaited(LocalCache.instance.putBlob(assetId, 'raw', encBytes));
+    } on DioException {
+      final cached = await LocalCache.instance.getBlob(assetId, 'raw');
+      if (cached == null) rethrow;
+      encBytes = cached;
+      ConnectivityStatus.instance.offline.value = true;
+    }
     return VaultCrypto.decryptBytes(vmk, encBytes);
   }
 
   Future<Uint8List> downloadThumbnail(Uint8List vmk, String assetId) async {
-    final res = await _dio.get<List<int>>(
-      '/media/$assetId/thumbnail',
-      options: Options(responseType: ResponseType.bytes),
-    );
-    final encBytes = Uint8List.fromList(res.data!);
+    Uint8List encBytes;
+    try {
+      final res = await _dio.get<List<int>>(
+        '/media/$assetId/thumbnail',
+        options: Options(responseType: ResponseType.bytes),
+      );
+      encBytes = Uint8List.fromList(res.data!);
+      ConnectivityStatus.instance.offline.value = false;
+      unawaited(LocalCache.instance.putBlob(assetId, 'thumb', encBytes));
+    } on DioException {
+      final cached = await LocalCache.instance.getBlob(assetId, 'thumb');
+      if (cached == null) rethrow;
+      encBytes = cached;
+      ConnectivityStatus.instance.offline.value = true;
+    }
     return VaultCrypto.decryptBytes(vmk, encBytes);
   }
 }

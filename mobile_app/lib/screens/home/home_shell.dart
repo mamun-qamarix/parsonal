@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/network/connectivity_status.dart';
 import '../../core/network/ws_client.dart';
 import '../../providers/session_provider.dart';
 import '../../services/profile_cache.dart';
@@ -90,7 +91,12 @@ class _HomeShellState extends State<HomeShell> {
         if (!didPop) _selectTab(0);
       },
       child: Scaffold(
-        body: IndexedStack(index: _index, children: _pages),
+        body: Column(
+          children: [
+            const _OfflineBanner(),
+            Expanded(child: IndexedStack(index: _index, children: _pages)),
+          ],
+        ),
         bottomNavigationBar: NavigationBar(
           selectedIndex: _index,
           onDestinationSelected: _selectTab,
@@ -118,6 +124,44 @@ class _HomeShellState extends State<HomeShell> {
           ],
         ),
       ),
+    );
+  }
+}
+
+/// A thin strip that appears whenever a read-path service has just fallen
+/// back to [LocalCache] because the network call failed -- so the user
+/// knows they may be looking at slightly stale, previously-saved data
+/// rather than a live feed. One instance here in the shell covers every
+/// tab (including chat, which lives inside this same IndexedStack).
+/// Clears itself automatically the moment any service call succeeds
+/// against the live network again. See DECISIONS.md.
+class _OfflineBanner extends StatelessWidget {
+  const _OfflineBanner();
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder<bool>(
+      valueListenable: ConnectivityStatus.instance.offline,
+      builder: (context, offline, _) {
+        if (!offline) return const SizedBox.shrink();
+        return SafeArea(
+          bottom: false,
+          child: Container(
+            width: double.infinity,
+            color: Colors.orange.shade800,
+            padding: const EdgeInsets.symmetric(vertical: 5),
+            child: const Text(
+              'অফলাইন — সংরক্ষিত তথ্য দেখানো হচ্ছে',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 11,
+                color: Colors.white,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }
