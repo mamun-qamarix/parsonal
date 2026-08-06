@@ -1413,6 +1413,34 @@ lints, plus 2 new harmless `use_null_aware_elements` style suggestions
 in `chat_service.dart`), backend imports cleanly (80 routes), and a
 `--split-per-abi` release build succeeded.
 
+## 41. Clickable links, anywhere user text shows
+
+New `LinkifiedText` widget (`widgets/linkified_text.dart`) -- detects
+`http(s)://` and `www.`-prefixed links inside any decrypted text and
+renders them in blue, underlined, and tappable (opens in the phone's
+browser via `url_launcher`, stripping trailing sentence punctuation
+like a closing `)` or `.` first so links at the end of a sentence don't
+get mangled). Deliberately does NOT try to match bare domains with no
+scheme/`www.` prefix (e.g. "ছবি.com" appearing naturally in Bengali
+text) -- too easy to false-positive on ordinary text.
+
+Wired into every place decrypted user text renders: chat message
+bubbles, vault entry captions (card + detail screen), Reel captions,
+comments (full thread), wishlist items, and phrases. (Comment
+*preview* lines under a post stay plain `Text` -- they're a 1-line
+truncated snippet; tapping one opens the full thread, which does show
+the link properly.) Implemented as a `StatefulWidget` specifically so
+its `TapGestureRecognizer`s get disposed correctly on rebuild/unmount
+rather than leaking (a common mistake with inline `RichText` links).
+
+Needed a new dependency (`url_launcher`) and an `AndroidManifest.xml`
+`<queries>` entry for `ACTION_VIEW` on `http`/`https` schemes --
+required on Android 11+ for the app to be able to find/launch a browser
+at all under package-visibility restrictions.
+
+**Verified:** `flutter analyze` clean (same pre-existing info-level
+lints only), and a `--split-per-abi` release build succeeded.
+
 ## 19. Add Device (peer-to-peer pairing)
 
 **Problem:** each role (`husband`/`wife`) can only be claimed once, ever

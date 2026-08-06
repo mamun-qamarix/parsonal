@@ -19,6 +19,7 @@ import '../../providers/session_provider.dart';
 import '../../services/chat_service.dart';
 import '../../services/media_service.dart';
 import '../../widgets/decrypted_media.dart';
+import '../../widgets/linkified_text.dart';
 import '../../widgets/reaction_bar.dart';
 import '../../widgets/shimmer_loading.dart';
 import '../../widgets/media_viewer_screen.dart';
@@ -782,7 +783,7 @@ class _ChatScreenState extends State<ChatScreen> {
                               if (hidden)
                                 _hiddenPlaceholder(mine)
                               else if (msg.contentType == 'text')
-                                Text(
+                                LinkifiedText(
                                   msg.decryptedText ?? '',
                                   style: TextStyle(
                                     color: mine

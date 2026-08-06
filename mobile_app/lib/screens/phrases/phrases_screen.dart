@@ -7,6 +7,7 @@ import '../../models/models.dart';
 import '../../providers/session_provider.dart';
 import '../../services/phrase_service.dart';
 import '../../widgets/comment_section.dart';
+import '../../widgets/linkified_text.dart';
 import '../../widgets/reaction_bar.dart';
 import '../../widgets/shimmer_loading.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
@@ -237,7 +238,7 @@ class _PhraseListState extends State<_PhraseList> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Expanded(
-                        child: Text(
+                        child: LinkifiedText(
                           p.decryptedText ?? '',
                           style: const TextStyle(fontSize: 15),
                         ),

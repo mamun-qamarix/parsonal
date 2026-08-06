@@ -8,6 +8,7 @@ import '../services/vault_service.dart';
 import 'author_badge.dart';
 import 'comment_preview.dart';
 import 'decrypted_media.dart';
+import 'linkified_text.dart';
 import 'media_viewer_screen.dart';
 import 'reaction_bar.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
@@ -214,7 +215,7 @@ class _VaultEntryCardState extends State<VaultEntryCard> {
                       '● ● ● ●',
                       style: TextStyle(letterSpacing: 2),
                     )
-                  : Text(
+                  : LinkifiedText(
                       caption,
                       maxLines: _captionExpanded ? null : 3,
                       overflow: _captionExpanded

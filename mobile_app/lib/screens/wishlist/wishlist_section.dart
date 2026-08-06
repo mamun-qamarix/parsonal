@@ -5,6 +5,7 @@ import '../../models/models.dart';
 import '../../providers/session_provider.dart';
 import '../../services/vault_service.dart';
 import '../../services/wishlist_service.dart';
+import '../../widgets/linkified_text.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
 
 /// A plain wishlist -- NOT a task/checklist. No checkbox, no
@@ -146,7 +147,7 @@ class _WishlistSectionState extends State<WishlistSection> {
             return Card(
               child: ListTile(
                 leading: Icon(Iconsax.gift, color: Theme.of(context).colorScheme.primary),
-                title: Text(item.decryptedText ?? ''),
+                title: LinkifiedText(item.decryptedText ?? ''),
                 subtitle: categoryName != null
                     ? Text(categoryName, style: const TextStyle(fontSize: 12))
                     : null,

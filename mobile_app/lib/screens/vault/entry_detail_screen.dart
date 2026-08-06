@@ -8,6 +8,7 @@ import '../../services/social_service.dart';
 import '../../services/vault_service.dart';
 import '../../widgets/comment_section.dart';
 import '../../widgets/decrypted_media.dart';
+import '../../widgets/linkified_text.dart';
 import '../../widgets/match_celebration_overlay.dart';
 import '../../widgets/media_viewer_screen.dart';
 import '../../widgets/reaction_bar.dart';
@@ -193,10 +194,12 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
             if (entry.decryptedText != null &&
                 entry.decryptedText!.isNotEmpty) ...[
               const SizedBox(height: 16),
-              Text(
-                privacyMask ? '● ● ● ●' : entry.decryptedText!,
-                style: const TextStyle(fontSize: 16),
-              ),
+              privacyMask
+                  ? const Text('● ● ● ●', style: TextStyle(fontSize: 16))
+                  : LinkifiedText(
+                      entry.decryptedText!,
+                      style: const TextStyle(fontSize: 16),
+                    ),
             ],
             const SizedBox(height: 20),
             ReactionBar(targetType: 'vault_entry', targetId: entry.id),

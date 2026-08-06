@@ -6,6 +6,7 @@ import '../providers/session_provider.dart';
 import '../services/profile_cache.dart';
 import '../services/social_service.dart';
 import 'author_badge.dart';
+import 'linkified_text.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
 
 class CommentSection extends StatefulWidget {
@@ -142,7 +143,9 @@ class _CommentSectionState extends State<CommentSection> {
                       children: [
                         _AuthorNameLabel(role: c.authorRole),
                         const SizedBox(height: 2),
-                        Text(masked ? '● ● ●' : (c.decryptedText ?? '')),
+                        masked
+                            ? const Text('● ● ●')
+                            : LinkifiedText(c.decryptedText ?? ''),
                       ],
                     ),
                   ),

@@ -6,6 +6,7 @@ import '../../services/reel_service.dart';
 import '../../widgets/author_badge.dart';
 import '../../widgets/comment_section.dart';
 import '../../widgets/decrypted_media.dart';
+import '../../widgets/linkified_text.dart';
 import '../../widgets/match_celebration_overlay.dart';
 import '../../widgets/reaction_bar.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
@@ -155,10 +156,12 @@ class _ReelPage extends StatelessWidget {
               ),
               if ((entry.decryptedText ?? '').isNotEmpty) ...[
                 const SizedBox(height: 6),
-                Text(
-                  privacyMask ? '● ● ● ●' : entry.decryptedText!,
-                  style: const TextStyle(color: Colors.white),
-                ),
+                privacyMask
+                    ? const Text('● ● ● ●', style: TextStyle(color: Colors.white))
+                    : LinkifiedText(
+                        entry.decryptedText!,
+                        style: const TextStyle(color: Colors.white),
+                      ),
               ],
               const SizedBox(height: 10),
               Theme(
