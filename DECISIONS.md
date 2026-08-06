@@ -1231,6 +1231,49 @@ decrypted bytes/text or syncs to the other spouse.
 **Verified:** `flutter analyze` clean (same pre-existing info-level
 lints only), and a `--split-per-abi` release build succeeded.
 
+## 38. Fix FAB/outlined-button color, promote privacy mask to app-wide
+
+**Home screen's "+" FAB and outlined buttons were still off-color.**
+`floatingActionButtonTheme` never set a `backgroundColor` -- Material
+3's own FAB default reads `colorScheme.primaryContainer`, a pale/muted
+tint, not the solid accent, which is almost certainly what read as
+"washed out" on the home screen. Now explicit:
+`backgroundColor: scheme.primary`. `outlinedButtonTheme` was missing
+entirely too (foreground + border now `scheme.primary`). Between this
+and #37's `filledButtonTheme`/`textButtonTheme`, every standard button
+type Flutter has (`ElevatedButton`, `FilledButton`/`.tonal`,
+`OutlinedButton`, `TextButton`) now explicitly resolves its color from
+`scheme.primary` rather than leaving any of them to Material 3's own
+(sometimes muted-by-design) default resolution.
+
+**Privacy mask promoted from home-screen-only to app-wide, including
+names.** Per explicit follow-up request -- the eye button stays on the
+home app bar, but what it controls moved from `HomeTab`'s local state
+into `SessionProvider.privacyMask` (global, `SharedPreferences`-backed,
+loaded at `bootstrap()`). The blur itself is now baked directly into
+the three shared low-level media widgets (`DecryptedThumbnail`,
+`DecryptedFullImage`, `DecryptedVideoPlayer` in `decrypted_media.dart`)
+via a shared `_applyPrivacyBlur()` helper that reads the same global
+flag -- so every image and video anywhere in the app (home, favorites,
+history, entry detail, Reel, chat bubbles, the full-screen viewer,
+profile/reaction/comment avatar photos) blurs automatically with zero
+per-screen wiring, "nothing excluded" as requested. Text follows the
+same pattern per-screen (`VaultEntryCard`, `EntryDetailScreen`, Reel's
+caption, `CommentSection`/`CommentPreview`) -- masked to `'● ● ● ●'`.
+Spouse **names** are masked too: `authorDisplayName()` takes a `masked`
+flag now, and every caller (`AuthorRow`, `CommentSection`'s name label)
+passes the global flag through -- avatar *photos* were already covered
+for free since `AuthorAvatar` renders through `DecryptedThumbnail`.
+Chat's existing local eye toggle (session-only, from #39) still works
+exactly as before as an independent additional override -- chat now
+masks when *either* that local toggle or the new global flag is on.
+Deliberately still device-local only, not synced to the other spouse
+(unlike intimate mode) -- this is "who's looking over MY shoulder right
+now", a personal-situation toggle, not a shared mood signal.
+
+**Verified:** `flutter analyze` clean (same pre-existing info-level
+lints only), and a `--split-per-abi` release build succeeded.
+
 ## 19. Add Device (peer-to-peer pairing)
 
 **Problem:** each role (`husband`/`wife`) can only be claimed once, ever

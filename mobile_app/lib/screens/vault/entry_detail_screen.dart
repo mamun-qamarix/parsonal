@@ -124,6 +124,7 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     final entry = _entry!;
+    final privacyMask = context.watch<SessionProvider>().privacyMask;
     return Scaffold(
       appBar: AppBar(
         actions: [
@@ -157,7 +158,7 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
                 ),
                 const Spacer(),
                 Text(
-                  '${entry.viewCount} views',
+                  '${entry.viewCount} ভিউ',
                   style: const TextStyle(color: Colors.grey),
                 ),
               ],
@@ -169,14 +170,16 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
                 child: entry.contentType == 'video'
                     ? DecryptedVideoPlayer(assetId: entry.mediaAssets.first.id)
                     : GestureDetector(
-                        onTap: () => Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => MediaViewerScreen(
-                              assetId: entry.mediaAssets.first.id,
-                              contentType: 'photo',
-                            ),
-                          ),
-                        ),
+                        onTap: privacyMask
+                            ? null
+                            : () => Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => MediaViewerScreen(
+                                    assetId: entry.mediaAssets.first.id,
+                                    contentType: 'photo',
+                                  ),
+                                ),
+                              ),
                         child: SizedBox(
                           height: 320,
                           width: double.infinity,
@@ -190,7 +193,10 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
             if (entry.decryptedText != null &&
                 entry.decryptedText!.isNotEmpty) ...[
               const SizedBox(height: 16),
-              Text(entry.decryptedText!, style: const TextStyle(fontSize: 16)),
+              Text(
+                privacyMask ? '● ● ● ●' : entry.decryptedText!,
+                style: const TextStyle(fontSize: 16),
+              ),
             ],
             const SizedBox(height: 20),
             ReactionBar(targetType: 'vault_entry', targetId: entry.id),

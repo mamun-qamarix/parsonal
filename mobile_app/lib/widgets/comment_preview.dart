@@ -169,6 +169,7 @@ class CommentPreviewState extends State<CommentPreview> {
   @override
   Widget build(BuildContext context) {
     if (_loading) return const SizedBox.shrink();
+    final masked = context.watch<SessionProvider>().privacyMask;
     final preview = _comments.length > 2
         ? _comments.sublist(_comments.length - 2)
         : _comments;
@@ -209,7 +210,7 @@ class CommentPreviewState extends State<CommentPreview> {
                   const SizedBox(width: 6),
                   Flexible(
                     child: Text(
-                      c.decryptedText ?? '',
+                      masked ? '● ● ●' : (c.decryptedText ?? ''),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontSize: 12),

@@ -112,6 +112,7 @@ class _CommentSectionState extends State<CommentSection> {
         child: LinearProgressIndicator(),
       );
     final myId = context.watch<SessionProvider>().spouseId;
+    final masked = context.watch<SessionProvider>().privacyMask;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -141,7 +142,7 @@ class _CommentSectionState extends State<CommentSection> {
                       children: [
                         _AuthorNameLabel(role: c.authorRole),
                         const SizedBox(height: 2),
-                        Text(c.decryptedText ?? ''),
+                        Text(masked ? '● ● ●' : (c.decryptedText ?? '')),
                       ],
                     ),
                   ),
@@ -197,11 +198,12 @@ class _AuthorNameLabel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final vmk = context.read<SessionProvider>().vmk!;
+    final masked = context.watch<SessionProvider>().privacyMask;
     return FutureBuilder<ProfileModel?>(
       future: ProfileCache.instance.get(vmk, role),
       initialData: ProfileCache.instance.peek(role),
       builder: (context, snapshot) => Text(
-        authorDisplayName(role, snapshot.data),
+        authorDisplayName(role, snapshot.data, masked: masked),
         style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 12),
       ),
     );

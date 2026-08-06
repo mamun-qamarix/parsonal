@@ -9,8 +9,11 @@ import 'decrypted_media.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
 
 /// Falls back to the generic role label when no name is set on that
-/// profile yet.
-String authorDisplayName(String role, ProfileModel? profile) {
+/// profile yet. When the app-wide privacy mask is on, the real name is
+/// replaced with dots too -- "everything, nothing excluded" per request.
+/// See DECISIONS.md.
+String authorDisplayName(String role, ProfileModel? profile, {bool masked = false}) {
+  if (masked) return '● ● ●';
   final name = profile?.decryptedName;
   if (name != null && name.isNotEmpty) return name;
   return role == 'husband' ? 'স্বামী' : 'স্ত্রী';
@@ -74,6 +77,7 @@ class AuthorRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final vmk = context.read<SessionProvider>().vmk!;
+    final masked = context.watch<SessionProvider>().privacyMask;
     return FutureBuilder<ProfileModel?>(
       future: ProfileCache.instance.get(vmk, role),
       initialData: ProfileCache.instance.peek(role),
@@ -85,7 +89,7 @@ class AuthorRow extends StatelessWidget {
             const SizedBox(width: 8),
             Flexible(
               child: Text(
-                authorDisplayName(role, snapshot.data),
+                authorDisplayName(role, snapshot.data, masked: masked),
                 overflow: TextOverflow.ellipsis,
                 style: textStyle ?? const TextStyle(fontWeight: FontWeight.w600),
               ),

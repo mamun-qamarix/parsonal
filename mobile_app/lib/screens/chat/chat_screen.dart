@@ -550,7 +550,12 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final myId = context.watch<SessionProvider>().spouseId;
+    final session = context.watch<SessionProvider>();
+    final myId = session.spouseId;
+    // The app-wide privacy mask (see DECISIONS.md) masks chat the same
+    // way the chat-local eye toggle already did -- either one hides
+    // everything (text/photo/video alike) behind the same placeholder.
+    final hidden = _hidden || session.privacyMask;
     return Scaffold(
       appBar: AppBar(
         title: _searching
@@ -645,7 +650,7 @@ class _ChatScreenState extends State<ChatScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              if (_hidden)
+                              if (hidden)
                                 _hiddenPlaceholder(mine)
                               else if (msg.contentType == 'text')
                                 Text(

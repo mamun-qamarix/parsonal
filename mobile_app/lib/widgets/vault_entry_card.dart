@@ -1,5 +1,3 @@
-import 'dart:ui' as ui;
-
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -28,16 +26,11 @@ class VaultEntryCard extends StatefulWidget {
   /// Called after an edit/delete/favorite change so the parent list can
   /// refresh itself without waiting for a full navigation round-trip.
   final VoidCallback? onChanged;
-  /// Home screen's privacy toggle (see DECISIONS.md) -- blurs media and
-  /// masks caption text with dots when on. Purely visual on this device;
-  /// doesn't touch the actual decrypted bytes/text underneath.
-  final bool privacyMask;
   const VaultEntryCard({
     super.key,
     required this.entry,
     required this.onTap,
     this.onChanged,
-    this.privacyMask = false,
   });
 
   @override
@@ -202,6 +195,7 @@ class _VaultEntryCardState extends State<VaultEntryCard> {
   @override
   Widget build(BuildContext context) {
     final entry = widget.entry;
+    final privacyMask = context.watch<SessionProvider>().privacyMask;
     final asset = entry.mediaAssets.isNotEmpty ? entry.mediaAssets.first : null;
     final caption = entry.decryptedText;
     final captionIsLong = (caption?.length ?? 0) > 140;
@@ -215,7 +209,7 @@ class _VaultEntryCardState extends State<VaultEntryCard> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              widget.privacyMask
+              privacyMask
                   ? const Text(
                       '● ● ● ●',
                       style: TextStyle(letterSpacing: 2),
@@ -227,7 +221,7 @@ class _VaultEntryCardState extends State<VaultEntryCard> {
                           ? TextOverflow.visible
                           : TextOverflow.ellipsis,
                     ),
-              if (captionIsLong && !widget.privacyMask)
+              if (captionIsLong && !privacyMask)
                 GestureDetector(
                   onTap: () =>
                       setState(() => _captionExpanded = !_captionExpanded),
@@ -298,8 +292,12 @@ class _VaultEntryCardState extends State<VaultEntryCard> {
             GestureDetector(
               // Blurred means "don't actually let anyone tap through to
               // full-screen it either" -- the point is nothing readable
-              // shows up on this screen at all right now.
-              onTap: widget.privacyMask
+              // shows up on this screen at all right now. (The blur
+              // itself is baked into DecryptedThumbnail -- it reads the
+              // same app-wide flag directly, so it applies here and
+              // everywhere else a thumbnail shows without needing to be
+              // passed down. See DECISIONS.md.)
+              onTap: privacyMask
                   ? null
                   : () => Navigator.of(context).push(
                       MaterialPageRoute(
@@ -314,20 +312,15 @@ class _VaultEntryCardState extends State<VaultEntryCard> {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    ImageFiltered(
-                      imageFilter: widget.privacyMask
-                          ? ui.ImageFilter.blur(sigmaX: 22, sigmaY: 22)
-                          : ui.ImageFilter.blur(sigmaX: 0, sigmaY: 0),
-                      child: DecryptedThumbnail(
-                        assetId: asset.id,
-                        hasThumbnail: asset.hasThumbnail,
-                        isVideo: entry.contentType == 'video',
-                        onAspectRatio: (r) => setState(
-                          () => _aspectRatio = r < 0.5 ? 0.5 : r,
-                        ),
+                    DecryptedThumbnail(
+                      assetId: asset.id,
+                      hasThumbnail: asset.hasThumbnail,
+                      isVideo: entry.contentType == 'video',
+                      onAspectRatio: (r) => setState(
+                        () => _aspectRatio = r < 0.5 ? 0.5 : r,
                       ),
                     ),
-                    if (entry.contentType == 'video' && !widget.privacyMask)
+                    if (entry.contentType == 'video' && !privacyMask)
                       Container(
                         color: Colors.black26,
                         child: const Center(
@@ -338,7 +331,7 @@ class _VaultEntryCardState extends State<VaultEntryCard> {
                           ),
                         ),
                       ),
-                    if (widget.privacyMask)
+                    if (privacyMask)
                       Container(
                         color: Colors.black38,
                         child: const Center(

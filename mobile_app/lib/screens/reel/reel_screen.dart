@@ -99,6 +99,7 @@ class _ReelPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final entry = item.entry;
     final asset = entry.mediaAssets.isNotEmpty ? entry.mediaAssets.first : null;
+    final privacyMask = context.watch<SessionProvider>().privacyMask;
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -155,7 +156,7 @@ class _ReelPage extends StatelessWidget {
               if ((entry.decryptedText ?? '').isNotEmpty) ...[
                 const SizedBox(height: 6),
                 Text(
-                  entry.decryptedText!,
+                  privacyMask ? '● ● ● ●' : entry.decryptedText!,
                   style: const TextStyle(color: Colors.white),
                 ),
               ],

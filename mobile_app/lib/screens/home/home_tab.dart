@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/theme/app_theme.dart';
 import '../../models/models.dart';
@@ -28,8 +27,6 @@ class HomeTab extends StatefulWidget {
 }
 
 class _HomeTabState extends State<HomeTab> {
-  static const _kPrivacyMaskPref = 'home_privacy_mask_enabled';
-
   final _service = VaultService();
   List<VaultEntry> _entries = [];
   List<Category> _categories = [];
@@ -39,32 +36,10 @@ class _HomeTabState extends State<HomeTab> {
   // null = "সব" (all categories) -- the default.
   String? _categoryFilter;
 
-  // Blurs every image/video thumbnail and masks every text caption on this
-  // screen -- for glancing at the phone somewhere semi-public without
-  // anything actually being readable. Persisted locally (this device
-  // only, like the chat privacy mask) so it's still on/off the same way
-  // the next time the app opens. See DECISIONS.md.
-  bool _privacyMask = false;
-
   @override
   void initState() {
     super.initState();
     _load();
-    _loadPrivacyMaskPref();
-  }
-
-  Future<void> _loadPrivacyMaskPref() async {
-    final prefs = await SharedPreferences.getInstance();
-    if (mounted) {
-      setState(() => _privacyMask = prefs.getBool(_kPrivacyMaskPref) ?? false);
-    }
-  }
-
-  Future<void> _togglePrivacyMask() async {
-    final next = !_privacyMask;
-    setState(() => _privacyMask = next);
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_kPrivacyMaskPref, next);
   }
 
   Future<void> _load() async {
@@ -146,6 +121,7 @@ class _HomeTabState extends State<HomeTab> {
 
   @override
   Widget build(BuildContext context) {
+    final session = context.watch<SessionProvider>();
     final list = _entries
         .where(
           (e) =>
@@ -197,11 +173,11 @@ class _HomeTabState extends State<HomeTab> {
                   ),
                 ),
                 IconButton(
-                  icon: Icon(_privacyMask ? Iconsax.eye_slash : Iconsax.eye),
-                  tooltip: _privacyMask
+                  icon: Icon(session.privacyMask ? Iconsax.eye_slash : Iconsax.eye),
+                  tooltip: session.privacyMask
                       ? 'সবকিছু আবার দেখান'
-                      : 'ছবি ঝাপসা করুন, টেক্সট লুকান',
-                  onPressed: _togglePrivacyMask,
+                      : 'পুরো অ্যাপে ছবি ঝাপসা করুন, টেক্সট ও নাম লুকান',
+                  onPressed: session.togglePrivacyMask,
                 ),
                 IconButton(
                   icon: const Icon(Iconsax.setting_2),
@@ -339,7 +315,6 @@ class _HomeTabState extends State<HomeTab> {
                       VaultEntryCard(
                         entry: list[i],
                         onChanged: _load,
-                        privacyMask: _privacyMask,
                         onTap: () async {
                           await Navigator.of(context).push(
                             MaterialPageRoute(

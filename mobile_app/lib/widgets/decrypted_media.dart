@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/material.dart';
@@ -12,6 +13,19 @@ import '../core/media/video_thumbnail_helper.dart';
 import '../providers/session_provider.dart';
 import '../services/media_service.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
+
+/// Blurs [child] whenever the app-wide privacy mask (see DECISIONS.md) is
+/// on -- baked into the shared media widgets below so EVERY image/video
+/// anywhere in the app picks this up automatically, with nothing to
+/// remember to wire in per screen.
+Widget _applyPrivacyBlur(BuildContext context, Widget child) {
+  final masked = context.watch<SessionProvider>().privacyMask;
+  if (!masked) return child;
+  return ImageFiltered(
+    imageFilter: ui.ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+    child: child,
+  );
+}
 
 class _DecryptedMediaCache {
   static final Map<String, Uint8List> _cache = {};
@@ -123,7 +137,10 @@ class _DecryptedThumbnailState extends State<DecryptedThumbnail> {
           );
         }
         _maybeReportAspect(snapshot.data!);
-        return Image.memory(snapshot.data!, fit: widget.fit);
+        return _applyPrivacyBlur(
+          context,
+          Image.memory(snapshot.data!, fit: widget.fit),
+        );
       },
     );
   }
@@ -162,7 +179,10 @@ class DecryptedFullImage extends StatelessWidget {
         if (snapshot.hasError || !snapshot.hasData) {
           return const Center(child: Icon(Iconsax.gallery_slash, size: 48));
         }
-        final image = Image.memory(snapshot.data!, fit: fit);
+        final image = _applyPrivacyBlur(
+          context,
+          Image.memory(snapshot.data!, fit: fit),
+        );
         return zoomable ? InteractiveViewer(child: image) : image;
       },
     );
@@ -261,7 +281,7 @@ class _DecryptedVideoPlayerState extends State<DecryptedVideoPlayer> {
       child: Stack(
         alignment: Alignment.center,
         children: [
-          VideoPlayer(controller),
+          _applyPrivacyBlur(context, VideoPlayer(controller)),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [

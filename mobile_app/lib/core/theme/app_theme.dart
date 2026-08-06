@@ -102,6 +102,12 @@ class AppTheme {
       textButtonTheme: TextButtonThemeData(
         style: TextButton.styleFrom(foregroundColor: scheme.primary),
       ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: scheme.primary,
+          side: BorderSide(color: scheme.primary),
+        ),
+      ),
       navigationBarTheme: NavigationBarThemeData(
         backgroundColor: isDark ? const Color(0xFF17211C) : Colors.white,
         indicatorColor: scheme.primary.withValues(alpha: 0.18),
@@ -129,7 +135,13 @@ class AppTheme {
         elevation: 0,
         color: isDark ? const Color(0xFF17211C) : Colors.white,
       ),
-      floatingActionButtonTheme: const FloatingActionButtonThemeData(
+      // Explicit backgroundColor -- M3's own FAB default reads
+      // colorScheme.primaryContainer, a pale/muted tint rather than the
+      // solid accent, which is very likely what read as "washed out,
+      // reduced opacity" on the home screen's "+" button. See DECISIONS.md.
+      floatingActionButtonTheme: FloatingActionButtonThemeData(
+        backgroundColor: scheme.primary,
+        foregroundColor: Colors.white,
         elevation: 0,
         focusElevation: 0,
         hoverElevation: 0,

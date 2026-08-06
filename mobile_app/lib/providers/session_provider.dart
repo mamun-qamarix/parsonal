@@ -90,6 +90,30 @@ class SessionProvider extends ChangeNotifier {
     }
   }
 
+  // App-wide privacy mask -- blurs every image/video and masks every piece
+  // of decrypted text (including spouse names) anywhere it's shown, not
+  // just on the home screen. Purely a per-device rendering toggle (like
+  // the older chat-only mask it supersedes) -- persisted locally via
+  // SharedPreferences so it survives app restarts, and deliberately NOT
+  // synced to the other spouse's device (this is "who's looking over MY
+  // shoulder right now", not a shared mood signal like intimate mode).
+  // See DECISIONS.md.
+  static const _kPrivacyMaskPref = 'privacy_mask_enabled';
+  bool privacyMask = false;
+
+  Future<void> loadPrivacyMask() async {
+    final prefs = await SharedPreferences.getInstance();
+    privacyMask = prefs.getBool(_kPrivacyMaskPref) ?? false;
+    notifyListeners();
+  }
+
+  Future<void> togglePrivacyMask() async {
+    privacyMask = !privacyMask;
+    notifyListeners();
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_kPrivacyMaskPref, privacyMask);
+  }
+
   set autoLockMinutesAndPersist(int value) {
     autoLockMinutes = value;
     SharedPreferences.getInstance().then(
@@ -113,6 +137,9 @@ class SessionProvider extends ChangeNotifier {
   Future<void> bootstrap() async {
     final prefs = await SharedPreferences.getInstance();
     autoLockMinutes = prefs.getInt(_kAutoLockMinutesPref) ?? 5;
+    // Device-local, not tied to any account -- safe to load before we even
+    // know if a session exists.
+    privacyMask = prefs.getBool(_kPrivacyMaskPref) ?? false;
 
     await ApiClient.instance.ensureConfigured();
     final hasSession = await SecureStorageService.instance.hasSession;
