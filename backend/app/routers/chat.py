@@ -201,12 +201,18 @@ async def chat_ws(websocket: WebSocket, token: str = Query(...)):
 
                         await websocket.send_text(json.dumps({"type": "chat_ack", "message": json.loads((await _msg_to_out(db, msg)).model_dump_json())}))
                 if msg_type == "typing":
+                    # `kind` distinguishes "typing a text message" from
+                    # "recording a voice message" -- both are shown as a
+                    # live indicator on the other spouse's screen. Defaults
+                    # to "text" so older clients that don't send it yet
+                    # still work. See DECISIONS.md.
+                    kind = data.get("kind", "text")
                     async with AsyncSessionLocal() as db:
                         target_role = other_role(role)
                         target_result = await db.execute(select(Spouse.id).where(Spouse.role == RoleEnum(target_role)))
                         target_id = target_result.scalar_one_or_none()
                         if target_id:
-                            await ws_manager.send_to_spouse(str(target_id), {"type": "typing"})
+                            await ws_manager.send_to_spouse(str(target_id), {"type": "typing", "kind": kind})
             except Exception:
                 await websocket.send_text(json.dumps({"type": "error", "detail": "malformed message"}))
     except WebSocketDisconnect:

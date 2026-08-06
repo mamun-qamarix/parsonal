@@ -95,6 +95,17 @@ class _ChatScreenState extends State<ChatScreen> {
   StreamSubscription<Amplitude>? _amplitudeSub;
   final List<double> _waveform = [];
 
+  // Real-time "টাইপ করছেন"/"ভয়েস রেকর্ড করছেন" indicator for the OTHER
+  // spouse -- driven by periodic WS pings sent while this device is
+  // composing text (throttled) or recording voice, and auto-cleared a few
+  // seconds after the last incoming ping if no new one arrives (no
+  // explicit "stopped" event needed, same pattern WhatsApp/Telegram use).
+  // See DECISIONS.md.
+  String? _peerTypingKind; // null | 'text' | 'voice'
+  Timer? _peerTypingClearTimer;
+  DateTime? _lastTypingPingSentAt;
+  Timer? _recordingPingTimer;
+
   @override
   void initState() {
     super.initState();
@@ -102,6 +113,21 @@ class _ChatScreenState extends State<ChatScreen> {
     _load();
     _wsSub = WsClient.instance.events.listen(_onWsEvent);
     _itemPositionsListener.itemPositions.addListener(_onScrollPositionsChanged);
+    _textController.addListener(_onComposingChanged);
+  }
+
+  /// Pings the other spouse that this device is actively typing --
+  /// throttled to at most once every 2 seconds so every keystroke doesn't
+  /// spam the WS connection. See DECISIONS.md.
+  void _onComposingChanged() {
+    if (_textController.text.trim().isEmpty) return;
+    final now = DateTime.now();
+    if (_lastTypingPingSentAt != null &&
+        now.difference(_lastTypingPingSentAt!) < const Duration(seconds: 2)) {
+      return;
+    }
+    _lastTypingPingSentAt = now;
+    WsClient.instance.send({'type': 'typing', 'kind': 'text'});
   }
 
   Future<void> _load() async {
@@ -173,6 +199,15 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _onWsEvent(Map<String, dynamic> data) async {
+    if (data['type'] == 'typing') {
+      final kind = data['kind'] as String? ?? 'text';
+      _peerTypingClearTimer?.cancel();
+      if (mounted) setState(() => _peerTypingKind = kind);
+      _peerTypingClearTimer = Timer(const Duration(seconds: 4), () {
+        if (mounted) setState(() => _peerTypingKind = null);
+      });
+      return;
+    }
     if (data['type'] == 'chat_read') {
       final messageId = data['message_id'] as String?;
       if (messageId == null || !mounted) return;
@@ -204,6 +239,13 @@ class _ChatScreenState extends State<ChatScreen> {
       final myId = context.read<SessionProvider>().spouseId;
       final isNewIncoming =
           msg.senderId != myId && !_messages.any((m) => m.id == msg.id);
+      // The message just arrived, so whatever "typing"/"recording voice"
+      // indicator was showing for them is stale now -- clear it instead
+      // of waiting out the timeout.
+      if (isNewIncoming) {
+        _peerTypingClearTimer?.cancel();
+        _peerTypingKind = null;
+      }
       setState(() {
         final existingIndex = _messages.indexWhere((m) => m.id == msg.id);
         if (existingIndex >= 0) {
@@ -477,6 +519,14 @@ class _ChatScreenState extends State<ChatScreen> {
       _recording = true;
       _paused = false;
     });
+    // Let the other spouse know a voice message is being recorded, live --
+    // same periodic-ping pattern as text typing, just its own `kind` so
+    // the indicator reads differently. See DECISIONS.md.
+    WsClient.instance.send({'type': 'typing', 'kind': 'voice'});
+    _recordingPingTimer?.cancel();
+    _recordingPingTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+      WsClient.instance.send({'type': 'typing', 'kind': 'voice'});
+    });
   }
 
   Future<void> _togglePause() async {
@@ -492,6 +542,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _resetRecordingState() async {
     _recordTimer?.cancel();
+    _recordingPingTimer?.cancel();
     await _amplitudeSub?.cancel();
     if (mounted) {
       setState(() {
@@ -523,9 +574,12 @@ class _ChatScreenState extends State<ChatScreen> {
   void dispose() {
     _wsSub?.cancel();
     _recordTimer?.cancel();
+    _recordingPingTimer?.cancel();
+    _peerTypingClearTimer?.cancel();
     _amplitudeSub?.cancel();
     _recorder.dispose();
     _itemPositionsListener.itemPositions.removeListener(_onScrollPositionsChanged);
+    _textController.removeListener(_onComposingChanged);
     _searchController.dispose();
     super.dispose();
   }
@@ -937,11 +991,42 @@ class _ChatScreenState extends State<ChatScreen> {
               child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
             ),
           if (_sending) const LinearProgressIndicator(),
+          if (_peerTypingKind != null) _buildPeerTypingIndicator(),
           if (_replyingTo != null) _buildReplyPreviewBar(),
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
               child: _recording ? _buildRecordingBar() : _buildNormalInputBar(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Live "সঙ্গী টাইপ করছেন" / "সঙ্গী ভয়েস রেকর্ড করছেন" row, driven by the
+  /// periodic WS pings in `_onComposingChanged`/`_startRecording` on the
+  /// OTHER device. See DECISIONS.md.
+  Widget _buildPeerTypingIndicator() {
+    final isVoice = _peerTypingKind == 'voice';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      alignment: Alignment.centerLeft,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            isVoice ? Iconsax.microphone : Iconsax.edit_2,
+            size: 14,
+            color: Theme.of(context).colorScheme.primary,
+          ),
+          const SizedBox(width: 6),
+          Text(
+            isVoice ? 'সঙ্গী ভয়েস রেকর্ড করছেন...' : 'সঙ্গী টাইপ করছেন...',
+            style: TextStyle(
+              fontSize: 12,
+              fontStyle: FontStyle.italic,
+              color: Theme.of(context).colorScheme.primary,
             ),
           ),
         ],

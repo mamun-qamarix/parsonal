@@ -1441,6 +1441,54 @@ at all under package-visibility restrictions.
 **Verified:** `flutter analyze` clean (same pre-existing info-level
 lints only), and a `--split-per-abi` release build succeeded.
 
+## 42. Distinct push notification sound, live typing/recording indicator
+
+**Push notification sound.** FCM pushes are plain "notification"-type
+messages (see #41-era notes / `notifications.py`), which Android shows
+automatically without any app code running while backgrounded/killed --
+so a custom sound has to be set up at the OS notification-channel
+level, natively, not from Dart. Reused the existing in-app "message
+received" chime (`assets/sounds/received.wav`, copied to `android/app/
+src/main/res/raw/notify_sound.wav`) rather than commissioning a new
+sound -- it's a sound the user already associates with this app from
+everyday in-app use, so hearing it identify the app was already true
+before this change, it just didn't play for background pushes yet.
+`MainActivity.createNotificationChannel()` creates a channel
+(`parsonal_default`) with that sound at app startup (Android 8+ ties
+sound to the channel, immutably, so this can only be set once at
+creation, natively); `AndroidManifest.xml`'s `com.google.firebase.
+messaging.default_notification_channel_id` meta-data routes FCM's
+pushes through it without the backend needing to specify anything
+per-message. Channel name/description are deliberately generic
+("বিজ্ঞপ্তি") to match the app's icon-disguise design (project.md §6) --
+doesn't reveal what the app is if someone checks notification settings.
+
+(Ran into `org.xml.sax.SAXParseException: "--" is not permitted within
+comments` building this -- XML comments forbid a literal `--` anywhere
+inside them, unlike the `--` this codebase's Dart/Kotlin comments use
+constantly as a prose dash. Fixed by rewording the one new AndroidManifest.xml
+comment that had it; worth remembering for any future manifest edits.)
+
+**Live typing/voice-recording indicator in chat.** The backless
+WebSocket handler for `{"type": "typing"}` already existed server-side
+(broadcasts to the other spouse) but nothing client-side ever sent or
+displayed it. Now: `chat_screen.dart` sends a `{"type": "typing", "kind":
+"text"}` ping (throttled to at most once every 2s) while the message
+composer has non-empty text, and the same shape with `"kind": "voice"`
+every 2s while recording a voice note. The receiving side shows "সঙ্গী
+টাইপ করছেন..." / "সঙ্গী ভয়েস রেকর্ড করছেন..." above the input bar, and
+auto-clears it 4 seconds after the last ping (no explicit "stopped"
+event needed, same pattern WhatsApp/Telegram use) -- also cleared
+immediately the moment an actual new message arrives from that spouse,
+rather than waiting out the timeout. Backend change was trivial: the
+existing handler now reads and passes through an optional `kind` field
+(defaults to `"text"` for backward compatibility) instead of hardcoding
+the broadcast payload.
+
+**Verified:** `flutter analyze` clean (same pre-existing info-level
+lints only), backend imports cleanly (80 routes), and a `--split-per-abi`
+release build succeeded (after fixing the XML comment issue above).
+
 ## 19. Add Device (peer-to-peer pairing)
 
 **Problem:** each role (`husband`/`wife`) can only be claimed once, ever
