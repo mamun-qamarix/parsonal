@@ -1518,6 +1518,21 @@ any specific pill replaces the filter with exactly that one value
 **Verified:** `flutter analyze` clean (same pre-existing info-level
 lints only), and a `--split-per-abi` release build succeeded.
 
+## 44. Chat compose field masked too, while typing, when chat privacy is on
+
+`_hidden` (chat's own local privacy toggle) now also sets `obscureText:
+true` on the message `TextField` itself -- previously only *already-
+sent* messages masked to dots; what you were actively typing right now
+showed in the clear. `TextField.obscureText` draws dots in place of
+whatever's typed while leaving the actual string (and therefore what
+gets encrypted and sent) completely unchanged -- purely a rendering
+difference. Tied to `_hidden` specifically, not the home screen's
+global flag, consistent with #40's "chat's own toggle has full,
+independent authority" decision.
+
+**Verified:** `flutter analyze` clean (same pre-existing info-level
+lints only), and a `--split-per-abi` release build succeeded.
+
 ## 19. Add Device (peer-to-peer pairing)
 
 **Problem:** each role (`husband`/`wife`) can only be claimed once, ever

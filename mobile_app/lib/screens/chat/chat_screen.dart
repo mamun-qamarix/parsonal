@@ -1106,6 +1106,12 @@ class _ChatScreenState extends State<ChatScreen> {
         Expanded(
           child: TextField(
             controller: _textController,
+            // Same idea as the hidden-placeholder bubbles below -- while
+            // chat's own privacy toggle is on, what's actually being typed
+            // shows as dots too, not just what's already been sent. The
+            // real text is still what gets encrypted and sent; this is
+            // purely how it's drawn on screen. See DECISIONS.md.
+            obscureText: _hidden,
             decoration: const InputDecoration(hintText: 'লিখুন...'),
             onSubmitted: (_) => _sendText(),
           ),
