@@ -73,56 +73,52 @@ class _CountdownCardState extends State<CountdownCard> {
     if (_loading) return const SizedBox.shrink();
     final target = _target;
     final remaining = target?.difference(DateTime.now());
+    final primary = Theme.of(context).colorScheme.primary;
 
+    // Everything -- icon, title, and the countdown itself -- fits on one
+    // compact line now, per request: no separate row for the boxes below,
+    // no colons between them (the boxes themselves are separator enough).
     return Card(
       child: InkWell(
         borderRadius: BorderRadius.circular(18),
         onTap: _pick,
         child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          child: Row(
             children: [
-              Row(
-                children: [
-                  Icon(
-                    Iconsax.profile_2user_copy,
-                    color: Theme.of(context).colorScheme.primary,
-                    size: 26,
-                  ),
-                  const SizedBox(width: 10),
-                  const Expanded(
-                    child: Text(
-                      'কবে দেখা হবে',
-                      style: TextStyle(fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                  const Icon(Iconsax.calendar_edit, color: Colors.grey, size: 18),
-                ],
+              Icon(Iconsax.profile_2user_copy, color: primary, size: 18),
+              const SizedBox(width: 6),
+              const Text(
+                'কবে দেখা হবে',
+                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
               ),
-              if (target == null)
-                const Padding(
-                  padding: EdgeInsets.only(top: 8),
-                  child: Text(
-                    'তারিখ ঠিক করতে ট্যাপ করুন',
-                    style: TextStyle(color: Colors.grey),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Align(
+                  alignment: Alignment.centerRight,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    alignment: Alignment.centerRight,
+                    child: target == null
+                        ? const Text(
+                            'তারিখ ঠিক করতে ট্যাপ করুন',
+                            style: TextStyle(color: Colors.grey, fontSize: 11),
+                          )
+                        : (remaining != null && remaining.isNegative)
+                        ? Text(
+                            'এই তো, একদম কাছে! 💚',
+                            style: TextStyle(
+                              color: primary,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          )
+                        : remaining != null
+                        ? _CompactCountdown(remaining: remaining, color: primary)
+                        : const SizedBox.shrink(),
                   ),
-                )
-              else if (remaining != null && remaining.isNegative)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: Text(
-                    'এই তো, একদম কাছে! 💚',
-                    style: TextStyle(
-                      color: Theme.of(context).colorScheme.primary,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                )
-              else if (remaining != null) ...[
-                const SizedBox(height: 12),
-                _CountdownBoxes(remaining: remaining),
-              ],
+                ),
+              ),
             ],
           ),
         ),
@@ -131,12 +127,14 @@ class _CountdownCardState extends State<CountdownCard> {
   }
 }
 
-/// A standard digital-countdown look -- separate boxes for days/hours/
-/// minutes/seconds -- replacing the old single line of running text. See
-/// DECISIONS.md.
-class _CountdownBoxes extends StatelessWidget {
+/// Days/hours/minutes/seconds as small boxes in a single row -- the unit
+/// letter sits inside each box next to the number instead of a separate
+/// label underneath, and there's no colon between boxes (the boxes
+/// themselves already read as distinct). See DECISIONS.md.
+class _CompactCountdown extends StatelessWidget {
   final Duration remaining;
-  const _CountdownBoxes({required this.remaining});
+  final Color color;
+  const _CompactCountdown({required this.remaining, required this.color});
 
   @override
   Widget build(BuildContext context) {
@@ -145,62 +143,33 @@ class _CountdownBoxes extends StatelessWidget {
     final minutes = remaining.inMinutes % 60;
     final seconds = remaining.inSeconds % 60;
     return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Expanded(child: _CountdownBox(value: days, label: 'দিন')),
-        const _Colon(),
-        Expanded(child: _CountdownBox(value: hours, label: 'ঘণ্টা')),
-        const _Colon(),
-        Expanded(child: _CountdownBox(value: minutes, label: 'মিনিট')),
-        const _Colon(),
-        Expanded(child: _CountdownBox(value: seconds, label: 'সেকেন্ড')),
+        _box(days, 'দি'),
+        const SizedBox(width: 3),
+        _box(hours, 'ঘ'),
+        const SizedBox(width: 3),
+        _box(minutes, 'মি'),
+        const SizedBox(width: 3),
+        _box(seconds, 'সে'),
       ],
     );
   }
-}
 
-class _CountdownBox extends StatelessWidget {
-  final int value;
-  final String label;
-  const _CountdownBox({required this.value, required this.label});
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          decoration: BoxDecoration(
-            color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.1),
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Text(
-            value.toString().padLeft(2, '0'),
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-          ),
-        ),
-        const SizedBox(height: 4),
-        Text(label, style: const TextStyle(fontSize: 10, color: Colors.grey)),
-      ],
-    );
-  }
-}
-
-class _Colon extends StatelessWidget {
-  const _Colon();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Padding(
-      padding: EdgeInsets.only(bottom: 16),
+  Widget _box(int value, String unit) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(6),
+      ),
       child: Text(
-        ':',
-        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Colors.grey),
+        '${value.toString().padLeft(2, '0')}$unit',
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.bold,
+          color: color,
+        ),
       ),
     );
   }

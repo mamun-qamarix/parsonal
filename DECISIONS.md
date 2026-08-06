@@ -1139,6 +1139,72 @@ logically be "on" there.
 info-level lints), backend imports cleanly (80 routes registered), and
 a `--split-per-abi` release build succeeded.
 
+## 36. Fix intimate-mode green shift, single-line countdown, edge-to-edge feed, combined action row
+
+Follow-up fixes from real-device feedback on #35's release.
+
+**Green looked "off" even with intimate mode off -- fixed.**
+`ColorScheme.fromSeed(seedColor: AppColors.halalGreen)` does NOT make
+`scheme.primary` equal the seed hex -- Material 3's tonal-palette
+algorithm computes its own (visibly more muted) tone-40 shade from the
+seed. Every widget that used to read the hardcoded `AppColors.halalGreen`
+constant directly got the *exact* original green; once #35 switched
+those same widgets to `Theme.of(context).colorScheme.primary` (needed
+for the intimate-mode toggle to actually retint them), they silently
+picked up that different M3-computed shade instead -- a real,
+unintended color shift the user immediately noticed. Fixed at the
+source: `AppTheme.light()/dark()` now do
+`ColorScheme.fromSeed(...).copyWith(primary: seed)`, pinning
+`colorScheme.primary` to the exact chosen hex (green or, in intimate
+mode, blue) regardless of what M3's tonal derivation would have picked.
+
+**Bottom nav height reduced.** No labels are shown
+(`alwaysHide`), so the default Material 3 height (80) was leaving
+noticeably dead vertical space under a lone icon -- `NavigationBarTheme
+Data.height` set to 58.
+
+**Countdown card: single line, no colons, smaller boxes.** Redesigned
+again -- icon, "কবে দেখা হবে", and the countdown itself (or the "tap to
+set a date" / "practically here" fallback text) now all sit on one Row,
+right-aligned inside a `FittedBox` so it always fits regardless of
+screen width. The four day/hour/minute/second boxes lost their
+in-between colon separators (the boxes read as distinct on their own)
+and their separate unit-label-underneath -- each box now just shows
+`"07দি"`, `"04ঘ"`, etc., number and unit abbreviation together, in a
+much smaller box.
+
+**Home feed: edge-to-edge, no card, thin divider.** `VaultEntryCard`
+no longer wraps itself in a `Card` (which added rounded corners, a
+background fill distinct from the scaffold, and per-card margins) --
+now a plain full-width `Column`, so each post visually spans the entire
+screen width like a normal social feed rather than sitting inside a
+separate box. `home_tab.dart`'s `SliverPadding(all: 12)` wrapper is
+gone; a thin 1px `Divider` (grey, 15% alpha) between posts does the
+separating instead of card gaps. `favorites_screen.dart` and
+`history_screen.dart` (same `VaultEntryCard`) got the matching
+`ListView.separated` treatment for visual consistency.
+
+**Post action row: side by side, not stacked.** The add-emoji button,
+comment button, and view count used to be three separate stacked
+blocks (each with its own leading icon/header). `ReactionBar` split
+into `ReactionList` (just the reactor avatar+emoji rows) and
+`ReactionAddButton` (just the icon); `CommentPreview` gained a
+`showHeader` flag and a new sibling `CommentCountButton` (icon + count,
+tap opens the thread). `VaultEntryCard` now composes all three inline
+in one `Row`, with the actual reactor list and up-to-2 comment preview
+lines (real content, not just buttons) following directly underneath --
+takes noticeably less vertical space per post. `GlobalKey`s wire the
+add-emoji button and comment-count button to reload their sibling list
+widgets after a change, without lifting all the state up to the card.
+
+**Text-only posts: action row moves below the text, not above.** Posts
+with no media now render caption first, then the action row -- media
+posts keep the original order (media, action row, caption) since that
+part of the layout wasn't the complaint.
+
+**Verified:** `flutter analyze` clean (same pre-existing info-level
+lints only), and a `--split-per-abi` release build succeeded.
+
 ## 19. Add Device (peer-to-peer pairing)
 
 **Problem:** each role (`husband`/`wife`) can only be claimed once, ever

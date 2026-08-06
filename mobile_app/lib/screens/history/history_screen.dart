@@ -46,23 +46,24 @@ class _HistoryScreenState extends State<HistoryScreen> {
               onRefresh: _load,
               child: _entries.isEmpty
                   ? const Center(child: Text('এখনো কোনো কার্যক্রম নেই'))
-                  : ListView.builder(
-                      padding: const EdgeInsets.all(12),
+                  : ListView.separated(
                       itemCount: _entries.length,
-                      itemBuilder: (context, i) => Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: VaultEntryCard(
-                          entry: _entries[i],
-                          onTap: () async {
-                            await Navigator.of(context).push(
-                              MaterialPageRoute(
-                                builder: (_) =>
-                                    EntryDetailScreen(entryId: _entries[i].id),
-                              ),
-                            );
-                            _load();
-                          },
-                        ),
+                      separatorBuilder: (_, _) => Divider(
+                        height: 1,
+                        thickness: 1,
+                        color: Colors.grey.withValues(alpha: 0.15),
+                      ),
+                      itemBuilder: (context, i) => VaultEntryCard(
+                        entry: _entries[i],
+                        onTap: () async {
+                          await Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) =>
+                                  EntryDetailScreen(entryId: _entries[i].id),
+                            ),
+                          );
+                          _load();
+                        },
                       ),
                     ),
             ),

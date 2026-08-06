@@ -9,10 +9,14 @@ import 'package:iconsax_flutter/iconsax_flutter.dart';
 /// One row per person who's reacted -- their avatar, then all their emoji
 /// stuck together with no per-emoji counts (multiple different emoji from
 /// the same person is the whole point now, so a count next to each one
-/// would be noise). Tapping an emoji in your own row removes it; the
-/// add-emoji button opens the phone's own keyboard emoji panel to add
-/// another. See DECISIONS.md.
-class ReactionBar extends StatefulWidget {
+/// would be noise). Tapping an emoji in your own row removes it.
+///
+/// Split into [ReactionList] (just the rows above) and [ReactionAddButton]
+/// (just the add-emoji icon) so screens that want the icon sitting inline
+/// in their own compact action row (see `VaultEntryCard`) can use that
+/// piece alone; [ReactionBar] itself just stacks both, unchanged, for
+/// places (Reel) that show the full thing as one block. See DECISIONS.md.
+class ReactionBar extends StatelessWidget {
   final String targetType;
   final String targetId;
   const ReactionBar({
@@ -22,10 +26,32 @@ class ReactionBar extends StatefulWidget {
   });
 
   @override
-  State<ReactionBar> createState() => _ReactionBarState();
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ReactionList(targetType: targetType, targetId: targetId),
+        ReactionAddButton(targetType: targetType, targetId: targetId),
+      ],
+    );
+  }
 }
 
-class _ReactionBarState extends State<ReactionBar> {
+class ReactionList extends StatefulWidget {
+  final String targetType;
+  final String targetId;
+  const ReactionList({
+    super.key,
+    required this.targetType,
+    required this.targetId,
+  });
+
+  @override
+  State<ReactionList> createState() => ReactionListState();
+}
+
+class ReactionListState extends State<ReactionList> {
   final _service = SocialService();
   List<ReactionPersonGroup> _groups = [];
   bool _loading = true;
@@ -33,10 +59,10 @@ class _ReactionBarState extends State<ReactionBar> {
   @override
   void initState() {
     super.initState();
-    _load();
+    reload();
   }
 
-  Future<void> _load() async {
+  Future<void> reload() async {
     try {
       final groups = await _service.getReactionBreakdown(
         widget.targetType,
@@ -55,17 +81,61 @@ class _ReactionBarState extends State<ReactionBar> {
 
   Future<void> _removeMine(String emoji) async {
     await _service.removeReaction(widget.targetType, widget.targetId, emoji);
-    await _load();
+    await reload();
   }
 
-  Future<void> _addEmoji(String emoji) async {
-    final matched = await _service.addReaction(
-      widget.targetType,
-      widget.targetId,
-      emoji,
+  @override
+  Widget build(BuildContext context) {
+    if (_loading || _groups.isEmpty) return const SizedBox.shrink();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: _groups
+          .map(
+            (g) => Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AuthorAvatar(role: g.role, radius: 10),
+                  const SizedBox(width: 6),
+                  ...g.emojis.map(
+                    (e) => GestureDetector(
+                      onTap: g.isMe ? () => _removeMine(e) : null,
+                      child: Text(e, style: const TextStyle(fontSize: 18)),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          )
+          .toList(),
     );
-    if (matched && mounted) showMatchCelebration(context);
-    await _load();
+  }
+}
+
+/// Just the add-emoji icon -- opens the same sheet as before. Takes an
+/// optional [onChanged] so a parent showing a separate [ReactionList] (or
+/// its own count) can refresh once a reaction is added, since this button
+/// no longer owns that state itself.
+class ReactionAddButton extends StatelessWidget {
+  final String targetType;
+  final String targetId;
+  final VoidCallback? onChanged;
+  final double size;
+  const ReactionAddButton({
+    super.key,
+    required this.targetType,
+    required this.targetId,
+    this.onChanged,
+    this.size = 20,
+  });
+
+  Future<void> _addEmoji(BuildContext context, String emoji) async {
+    final service = SocialService();
+    final matched = await service.addReaction(targetType, targetId, emoji);
+    if (matched && context.mounted) showMatchCelebration(context);
+    onChanged?.call();
   }
 
   /// Opens the phone's own keyboard (with its built-in emoji panel -- most
@@ -73,48 +143,23 @@ class _ReactionBarState extends State<ReactionBar> {
   /// entry) so ANY emoji can be picked. Stays open after each add so
   /// several different emoji can be added one after another. See
   /// DECISIONS.md.
-  void _openAddEmoji() {
+  void _open(BuildContext context) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      builder: (_) => _AddEmojiSheet(onAdd: _addEmoji),
+      builder: (_) => _AddEmojiSheet(onAdd: (e) => _addEmoji(context, e)),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const SizedBox(height: 28);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        ..._groups.map(
-          (g) => Padding(
-            padding: const EdgeInsets.only(bottom: 4),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                AuthorAvatar(role: g.role, radius: 10),
-                const SizedBox(width: 6),
-                ...g.emojis.map(
-                  (e) => GestureDetector(
-                    onTap: g.isMe ? () => _removeMine(e) : null,
-                    child: Text(e, style: const TextStyle(fontSize: 18)),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-        InkWell(
-          onTap: _openAddEmoji,
-          borderRadius: BorderRadius.circular(999),
-          child: const Padding(
-            padding: EdgeInsets.symmetric(vertical: 2),
-            child: Icon(Iconsax.emoji_happy, size: 20, color: Colors.grey),
-          ),
-        ),
-      ],
+    return InkWell(
+      onTap: () => _open(context),
+      borderRadius: BorderRadius.circular(999),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Icon(Iconsax.emoji_happy, size: size, color: Colors.grey),
+      ),
     );
   }
 }

@@ -297,13 +297,14 @@ class _HomeTabState extends State<HomeTab> {
                 child: Center(child: Text('এখনো কিছু নেই')),
               )
             else
-              SliverPadding(
-                padding: const EdgeInsets.all(12),
-                sliver: SliverList(
-                  delegate: SliverChildBuilderDelegate(
-                    (context, i) => Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: VaultEntryCard(
+              // Full-bleed, edge-to-edge -- no per-card box/margin anymore,
+              // a thin divider between posts does the separating instead.
+              // See DECISIONS.md.
+              SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, i) => Column(
+                    children: [
+                      VaultEntryCard(
                         entry: list[i],
                         onChanged: _load,
                         onTap: () async {
@@ -316,9 +317,14 @@ class _HomeTabState extends State<HomeTab> {
                           _load();
                         },
                       ),
-                    ),
-                    childCount: list.length,
+                      Divider(
+                        height: 1,
+                        thickness: 1,
+                        color: Colors.grey.withValues(alpha: 0.15),
+                      ),
+                    ],
                   ),
+                  childCount: list.length,
                 ),
               ),
           ],

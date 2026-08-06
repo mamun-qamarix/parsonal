@@ -22,18 +22,27 @@ class AppColors {
 
 class AppTheme {
   static ThemeData light({bool intimate = false}) {
+    final seed = intimate ? AppColors.intimateBlue : AppColors.halalGreen;
+    // .copyWith(primary: seed) pins colorScheme.primary to the EXACT seed
+    // hex -- ColorScheme.fromSeed's Material-3 tonal palette otherwise
+    // computes its own (slightly different, more muted) tone-40 shade for
+    // `primary`, which was a visible, unintended color shift the moment
+    // widgets across the app switched from the old hardcoded
+    // AppColors.halalGreen constant to Theme.of(context).colorScheme
+    // .primary for intimate-mode support. See DECISIONS.md.
     final scheme = ColorScheme.fromSeed(
-      seedColor: intimate ? AppColors.intimateBlue : AppColors.halalGreen,
+      seedColor: seed,
       brightness: Brightness.light,
-    );
+    ).copyWith(primary: seed);
     return _base(scheme, Brightness.light);
   }
 
   static ThemeData dark({bool intimate = false}) {
+    final seed = intimate ? AppColors.intimateBlueDark : AppColors.halalGreenDark;
     final scheme = ColorScheme.fromSeed(
-      seedColor: intimate ? AppColors.intimateBlueDark : AppColors.halalGreenDark,
+      seedColor: seed,
       brightness: Brightness.dark,
-    );
+    ).copyWith(primary: seed);
     return _base(scheme, Brightness.dark);
   }
 
@@ -85,6 +94,9 @@ class AppTheme {
         indicatorColor: scheme.primary.withValues(alpha: 0.18),
         labelBehavior: NavigationDestinationLabelBehavior.alwaysHide,
         elevation: 0,
+        // No labels shown -- the default M3 height (80) leaves a lot of
+        // dead vertical space under just an icon. See DECISIONS.md.
+        height: 58,
       ),
       dialogTheme: DialogThemeData(
         elevation: 0,
