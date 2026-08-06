@@ -186,6 +186,7 @@ class ChatMessageModel {
   DateTime? readAt;
   final String? mediaAssetId;
   final bool mediaHasThumbnail;
+  final String? replyToId;
   String? decryptedText;
 
   ChatMessageModel({
@@ -199,6 +200,7 @@ class ChatMessageModel {
     required this.readAt,
     required this.mediaAssetId,
     this.mediaHasThumbnail = false,
+    this.replyToId,
   });
 
   factory ChatMessageModel.fromJson(Map<String, dynamic> json) =>
@@ -217,6 +219,7 @@ class ChatMessageModel {
             : null,
         mediaAssetId: json['media_asset_id'],
         mediaHasThumbnail: json['media_has_thumbnail'] ?? false,
+        replyToId: json['reply_to_id'],
       );
 }
 

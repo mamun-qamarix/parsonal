@@ -32,11 +32,15 @@ class ChatService {
     return messages;
   }
 
-  Future<void> sendTextViaWs(Uint8List vmk, String text) async {
+  Future<void> sendTextViaWs(Uint8List vmk, String text, {String? replyToId}) async {
     final enc = await VaultCrypto.encryptText(vmk, text);
     WsClient.instance.send({
       'type': 'chat_message',
-      'payload': {'content_type': 'text', 'enc_payload': enc},
+      'payload': {
+        'content_type': 'text',
+        'enc_payload': enc,
+        if (replyToId != null) 'reply_to_id': replyToId,
+      },
     });
   }
 
@@ -44,6 +48,7 @@ class ChatService {
     required String contentType,
     required String mediaAssetId,
     String? caption,
+    String? replyToId,
   }) async {
     final res = await _dio.post(
       '/chat/messages',
@@ -51,6 +56,7 @@ class ChatService {
         'content_type': contentType,
         'media_asset_id': mediaAssetId,
         if (caption != null) 'enc_payload': caption,
+        if (replyToId != null) 'reply_to_id': replyToId,
       },
     );
     return ChatMessageModel.fromJson(res.data);

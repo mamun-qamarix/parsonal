@@ -10,6 +10,7 @@ class ChatMessageCreate(BaseModel):
     content_type: str  # text | photo | video | voice | file
     enc_payload: str | None = None
     media_asset_id: uuid.UUID | None = None
+    reply_to_id: uuid.UUID | None = None
 
 
 class ChatMessageOut(ORMBase):
@@ -23,6 +24,7 @@ class ChatMessageOut(ORMBase):
     read_at: datetime | None
     media_asset_id: uuid.UUID | None = None
     media_has_thumbnail: bool = False
+    reply_to_id: uuid.UUID | None = None
 
 
 class ChatMediaOut(BaseModel):

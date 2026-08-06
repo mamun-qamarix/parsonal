@@ -8,9 +8,7 @@ class AppColors {
   // green to this blue from the chat screen, as a shared, at-a-glance
   // signal that "this is when we're talking about something private". See
   // DECISIONS.md. Screens that show the accent via Theme.of(context)
-  // .colorScheme.primary pick this up automatically; a handful of purely
-  // pre-login/disabled-feature screens intentionally keep the static green
-  // above since intimate mode can never be on before a real login exists.
+  // .colorScheme.primary pick this up automatically.
   static const Color intimateBlue = Color(0xFF3E7BE0);
   static const Color intimateBlueDark = Color(0xFF8FB4F5);
   static const Color husband = Color(0xFF3B7DD8);
@@ -21,39 +19,42 @@ class AppColors {
 }
 
 class AppTheme {
-  static ThemeData light({bool intimate = false}) {
-    final seed = intimate ? AppColors.intimateBlue : AppColors.halalGreen;
-    // .copyWith(primary: seed) pins colorScheme.primary to the EXACT seed
-    // hex -- ColorScheme.fromSeed's Material-3 tonal palette otherwise
-    // computes its own (slightly different, more muted) tone-40 shade for
-    // `primary`, which was a visible, unintended color shift the moment
-    // widgets across the app switched from the old hardcoded
-    // AppColors.halalGreen constant to Theme.of(context).colorScheme
-    // .primary for intimate-mode support. See DECISIONS.md.
-    final scheme = ColorScheme.fromSeed(
-      seedColor: seed,
-      brightness: Brightness.light,
-    ).copyWith(primary: seed);
-    return _base(scheme, Brightness.light);
-  }
-
+  /// The app is dark-theme-only now, per explicit request -- no light
+  /// theme anywhere, so there's no light/dark seed-color split to get
+  /// wrong either. Always uses the one solid, vivid green (or blue, in
+  /// intimate mode) rather than a separate pale "for dark mode" tint --
+  /// that pale tint was designed for accent TEXT on a dark background,
+  /// not as a button FILL color, and using it as one was the actual root
+  /// cause of the "green looks washed out/white" reports (see DECISIONS.md
+  /// #39). One color, used consistently as a solid fill everywhere, with
+  /// contrast-correct foreground computed below rather than assumed.
   static ThemeData dark({bool intimate = false}) {
-    final seed = intimate ? AppColors.intimateBlueDark : AppColors.halalGreenDark;
+    final seed = intimate ? AppColors.intimateBlue : AppColors.halalGreen;
     final scheme = ColorScheme.fromSeed(
       seedColor: seed,
       brightness: Brightness.dark,
-    ).copyWith(primary: seed);
-    return _base(scheme, Brightness.dark);
+    ).copyWith(primary: seed, onPrimary: _onColorFor(seed));
+    return _base(scheme);
   }
 
-  static ThemeData _base(ColorScheme scheme, Brightness brightness) {
-    final isDark = brightness == Brightness.dark;
+  /// Picks black or white for text/icons drawn on top of [color], based on
+  /// that color's own actual brightness -- not an assumption tied to
+  /// whether the overall theme happens to be light or dark. This is what
+  /// let the "dark mode primary is pale, so hardcoded white text
+  /// disappears" bug happen in the first place: the foreground was chosen
+  /// for the *theme's* brightness instead of the *color's*. See
+  /// DECISIONS.md #39.
+  static Color _onColorFor(Color color) {
+    return ThemeData.estimateBrightnessForColor(color) == Brightness.dark
+        ? Colors.white
+        : Colors.black87;
+  }
+
+  static ThemeData _base(ColorScheme scheme) {
     return ThemeData(
       useMaterial3: true,
       colorScheme: scheme,
-      scaffoldBackgroundColor: isDark
-          ? const Color(0xFF0F1512)
-          : const Color(0xFFF6FAF7),
+      scaffoldBackgroundColor: const Color(0xFF0F1512),
       appBarTheme: AppBarTheme(
         backgroundColor: Colors.transparent,
         elevation: 0,
@@ -62,13 +63,13 @@ class AppTheme {
       ),
       cardTheme: CardThemeData(
         elevation: 0,
-        color: isDark ? const Color(0xFF17211C) : Colors.white,
+        color: const Color(0xFF17211C),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
         margin: EdgeInsets.zero,
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: isDark ? const Color(0xFF17211C) : const Color(0xFFEFF5F1),
+        fillColor: const Color(0xFF17211C),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
           borderSide: BorderSide.none,
@@ -81,12 +82,6 @@ class AppTheme {
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: scheme.primary,
-          // scheme.onPrimary, NOT hardcoded white -- in dark mode
-          // scheme.primary is the deliberately pale AppColors.
-          // halalGreenDark; white text on that pale a fill has almost no
-          // contrast and reads as a washed-out, near-white blob. onPrimary
-          // is whatever M3 computed as the correctly-contrasting color
-          // for that primary, light or dark. See DECISIONS.md.
           foregroundColor: scheme.onPrimary,
           padding: const EdgeInsets.symmetric(vertical: 16),
           shape: RoundedRectangleBorder(
@@ -95,13 +90,10 @@ class AppTheme {
           textStyle: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
         ),
       ),
-      // Explicit, rather than relying on Material 3's own default color
-      // resolution for these -- dialog "সংরক্ষণ"/"মুছে ফেলুন"/etc. buttons
-      // were showing up grey instead of the accent color. See DECISIONS.md.
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           backgroundColor: scheme.primary,
-          foregroundColor: scheme.onPrimary, // see elevatedButtonTheme above
+          foregroundColor: scheme.onPrimary,
           disabledBackgroundColor: scheme.primary.withValues(alpha: 0.35),
         ),
       ),
@@ -115,17 +107,13 @@ class AppTheme {
         ),
       ),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: isDark ? const Color(0xFF17211C) : Colors.white,
+        backgroundColor: const Color(0xFF17211C),
         indicatorColor: scheme.primary.withValues(alpha: 0.18),
         labelBehavior: NavigationDestinationLabelBehavior.alwaysHide,
         elevation: 0,
         // No labels shown -- the default M3 height (80) leaves a lot of
         // dead vertical space under just an icon. See DECISIONS.md.
         height: 58,
-        // Was never set at all -- the selected tab's icon fell back to
-        // M3's own onSecondaryContainer default (unrelated to our green/
-        // blue branding entirely) instead of the accent color. See
-        // DECISIONS.md.
         iconTheme: WidgetStateProperty.resolveWith(
           (states) => IconThemeData(
             color: states.contains(WidgetState.selected)
@@ -136,29 +124,25 @@ class AppTheme {
       ),
       dialogTheme: DialogThemeData(
         elevation: 0,
-        backgroundColor: isDark ? const Color(0xFF17211C) : Colors.white,
+        backgroundColor: const Color(0xFF17211C),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       ),
       bottomSheetTheme: BottomSheetThemeData(
         elevation: 0,
         modalElevation: 0,
-        backgroundColor: isDark ? const Color(0xFF17211C) : Colors.white,
+        backgroundColor: const Color(0xFF17211C),
         shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
         ),
       ),
       snackBarTheme: const SnackBarThemeData(elevation: 0),
-      popupMenuTheme: PopupMenuThemeData(
+      popupMenuTheme: const PopupMenuThemeData(
         elevation: 0,
-        color: isDark ? const Color(0xFF17211C) : Colors.white,
+        color: Color(0xFF17211C),
       ),
-      // Explicit backgroundColor -- M3's own FAB default reads
-      // colorScheme.primaryContainer, a pale/muted tint rather than the
-      // solid accent, which is very likely what read as "washed out,
-      // reduced opacity" on the home screen's "+" button. See DECISIONS.md.
       floatingActionButtonTheme: FloatingActionButtonThemeData(
         backgroundColor: scheme.primary,
-        foregroundColor: scheme.onPrimary, // see elevatedButtonTheme above
+        foregroundColor: scheme.onPrimary,
         elevation: 0,
         focusElevation: 0,
         hoverElevation: 0,
@@ -168,7 +152,7 @@ class AppTheme {
       // whole app's UI is in Bengali; Latin text (numbers, English words in
       // e.g. logs) falls back to it too since it also covers Latin glyphs.
       fontFamily: 'Kohinoor',
-      textTheme: Typography.material2021(platform: TargetPlatform.android).black
+      textTheme: Typography.material2021(platform: TargetPlatform.android).white
           .apply(fontFamily: 'Kohinoor', bodyColor: scheme.onSurface, displayColor: scheme.onSurface),
     );
   }

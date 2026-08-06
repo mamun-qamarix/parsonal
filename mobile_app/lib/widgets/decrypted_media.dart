@@ -17,8 +17,13 @@ import 'package:iconsax_flutter/iconsax_flutter.dart';
 /// Blurs [child] whenever the app-wide privacy mask (see DECISIONS.md) is
 /// on -- baked into the shared media widgets below so EVERY image/video
 /// anywhere in the app picks this up automatically, with nothing to
-/// remember to wire in per screen.
-Widget _applyPrivacyBlur(BuildContext context, Widget child) {
+/// remember to wire in per screen. [forceShow] lets a screen with its own,
+/// more specific privacy control (chat's local eye toggle) opt out of the
+/// global one entirely for its own media -- chat's toggle is meant to have
+/// full, independent authority over what chat shows, with no relation to
+/// the home screen's toggle either way. See DECISIONS.md.
+Widget _applyPrivacyBlur(BuildContext context, Widget child, {bool forceShow = false}) {
+  if (forceShow) return child;
   final masked = context.watch<SessionProvider>().privacyMask;
   if (!masked) return child;
   return ImageFiltered(
@@ -63,6 +68,10 @@ class DecryptedThumbnail extends StatefulWidget {
   /// callers that want to size their layout to match instead of forcing
   /// a fixed crop. See DECISIONS.md.
   final void Function(double aspectRatio)? onAspectRatio;
+  /// See `_applyPrivacyBlur` -- opts this instance out of the global
+  /// privacy mask (used by chat, whose own local toggle takes full
+  /// priority instead). See DECISIONS.md.
+  final bool forceShow;
   const DecryptedThumbnail({
     super.key,
     required this.assetId,
@@ -70,6 +79,7 @@ class DecryptedThumbnail extends StatefulWidget {
     this.isVideo = false,
     this.fit = BoxFit.cover,
     this.onAspectRatio,
+    this.forceShow = false,
   });
 
   @override
@@ -140,6 +150,7 @@ class _DecryptedThumbnailState extends State<DecryptedThumbnail> {
         return _applyPrivacyBlur(
           context,
           Image.memory(snapshot.data!, fit: widget.fit),
+          forceShow: widget.forceShow,
         );
       },
     );
@@ -156,11 +167,14 @@ class DecryptedFullImage extends StatelessWidget {
   final String assetId;
   final BoxFit fit;
   final bool zoomable;
+  /// See `DecryptedThumbnail.forceShow`.
+  final bool forceShow;
   const DecryptedFullImage({
     super.key,
     required this.assetId,
     this.fit = BoxFit.contain,
     this.zoomable = true,
+    this.forceShow = false,
   });
 
   @override
@@ -182,6 +196,7 @@ class DecryptedFullImage extends StatelessWidget {
         final image = _applyPrivacyBlur(
           context,
           Image.memory(snapshot.data!, fit: fit),
+          forceShow: forceShow,
         );
         return zoomable ? InteractiveViewer(child: image) : image;
       },
@@ -201,7 +216,9 @@ class DecryptedFullImage extends StatelessWidget {
 /// DECISIONS.md.
 class DecryptedVideoPlayer extends StatefulWidget {
   final String assetId;
-  const DecryptedVideoPlayer({super.key, required this.assetId});
+  /// See `DecryptedThumbnail.forceShow`.
+  final bool forceShow;
+  const DecryptedVideoPlayer({super.key, required this.assetId, this.forceShow = false});
 
   @override
   State<DecryptedVideoPlayer> createState() => _DecryptedVideoPlayerState();
@@ -281,7 +298,7 @@ class _DecryptedVideoPlayerState extends State<DecryptedVideoPlayer> {
       child: Stack(
         alignment: Alignment.center,
         children: [
-          _applyPrivacyBlur(context, VideoPlayer(controller)),
+          _applyPrivacyBlur(context, VideoPlayer(controller), forceShow: widget.forceShow),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [

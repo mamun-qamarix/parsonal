@@ -131,30 +131,15 @@ class ReactionAddButton extends StatelessWidget {
     this.size = 20,
   });
 
-  Future<void> _addEmoji(BuildContext context, String emoji) async {
-    final service = SocialService();
-    final matched = await service.addReaction(targetType, targetId, emoji);
-    if (matched && context.mounted) showMatchCelebration(context);
-    onChanged?.call();
-  }
-
-  /// Opens the phone's own keyboard (with its built-in emoji panel -- most
-  /// keyboards, e.g. Gboard, have a smiley key right next to the text
-  /// entry) so ANY emoji can be picked. Stays open after each add so
-  /// several different emoji can be added one after another. See
-  /// DECISIONS.md.
-  void _open(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (_) => _AddEmojiSheet(onAdd: (e) => _addEmoji(context, e)),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: () => _open(context),
+      onTap: () => openReactionSheet(
+        context,
+        targetType: targetType,
+        targetId: targetId,
+        onChanged: onChanged,
+      ),
       borderRadius: BorderRadius.circular(999),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 2),
@@ -162,6 +147,31 @@ class ReactionAddButton extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Opens the phone's own keyboard (with its built-in emoji panel -- most
+/// keyboards, e.g. Gboard, have a smiley key right next to the text entry)
+/// so ANY emoji can be picked, plus a row of common ones for one tap.
+/// Shared entry point for [ReactionAddButton] and anywhere else that wants
+/// to trigger the exact same "react to this" flow -- e.g. long-pressing a
+/// chat bubble. See DECISIONS.md.
+void openReactionSheet(
+  BuildContext context, {
+  required String targetType,
+  required String targetId,
+  VoidCallback? onChanged,
+}) {
+  Future<void> addEmoji(String emoji) async {
+    final matched = await SocialService().addReaction(targetType, targetId, emoji);
+    if (matched && context.mounted) showMatchCelebration(context);
+    onChanged?.call();
+  }
+
+  showModalBottomSheet(
+    context: context,
+    isScrollControlled: true,
+    builder: (_) => _AddEmojiSheet(onAdd: addEmoji),
+  );
 }
 
 // Typing an emoji via the keyboard is slow -- these common ones can be

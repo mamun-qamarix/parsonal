@@ -19,6 +19,7 @@ import '../../providers/session_provider.dart';
 import '../../services/chat_service.dart';
 import '../../services/media_service.dart';
 import '../../widgets/decrypted_media.dart';
+import '../../widgets/reaction_bar.dart';
 import '../../widgets/shimmer_loading.dart';
 import '../../widgets/media_viewer_screen.dart';
 import 'chat_gallery_screen.dart';
@@ -67,6 +68,24 @@ class _ChatScreenState extends State<ChatScreen> {
   // other spouse unless they independently toggle their own.
   bool _hidden = false;
 
+  // Shows a floating "jump to latest" button once the user has scrolled up
+  // away from the bottom of the conversation. See DECISIONS.md.
+  bool _showScrollToBottom = false;
+
+  // Long-press a message -> react to it, WhatsApp/Telegram-style. Reuses
+  // the same generic Reaction system vault entries/comments already use
+  // (target_type='chat_message' was always a valid type server-side, just
+  // never wired up in the chat UI). One GlobalKey per message so its
+  // ReactionList can be told to reload after adding one, without
+  // rebuilding the whole message list. See DECISIONS.md.
+  final Map<String, GlobalKey<ReactionListState>> _reactionKeys = {};
+  GlobalKey<ReactionListState> _reactionKeyFor(String messageId) =>
+      _reactionKeys.putIfAbsent(messageId, () => GlobalKey<ReactionListState>());
+
+  // Swipe-right-to-reply target -- shown as a preview bar above the input
+  // and quoted inside whatever gets sent next. See DECISIONS.md.
+  ChatMessageModel? _replyingTo;
+
   // WhatsApp-style voice recording state.
   bool _recording = false;
   bool _paused = false;
@@ -100,11 +119,19 @@ class _ChatScreenState extends State<ChatScreen> {
 
   /// Triggers loading older history once the top of the currently-loaded
   /// window scrolls into view -- the natural "pull up for more" gesture.
+  /// Also tracks whether the very last message is currently on screen, to
+  /// show/hide the floating "jump to latest" button. See DECISIONS.md.
   void _onScrollPositionsChanged() {
     final positions = _itemPositionsListener.itemPositions.value;
     if (positions.isEmpty) return;
-    final topIndex = positions.map((p) => p.index).reduce((a, b) => a < b ? a : b);
+    final indices = positions.map((p) => p.index);
+    final topIndex = indices.reduce((a, b) => a < b ? a : b);
+    final bottomIndex = indices.reduce((a, b) => a > b ? a : b);
     if (topIndex <= 2) _loadMoreHistory();
+    final atBottom = _messages.isEmpty || bottomIndex >= _messages.length - 1;
+    if (atBottom == _showScrollToBottom) {
+      setState(() => _showScrollToBottom = !atBottom);
+    }
   }
 
   Future<void> _loadMoreHistory() async {
@@ -193,6 +220,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _scrollToBottom() {
+    if (_showScrollToBottom) setState(() => _showScrollToBottom = false);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_itemScrollController.isAttached && _messages.isNotEmpty) {
         _itemScrollController.scrollTo(
@@ -299,8 +327,10 @@ class _ChatScreenState extends State<ChatScreen> {
     final text = _textController.text.trim();
     if (text.isEmpty) return;
     final vmk = context.read<SessionProvider>().vmk!;
+    final replyToId = _replyingTo?.id;
     _textController.clear();
-    await _chatService.sendTextViaWs(vmk, text);
+    setState(() => _replyingTo = null);
+    await _chatService.sendTextViaWs(vmk, text, replyToId: replyToId);
     ChatSoundService.playSent();
   }
 
@@ -309,7 +339,11 @@ class _ChatScreenState extends State<ChatScreen> {
     String kind,
     File file,
   ) async {
-    setState(() => _sending = true);
+    final replyToId = _replyingTo?.id;
+    setState(() {
+      _sending = true;
+      _replyingTo = null;
+    });
     try {
       final vmk = context.read<SessionProvider>().vmk!;
       final bytes = await file.readAsBytes();
@@ -325,6 +359,7 @@ class _ChatScreenState extends State<ChatScreen> {
       final msg = await _chatService.sendMedia(
         contentType: contentType,
         mediaAssetId: asset.id,
+        replyToId: replyToId,
       );
       if (mounted) setState(() => _messages.add(msg));
       _scrollToBottom();
@@ -332,6 +367,57 @@ class _ChatScreenState extends State<ChatScreen> {
     } finally {
       if (mounted) setState(() => _sending = false);
     }
+  }
+
+  /// Swipe-right-to-reply, WhatsApp/Telegram-style -- sets the message
+  /// being replied to, which shows a preview bar above the input and gets
+  /// quoted inside the next message sent. See DECISIONS.md.
+  void _startReply(ChatMessageModel msg) {
+    setState(() => _replyingTo = msg);
+  }
+
+  /// A short one-line description of a message for the reply preview
+  /// bar / quoted-in-bubble snippet -- decrypted text if it's a text
+  /// message, otherwise a Bengali label for the content type.
+  String _previewFor(ChatMessageModel msg) {
+    switch (msg.contentType) {
+      case 'text':
+        return msg.decryptedText ?? '';
+      case 'photo':
+        return '📷 ছবি';
+      case 'video':
+        return '🎥 ভিডিও';
+      case 'voice':
+        return '🎤 ভয়েস মেসেজ';
+      default:
+        return '📎 ফাইল';
+    }
+  }
+
+  /// The message a given reply is quoting, if it's still in the currently
+  /// loaded window -- older messages outside the loaded page just show a
+  /// generic quote instead of fetching separately, to keep this simple.
+  ChatMessageModel? _repliedMessage(String? replyToId) {
+    if (replyToId == null) return null;
+    for (final m in _messages) {
+      if (m.id == replyToId) return m;
+    }
+    return null;
+  }
+
+  void _scrollToMessageId(String messageId) {
+    final index = _messages.indexWhere((m) => m.id == messageId);
+    if (index < 0) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_itemScrollController.isAttached) {
+        _itemScrollController.scrollTo(
+          index: index,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+          alignment: 0.4,
+        );
+      }
+    });
   }
 
   Future<void> _pickImage() async {
@@ -557,10 +643,10 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget build(BuildContext context) {
     final session = context.watch<SessionProvider>();
     final myId = session.spouseId;
-    // The app-wide privacy mask (see DECISIONS.md) masks chat the same
-    // way the chat-local eye toggle already did -- either one hides
-    // everything (text/photo/video alike) behind the same placeholder.
-    final hidden = _hidden || session.privacyMask;
+    // Chat's own local eye toggle has full, independent authority here --
+    // deliberately has NO relationship to the home screen's global privacy
+    // mask in either direction. See DECISIONS.md.
+    final hidden = _hidden;
     return Scaffold(
       appBar: AppBar(
         title: _searching
@@ -619,9 +705,25 @@ class _ChatScreenState extends State<ChatScreen> {
                 Expanded(
                   child: _loading
                       ? const ShimmerTileList()
-                      : ScrollablePositionedList.builder(
+                      : Stack(
+                          children: [
+                            ScrollablePositionedList.builder(
                           itemScrollController: _itemScrollController,
                           itemPositionsListener: _itemPositionsListener,
+                          // Land exactly on the newest message on first
+                          // open -- without this the list defaults to
+                          // index 0 (the oldest loaded message) for its
+                          // very first frame, which was long enough for
+                          // `_onScrollPositionsChanged` to see the top of
+                          // the list and prematurely trigger
+                          // `_loadMoreHistory()` before the animated
+                          // scroll-to-bottom in `_load()` ever got a
+                          // chance to run -- that history prepend's own
+                          // `jumpTo()` then won the race, landing
+                          // somewhere in the middle of the conversation
+                          // instead of the latest message. See
+                          // DECISIONS.md.
+                          initialScrollIndex: _messages.isEmpty ? 0 : _messages.length - 1,
                           padding: const EdgeInsets.all(12),
                           itemCount: _messages.length,
                           itemBuilder: (context, i) {
@@ -640,6 +742,19 @@ class _ChatScreenState extends State<ChatScreen> {
                         alignment: mine
                             ? Alignment.centerRight
                             : Alignment.centerLeft,
+                        child: GestureDetector(
+                        onLongPress: () => openReactionSheet(
+                          context,
+                          targetType: 'chat_message',
+                          targetId: msg.id,
+                          onChanged: () => _reactionKeyFor(msg.id).currentState?.reload(),
+                        ),
+                        // A quick rightward flick anywhere on the bubble
+                        // starts a reply to it -- WhatsApp/Telegram-style
+                        // swipe-to-reply. See DECISIONS.md.
+                        onHorizontalDragEnd: (details) {
+                          if ((details.primaryVelocity ?? 0) > 250) _startReply(msg);
+                        },
                         child: Container(
                           margin: const EdgeInsets.symmetric(vertical: 4),
                           padding: const EdgeInsets.all(10),
@@ -655,6 +770,15 @@ class _ChatScreenState extends State<ChatScreen> {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              if (!hidden && msg.replyToId != null)
+                                _QuotedReply(
+                                  message: _repliedMessage(msg.replyToId),
+                                  mine: mine,
+                                  preview: _repliedMessage(msg.replyToId) != null
+                                      ? _previewFor(_repliedMessage(msg.replyToId)!)
+                                      : 'মূল মেসেজ',
+                                  onTap: () => _scrollToMessageId(msg.replyToId!),
+                                ),
                               if (hidden)
                                 _hiddenPlaceholder(mine)
                               else if (msg.contentType == 'text')
@@ -686,6 +810,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                         assetId: msg.mediaAssetId!,
                                         fit: BoxFit.cover,
                                         zoomable: false,
+                                        forceShow: true,
                                       ),
                                     ),
                                   ),
@@ -714,6 +839,7 @@ class _ChatScreenState extends State<ChatScreen> {
                                             hasThumbnail: msg.mediaHasThumbnail,
                                             isVideo: true,
                                             fit: BoxFit.cover,
+                                            forceShow: true,
                                           ),
                                         ),
                                       ),
@@ -767,16 +893,42 @@ class _ChatScreenState extends State<ChatScreen> {
                             ],
                           ),
                         ),
+                        ),
                       );
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           if (showDateDivider) _DateDivider(date: msg.createdAt.toLocal()),
                           bubble,
+                          Align(
+                            alignment: mine
+                                ? Alignment.centerRight
+                                : Alignment.centerLeft,
+                            child: Padding(
+                              padding: const EdgeInsets.only(bottom: 4),
+                              child: ReactionList(
+                                key: _reactionKeyFor(msg.id),
+                                targetType: 'chat_message',
+                                targetId: msg.id,
+                              ),
+                            ),
+                          ),
                         ],
                       );
                     },
                   ),
+                            if (_showScrollToBottom)
+                              Positioned(
+                                right: 12,
+                                bottom: 12,
+                                child: FloatingActionButton.small(
+                                  heroTag: 'scrollToBottom',
+                                  onPressed: _scrollToBottom,
+                                  child: const Icon(Iconsax.arrow_down_1),
+                                ),
+                              ),
+                          ],
+                        ),
           ),
           if (_loadingMoreHistory)
             const Padding(
@@ -784,11 +936,61 @@ class _ChatScreenState extends State<ChatScreen> {
               child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
             ),
           if (_sending) const LinearProgressIndicator(),
+          if (_replyingTo != null) _buildReplyPreviewBar(),
           SafeArea(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
               child: _recording ? _buildRecordingBar() : _buildNormalInputBar(),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Shows what's about to be replied to, above the input bar, with a way
+  /// to cancel it -- the swipe gesture just sets `_replyingTo`, this is
+  /// what makes that state visible before actually sending. See
+  /// DECISIONS.md.
+  Widget _buildReplyPreviewBar() {
+    final target = _replyingTo!;
+    final myId = context.read<SessionProvider>().spouseId;
+    final mine = target.senderId == myId;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.grey.withValues(alpha: 0.1),
+        border: Border(
+          left: BorderSide(color: Theme.of(context).colorScheme.primary, width: 3),
+        ),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  mine ? 'নিজের মেসেজের উত্তর' : 'সঙ্গীর মেসেজের উত্তর',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+                ),
+                Text(
+                  _previewFor(target),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Iconsax.close_circle, size: 20),
+            onPressed: () => setState(() => _replyingTo = null),
           ),
         ],
       ),
@@ -891,6 +1093,50 @@ class _ChatScreenState extends State<ChatScreen> {
 /// between messages sent on different days -- makes it possible to tell
 /// where you are while scrolling back through a long history. See
 /// DECISIONS.md.
+/// The small quoted-message box shown at the top of a bubble that's
+/// replying to another one -- tap it to jump back to the original. See
+/// DECISIONS.md.
+class _QuotedReply extends StatelessWidget {
+  final ChatMessageModel? message;
+  final String preview;
+  final bool mine;
+  final VoidCallback onTap;
+  const _QuotedReply({
+    required this.message,
+    required this.preview,
+    required this.mine,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final barColor = mine
+        ? Theme.of(context).colorScheme.onPrimary
+        : Theme.of(context).colorScheme.primary;
+    final textColor = mine
+        ? Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.85)
+        : Colors.grey.shade700;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        decoration: BoxDecoration(
+          color: (mine ? Colors.black : Colors.white).withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(8),
+          border: Border(left: BorderSide(color: barColor, width: 3)),
+        ),
+        child: Text(
+          preview,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(fontSize: 12, color: textColor),
+        ),
+      ),
+    );
+  }
+}
+
 class _DateDivider extends StatelessWidget {
   final DateTime date;
   const _DateDivider({required this.date});

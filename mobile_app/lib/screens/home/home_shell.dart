@@ -42,7 +42,12 @@ class _HomeShellState extends State<HomeShell> {
   @override
   void initState() {
     super.initState();
-    final vmk = context.read<SessionProvider>().vmk;
+    final session = context.read<SessionProvider>();
+    // Reopen on whichever tab was last open (see SessionProvider.
+    // lastTabIndex) instead of always defaulting to home -- most visible
+    // right after a lock/unlock cycle rebuilds this whole widget fresh.
+    _index = session.lastTabIndex;
+    final vmk = session.vmk;
     if (vmk != null) ProfileCache.instance.warmUp(vmk);
     _wsSub = WsClient.instance.events.listen((data) {
       final type = data['type'];
@@ -69,14 +74,27 @@ class _HomeShellState extends State<HomeShell> {
     super.dispose();
   }
 
+  void _selectTab(int i) {
+    setState(() => _index = i);
+    context.read<SessionProvider>().lastTabIndex = i;
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: IndexedStack(index: _index, children: _pages),
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _index,
-        onDestinationSelected: (i) => setState(() => _index = i),
-        destinations: const [
+    return PopScope(
+      // On any tab other than home, back goes to the home tab first
+      // instead of exiting the app straight away -- only actually pops
+      // (exits) once already on home. See DECISIONS.md.
+      canPop: _index == 0,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop) _selectTab(0);
+      },
+      child: Scaffold(
+        body: IndexedStack(index: _index, children: _pages),
+        bottomNavigationBar: NavigationBar(
+          selectedIndex: _index,
+          onDestinationSelected: _selectTab,
+          destinations: const [
           NavigationDestination(
             icon: Icon(Iconsax.home),
             selectedIcon: Icon(Iconsax.home_copy),
@@ -97,7 +115,8 @@ class _HomeShellState extends State<HomeShell> {
             selectedIcon: Icon(Iconsax.profile_circle_copy),
             label: 'প্রোফাইল',
           ),
-        ],
+          ],
+        ),
       ),
     );
   }

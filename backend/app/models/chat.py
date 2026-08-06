@@ -27,6 +27,9 @@ class ChatMessage(Base, UUIDPk, TimestampMixin):
 
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    reply_to_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("chat_messages.id", ondelete="SET NULL"), nullable=True
+    )
 
     media_assets: Mapped[list["MediaAsset"]] = relationship(back_populates=None, viewonly=True,
                                                               primaryjoin="ChatMessage.id==MediaAsset.chat_message_id")

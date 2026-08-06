@@ -1322,6 +1322,97 @@ lints only), and a `--split-per-abi` release build succeeded. Not yet
 independently verified on a real dark-mode device by the user -- next
 report should confirm whether this was the actual complete fix.
 
+## 40. Dark-theme-only, chat privacy decoupled, nav/lifecycle fixes, reply + message reactions
+
+**App is dark-theme-only now, per explicit request.** `AppTheme.light()`
+is gone; `MaterialApp` only ever builds `AppTheme.dark()` (`themeMode:
+ThemeMode.dark`). More importantly, the seed color itself changed: dark
+mode no longer uses the separate pale `AppColors.halalGreenDark` --
+it's the same solid, vivid `AppColors.halalGreen`/`intimateBlue` used
+everywhere now, one color instead of a light/dark pair. Foreground
+contrast is computed from the color's own actual brightness
+(`ThemeData.estimateBrightnessForColor`), not assumed from the theme's
+brightness -- `_onColorFor()` picks white or black87 based on the real
+seed, which is what should have been done from the start instead of
+#39's theme-brightness-based `onPrimary` reliance.
+
+**Chat's privacy toggle is fully independent of the home screen's,
+in either direction.** #38 had OR'd them together (either one hides
+everything); per explicit follow-up, that was wrong -- chat's own
+local eye toggle now has sole, full authority over chat's masking,
+with zero relation to the home screen's global flag. To make that true
+even for media (which is blurred by a *global* check baked into
+`DecryptedThumbnail`/`DecryptedFullImage`/`DecryptedVideoPlayer`, see
+#38), those three widgets gained a `forceShow` param that skips the
+global check entirely; chat's photo/video bubbles always pass
+`forceShow: true` since chat's own `if (hidden) ...` branch already
+fully replaces the bubble with a placeholder when *chat's* toggle says
+so -- nothing left for the global flag to additionally decide.
+
+**Bottom nav: back button goes to the home tab first, not straight out
+of the app.** `HomeShell` wrapped in `PopScope` (`canPop: _index == 0`)
+-- pressing back on any other tab just switches to tab 0; only actually
+exits once already there.
+
+**Reopening after backgrounding stays on the same tab.** Backgrounding
+re-locks the session (see #27), which tears down and later rebuilds
+`HomeShell` from scratch once unlocked -- it always defaulted back to
+the home tab regardless of what was open before. The active tab index
+now lives in `SessionProvider.lastTabIndex` (never torn down across a
+lock/unlock cycle) instead of purely local `HomeShell` state, and
+`HomeShell` reads it back in `initState()`. Doesn't yet preserve a
+*pushed* screen several levels deep in a tab's own navigation stack
+(e.g. an open `EntryDetailScreen`) -- only which of the four bottom-nav
+tabs was active; a full fix for the deeper case would mean not tearing
+down `HomeShell` at all on lock (overlaying the biometric prompt on top
+instead), which is a bigger change left for if it's actually needed.
+
+**Chat: fixed landing mid-conversation instead of at the latest
+message.** Root cause: `ScrollablePositionedList.builder` had no
+`initialScrollIndex`, so its first frame always started at index 0 (the
+oldest loaded message) -- long enough for `_onScrollPositionsChanged` to
+see the top of the list and fire `_loadMoreHistory()` before the
+animated scroll-to-bottom in `_load()` got a chance to run. That
+history prepend's own `jumpTo()` then won the race, landing around the
+middle of the (now-doubled) message list. Fixed by setting
+`initialScrollIndex: _messages.length - 1` -- the very first frame
+already renders at the bottom, so the premature top-of-list trigger
+never happens.
+
+**Chat: floating "jump to latest" button.** Appears once you've
+scrolled up away from the bottom (tracked via the existing
+`itemPositionsListener`), disappears once you're back at the bottom or
+tap it to get there.
+
+**Chat message reactions, WhatsApp/Telegram-style.** Long-press any
+bubble to react with an emoji -- no backend change needed at all,
+`chat_message` was already a valid `Reaction.target_type` server-side,
+just never wired up client-side. `ReactionBar` split further:
+`openReactionSheet()` is now a standalone top-level function (used by
+both `ReactionAddButton` and chat's long-press handler), and each
+message gets its own `ReactionList` (keyed per message id) rendered
+underneath its bubble.
+
+**Chat swipe-to-reply.** A quick rightward flick on a bubble
+(`onHorizontalDragEnd` velocity check, not a full drag-tracked visual
+reveal -- kept simple) starts a reply to that message: a preview bar
+appears above the input (sender + a one-line snippet, with a way to
+cancel), and the next thing sent carries a new `reply_to_id`. Required
+an actual schema change -- `ChatMessage.reply_to_id`, a nullable self-
+referential FK (`ON DELETE SET NULL`), added via the same idempotent
+`ALTER TABLE ... ADD COLUMN IF NOT EXISTS` pattern already used for
+`device_uuid`/TOTP columns, so no manual migration step. A bubble that
+replies to something renders a small quoted box above its own content;
+tapping it scrolls back to the original *if* it's still in the
+currently-loaded page (older, already-paged-out messages just show a
+generic "মূল মেসেজ" label instead of fetching it separately, to keep
+this reasonably simple).
+
+**Verified:** `flutter analyze` clean (same pre-existing info-level
+lints, plus 2 new harmless `use_null_aware_elements` style suggestions
+in `chat_service.dart`), backend imports cleanly (80 routes), and a
+`--split-per-abi` release build succeeded.
+
 ## 19. Add Device (peer-to-peer pairing)
 
 **Problem:** each role (`husband`/`wife`) can only be claimed once, ever

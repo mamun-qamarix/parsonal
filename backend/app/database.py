@@ -29,6 +29,12 @@ async def init_models():
         # added after a table already existed on a live deployment, so a
         # full database reset isn't required for every schema tweak.
         await conn.execute(text("ALTER TABLE devices ADD COLUMN IF NOT EXISTS device_uuid VARCHAR(64)"))
+        # Swipe-to-reply: quote another message by id. Self-referential FK,
+        # SET NULL on delete so replying to a since-deleted message just
+        # drops the quote instead of failing. See DECISIONS.md.
+        await conn.execute(text(
+            "ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS reply_to_id UUID REFERENCES chat_messages(id) ON DELETE SET NULL"
+        ))
         # TOTP moved from spouses (shared per role) to devices (per
         # physical device) -- see DECISIONS.md. The old spouses.totp_secret
         # / totp_confirmed columns are left in place, unused, on deployments

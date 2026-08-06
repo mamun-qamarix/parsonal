@@ -39,6 +39,15 @@ class SessionProvider extends ChangeNotifier {
 
   String? _pendingFaceChallengeToken;
 
+  // Which bottom-nav tab was open -- kept here (not local HomeShell state)
+  // because backgrounding the app re-locks the session, which tears down
+  // and later rebuilds HomeShell from scratch once unlocked; without this
+  // that rebuild always defaulted back to the home tab regardless of what
+  // was open before backgrounding. SessionProvider itself is never torn
+  // down across a lock/unlock cycle, so this survives it. See
+  // DECISIONS.md.
+  int lastTabIndex = 0;
+
   // "Intimate mode" -- a shared, whole-app green->blue accent swap either
   // spouse can flip from the chat screen, purely as an at-a-glance private
   // signal for the two of them. Backed by the generic AppSetting key/value

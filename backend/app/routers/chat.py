@@ -37,6 +37,7 @@ async def _msg_to_out(db: AsyncSession, msg: ChatMessage) -> ChatMessageOut:
         id=msg.id, sender_id=msg.sender_id, sender_role=sender.role.value, content_type=msg.content_type.value,
         enc_payload=bytes_to_b64(msg.enc_payload), created_at=msg.created_at, delivered_at=msg.delivered_at,
         read_at=msg.read_at, media_asset_id=media_id, media_has_thumbnail=has_thumbnail,
+        reply_to_id=msg.reply_to_id,
     )
 
 
@@ -47,7 +48,10 @@ async def _persist_message(db: AsyncSession, sender: Spouse, payload: ChatMessag
     from app.schemas.common import b64_to_bytes
     enc_bytes = b64_to_bytes(payload.enc_payload) if payload.enc_payload else None
 
-    msg = ChatMessage(sender_id=sender.id, content_type=ChatContentTypeEnum(payload.content_type), enc_payload=enc_bytes)
+    msg = ChatMessage(
+        sender_id=sender.id, content_type=ChatContentTypeEnum(payload.content_type), enc_payload=enc_bytes,
+        reply_to_id=payload.reply_to_id,
+    )
     db.add(msg)
     await db.flush()
 

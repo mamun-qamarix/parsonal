@@ -7,10 +7,9 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:couple_vault/core/theme/app_theme.dart';
 
 void main() {
-  test('light and dark themes build without error', () {
-    final light = AppTheme.light();
+  test('dark theme builds without error', () {
+    // App is dark-theme-only now, per DECISIONS.md #39.
     final dark = AppTheme.dark();
-    expect(light.brightness, equals(Brightness.light));
     expect(dark.brightness, equals(Brightness.dark));
   });
 

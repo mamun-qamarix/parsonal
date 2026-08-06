@@ -58,9 +58,10 @@ class CoupleVaultApp extends StatelessWidget {
           title: "পার্সোনাল",
           scaffoldMessengerKey: scaffoldMessengerKey,
           debugShowCheckedModeBanner: false,
-          theme: AppTheme.light(intimate: session.intimateMode),
-          darkTheme: AppTheme.dark(intimate: session.intimateMode),
-          themeMode: ThemeMode.system,
+          // Dark-theme-only, per explicit request -- no light theme
+          // anywhere in the app. See DECISIONS.md #39.
+          theme: AppTheme.dark(intimate: session.intimateMode),
+          themeMode: ThemeMode.dark,
           locale: const Locale('bn'),
           supportedLocales: const [Locale('bn')],
           localizationsDelegates: const [
