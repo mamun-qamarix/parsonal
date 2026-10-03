@@ -91,7 +91,13 @@ async def _stream_object(object_key: str):
         data = await storage.get_object(object_key)
     except FileNotFoundError:
         raise HTTPException(status_code=404, detail="Object not found")
-    return StreamingResponse(io.BytesIO(data), media_type="application/octet-stream")
+    # Explicit Content-Length so the app can show real download progress
+    # (a chunked StreamingResponse has no total size). See DECISIONS.md.
+    return StreamingResponse(
+        io.BytesIO(data),
+        media_type="application/octet-stream",
+        headers={"Content-Length": str(len(data))},
+    )
 
 
 @router.get("/{asset_id}/raw")

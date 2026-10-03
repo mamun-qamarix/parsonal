@@ -207,3 +207,59 @@ class ShimmerFill extends StatelessWidget {
     return AppShimmer(child: Container(color: Colors.white));
   }
 }
+
+String _mb(int bytes) => (bytes / (1024 * 1024)).toStringAsFixed(1);
+
+/// Download progress readout: a thin bar plus "12.3 / 27.0 MB (45%)".
+/// [received]/[total] in bytes; total <= 0 means unknown size (shows just
+/// the amount so far with an indeterminate bar). Once everything has
+/// arrived it switches to [doneLabel] while decryption/saving finishes.
+class DownloadProgress extends StatelessWidget {
+  final int received;
+  final int total;
+  final Color color;
+  final String doneLabel;
+  const DownloadProgress({
+    super.key,
+    required this.received,
+    required this.total,
+    this.color = Colors.white,
+    this.doneLabel = 'প্রস্তুত হচ্ছে...',
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final known = total > 0;
+    final done = known && received >= total;
+    final fraction = known ? (received / total).clamp(0.0, 1.0) : null;
+    final String label;
+    if (done) {
+      label = doneLabel;
+    } else if (fraction != null) {
+      label =
+          'ডাউনলোড হচ্ছে  ${_mb(received)} / ${_mb(total)} MB  (${(fraction * 100).toStringAsFixed(0)}%)';
+    } else {
+      label = 'ডাউনলোড হচ্ছে  ${_mb(received)} MB';
+    }
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ClipRRect(
+          borderRadius: BorderRadius.circular(4),
+          child: LinearProgressIndicator(
+            value: done ? null : fraction,
+            minHeight: 5,
+            color: color,
+            backgroundColor: color.withValues(alpha: 0.2),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          label,
+          textAlign: TextAlign.center,
+          style: TextStyle(color: color, fontSize: 12),
+        ),
+      ],
+    );
+  }
+}

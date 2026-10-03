@@ -73,8 +73,15 @@ class MediaService {
   /// the network again, then decrypted locally as always. On a miss the
   /// network is used and the ciphertext is cached for next time. See
   /// DECISIONS.md.
-  Future<Uint8List> downloadRaw(Uint8List vmk, String assetId) =>
-      _download(vmk, assetId, 'raw');
+  ///
+  /// [onProgress] reports (bytesReceived, totalBytes) while a network
+  /// download is in progress (total is -1 if the server didn't say). Not
+  /// called at all on a cache hit, which is near-instant anyway.
+  Future<Uint8List> downloadRaw(
+    Uint8List vmk,
+    String assetId, {
+    void Function(int received, int total)? onProgress,
+  }) => _download(vmk, assetId, 'raw', onProgress: onProgress);
 
   Future<Uint8List> downloadThumbnail(Uint8List vmk, String assetId) =>
       _download(vmk, assetId, 'thumb');
@@ -82,8 +89,9 @@ class MediaService {
   Future<Uint8List> _download(
     Uint8List vmk,
     String assetId,
-    String variant,
-  ) async {
+    String variant, {
+    void Function(int received, int total)? onProgress,
+  }) async {
     final cached = await LocalCache.instance.getBlob(assetId, variant);
     if (cached != null) {
       try {
@@ -98,6 +106,7 @@ class MediaService {
       options: isRaw
           ? _transferOptions.copyWith(responseType: ResponseType.bytes)
           : Options(responseType: ResponseType.bytes),
+      onReceiveProgress: onProgress,
     );
     final encBytes = res.data is Uint8List
         ? res.data as Uint8List

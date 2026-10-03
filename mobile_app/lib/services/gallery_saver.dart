@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 
 import '../providers/session_provider.dart';
+import '../widgets/shimmer_loading.dart';
 import 'media_service.dart';
 
 /// Downloads (and decrypts) a photo/video and saves it into the phone's
@@ -19,43 +20,77 @@ Future<void> saveMediaToGallery(
   required bool isVideo,
 }) async {
   final messenger = ScaffoldMessenger.of(context);
+  final navigator = Navigator.of(context, rootNavigator: true);
   final vmk = context.read<SessionProvider>().vmk;
   if (vmk == null) return;
-  messenger.showSnackBar(
-    const SnackBar(
-      content: Text('ডাউনলোড হচ্ছে...'),
-      duration: Duration(seconds: 2),
+
+  // (received, total) in bytes; total <= 0 = unknown / not started yet.
+  final progress = ValueNotifier<(int, int)>((0, 0));
+  final stage = ValueNotifier<String?>(null);
+  var dialogOpen = true;
+  showDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => PopScope(
+      canPop: false,
+      child: AlertDialog(
+        title: Text(isVideo ? 'ভিডিও ডাউনলোড' : 'ছবি ডাউনলোড'),
+        content: ValueListenableBuilder<String?>(
+          valueListenable: stage,
+          builder: (context, st, _) => ValueListenableBuilder<(int, int)>(
+            valueListenable: progress,
+            builder: (context, p, _) => DownloadProgress(
+              received: p.$1,
+              total: p.$2,
+              color: Theme.of(context).colorScheme.primary,
+              doneLabel: st ?? 'প্রস্তুত হচ্ছে...',
+            ),
+          ),
+        ),
+      ),
     ),
-  );
+  ).whenComplete(() {
+    dialogOpen = false;
+  });
+
+  void closeDialog() {
+    if (dialogOpen) navigator.pop();
+  }
+
   File? tmp;
   try {
-    final bytes = await MediaService().downloadRaw(vmk, assetId);
+    final bytes = await MediaService().downloadRaw(
+      vmk,
+      assetId,
+      onProgress: (r, t) => progress.value = (r, t),
+    );
+    // Downloaded (or it was already cached): show the save stage.
+    final p = progress.value;
+    final full = p.$2 > 0 ? p.$2 : 1;
+    progress.value = (full, full);
+    stage.value = 'গ্যালারিতে সেভ হচ্ছে...';
     final dir = await getTemporaryDirectory();
     final ext = isVideo ? 'mp4' : _imageExt(bytes);
-    tmp = File(
-      '${dir.path}/dl_${DateTime.now().millisecondsSinceEpoch}.$ext',
-    );
+    tmp = File('${dir.path}/dl_${DateTime.now().millisecondsSinceEpoch}.$ext');
     await tmp.writeAsBytes(bytes, flush: true);
-    if (!await Gal.hasAccess()) {
-      if (!await Gal.requestAccess()) {
-        messenger.hideCurrentSnackBar();
-        messenger.showSnackBar(
-          const SnackBar(content: Text('গ্যালারিতে সেভ করার অনুমতি দেওয়া হয়নি')),
-        );
-        return;
-      }
+    if (!await Gal.hasAccess() && !await Gal.requestAccess()) {
+      closeDialog();
+      messenger.showSnackBar(
+        const SnackBar(content: Text('গ্যালারিতে সেভ করার অনুমতি দেওয়া হয়নি')),
+      );
+      return;
     }
     if (isVideo) {
       await Gal.putVideo(tmp.path);
     } else {
       await Gal.putImage(tmp.path);
     }
-    messenger.hideCurrentSnackBar();
+    closeDialog();
     messenger.showSnackBar(
       const SnackBar(content: Text('গ্যালারিতে সেভ হয়েছে ✅')),
     );
   } catch (_) {
-    messenger.hideCurrentSnackBar();
+    closeDialog();
     messenger.showSnackBar(
       const SnackBar(content: Text('ডাউনলোড করা যায়নি, আবার চেষ্টা করুন')),
     );
