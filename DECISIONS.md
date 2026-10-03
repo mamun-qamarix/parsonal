@@ -1701,6 +1701,12 @@ tree twice. `ReactionList` now takes an optional `refresh` Listenable; chat
 keeps one `ValueNotifier<int>` per message and bumps it after a reaction is
 added. Never put a GlobalKey on an item built by ScrollablePositionedList.
 
+## 51. Reel shows videos only
+
+Per request, Reel no longer mixes in photos. `/reel/feed` filters to
+`content_type == video`, and `ReelService.getFeed` drops anything else too
+so it's correct even before the backend is redeployed.
+
 ## 19. Add Device (peer-to-peer pairing)
 
 **Problem:** each role (`husband`/`wife`) can only be claimed once, ever

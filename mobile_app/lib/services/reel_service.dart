@@ -28,6 +28,9 @@ class ReelService {
     final items = <ReelItem>[];
     for (final raw in (res.data as List)) {
       final entryJson = raw['entry'] as Map<String, dynamic>;
+      // Reel is videos only, per request -- also enforced server-side, this
+      // just keeps it right against an older backend too.
+      if (entryJson['content_type'] != 'video') continue;
       final entry = VaultEntry.fromJson(entryJson);
       entry.decryptedText = entryJson['enc_payload'] != null
           ? await _safeDecrypt(vmk, entryJson['enc_payload'])

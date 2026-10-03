@@ -26,7 +26,8 @@ async def get_reel_feed(
 ):
     query = select(VaultEntry).where(
         VaultEntry.is_deleted == False,  # noqa: E712
-        VaultEntry.content_type.in_([ContentTypeEnum.photo, ContentTypeEnum.video]),
+        # Videos only -- photos stay in the home feed. See DECISIONS.md.
+        VaultEntry.content_type == ContentTypeEnum.video,
     )
     if category_id:
         query = query.where(VaultEntry.category_id == category_id)
