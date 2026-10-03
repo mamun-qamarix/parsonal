@@ -1713,11 +1713,13 @@ Big videos showed only a shimmer while downloading, with no way to tell how
 far along they were. `MediaService.downloadRaw` now takes `onProgress`
 (wired to Dio's `onReceiveProgress`), and a shared `DownloadProgress`
 widget (thin bar + "x / y MB (z%)", then "প্রস্তুত হচ্ছে..." while
-decrypting) shows it over the video player's placeholder and in a
-non-dismissible dialog during "ডাউনলোড (গ্যালারিতে)". The backend's media
+decrypting) shows it in a non-dismissible dialog during "ডাউনলোড (গ্যালারিতে)". The backend's media
 `StreamingResponse` had no Content-Length (chunked), so clients couldn't
 know the total; it now sends one. Until the backend is redeployed the app
 shows the MB downloaded so far with an indeterminate bar.
+
+User follow-up: progress belongs only to the gallery download, not to
+playback -- the player's overlay was removed again.
 
 ## 19. Add Device (peer-to-peer pairing)
 

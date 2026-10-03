@@ -335,11 +335,6 @@ class DecryptedVideoPlayer extends StatefulWidget {
 
 class _DecryptedVideoPlayerState extends State<DecryptedVideoPlayer> {
   VideoPlayerController? _controller;
-  // Download progress for a video that isn't cached yet -- big videos take
-  // a while and the user needs to see how far along it is.
-  int _received = 0;
-  int _total = 0;
-  bool _downloading = false;
   File? _tempFile;
   bool _error = false;
 
@@ -354,18 +349,7 @@ class _DecryptedVideoPlayerState extends State<DecryptedVideoPlayer> {
       final vmk = context.read<SessionProvider>().vmk!;
       final bytes = await _DecryptedMediaCache.get(
         'full:${widget.assetId}',
-        () => MediaService().downloadRaw(
-          vmk,
-          widget.assetId,
-          onProgress: (r, t) {
-            if (!mounted) return;
-            setState(() {
-              _downloading = true;
-              _received = r;
-              _total = t;
-            });
-          },
-        ),
+        () => MediaService().downloadRaw(vmk, widget.assetId),
       );
       if (!mounted) return;
       final file = await _writeTempFile(widget.assetId, bytes);
@@ -430,22 +414,7 @@ class _DecryptedVideoPlayerState extends State<DecryptedVideoPlayer> {
     if (_error) return const Center(child: Icon(Iconsax.danger));
     final controller = _controller;
     if (controller == null) {
-      return AspectRatio(
-        aspectRatio: 16 / 9,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            const ShimmerFill(),
-            if (_downloading)
-              Container(
-                color: Colors.black54,
-                alignment: Alignment.center,
-                padding: const EdgeInsets.symmetric(horizontal: 24),
-                child: DownloadProgress(received: _received, total: _total),
-              ),
-          ],
-        ),
-      );
+      return const AspectRatio(aspectRatio: 16 / 9, child: ShimmerFill());
     }
     final position = controller.value.position;
     final duration = controller.value.duration;
