@@ -1,7 +1,7 @@
 import enum
 import uuid
 
-from sqlalchemy import String, Integer, ForeignKey, Enum as SAEnum
+from sqlalchemy import Boolean, String, Integer, ForeignKey, Enum as SAEnum
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -27,5 +27,11 @@ class MediaAsset(Base, UUIDPk, TimestampMixin):
     object_key: Mapped[str] = mapped_column(String(255), nullable=False)
     thumbnail_object_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
     size_bytes: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # True = encrypted in independently-authenticated chunks (streamable
+    # video, see DECISIONS.md). False = the original single-blob format.
+    chunked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    # When an old single-blob video is converted to the chunked format the
+    # original ciphertext object is KEPT (never deleted) and remembered here.
+    legacy_object_key: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
     entry: Mapped["VaultEntry"] = relationship(back_populates="media_assets")

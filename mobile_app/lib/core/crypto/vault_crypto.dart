@@ -6,6 +6,8 @@ import 'dart:typed_data';
 import 'package:cryptography/cryptography.dart';
 import 'package:cryptography/dart.dart';
 
+import 'chunked_crypto.dart';
+
 /// Payloads above this size (photos, videos) are encrypted/decrypted inside
 /// a background isolate so the pure-Dart AES-GCM -- slow for big files --
 /// never blocks the UI thread (it used to freeze the app while a photo or
@@ -91,6 +93,11 @@ class VaultCrypto {
   }
 
   static Future<Uint8List> decryptBytes(Uint8List vmk, Uint8List packed) {
+    // Streamable videos use their own chunked format (see ChunkedCrypto);
+    // every caller that wants the whole file still just calls this.
+    if (ChunkedCrypto.isChunked(packed)) {
+      return Isolate.run(() => ChunkedCrypto.decryptAll(vmk, packed));
+    }
     if (packed.length > _kBackgroundThreshold) {
       return Isolate.run(() => _decryptPacked(vmk, packed));
     }

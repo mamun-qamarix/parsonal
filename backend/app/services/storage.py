@@ -61,6 +61,36 @@ async def get_object(object_key: str) -> bytes:
     return await run_in_threadpool(_get_object_sync, object_key)
 
 
+def _object_size_sync(object_key: str) -> int:
+    try:
+        return _client.stat_object(settings.minio_bucket, object_key).size
+    except S3Error as exc:
+        raise FileNotFoundError(object_key) from exc
+
+
+async def object_size(object_key: str) -> int:
+    return await run_in_threadpool(_object_size_sync, object_key)
+
+
+def _get_range_sync(object_key: str, offset: int, length: int) -> bytes:
+    response = None
+    try:
+        response = _client.get_object(settings.minio_bucket, object_key, offset=offset, length=length)
+        return response.read()
+    except S3Error as exc:
+        raise FileNotFoundError(object_key) from exc
+    finally:
+        if response is not None:
+            response.close()
+            response.release_conn()
+
+
+async def get_range(object_key: str, offset: int, length: int) -> bytes:
+    """Reads just bytes [offset, offset+length) -- used to stream videos
+    piece by piece instead of loading a whole (up to 1GB) object."""
+    return await run_in_threadpool(_get_range_sync, object_key, offset, length)
+
+
 # Deliberately NO delete function here. Deleted vault entries go to the
 # trash (soft-delete) and their encrypted media must NEVER be removed from
 # storage -- the user wants deleted photos/videos always recoverable. Do not

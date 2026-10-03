@@ -11,6 +11,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:video_player/video_player.dart';
 
+import '../core/media/video_stream_server.dart';
 import '../core/media/video_thumbnail_helper.dart';
 import '../providers/session_provider.dart';
 import '../services/media_service.dart';
@@ -336,6 +337,7 @@ class DecryptedVideoPlayer extends StatefulWidget {
 class _DecryptedVideoPlayerState extends State<DecryptedVideoPlayer> {
   VideoPlayerController? _controller;
   File? _tempFile;
+  Uri? _streamUri;
   bool _error = false;
 
   @override
@@ -344,35 +346,63 @@ class _DecryptedVideoPlayerState extends State<DecryptedVideoPlayer> {
     _load();
   }
 
+  /// Streams the video when it's in the chunked format (playback starts
+  /// after the first piece arrives -- see VideoStreamServer); falls back to
+  /// downloading it whole for old single-blob videos, or when offline and
+  /// only a fully cached copy is available. See DECISIONS.md.
   Future<void> _load() async {
+    File? file;
+    Uri? streamUri;
+    VideoPlayerController? controller;
     try {
       final vmk = context.read<SessionProvider>().vmk!;
-      final bytes = await _DecryptedMediaCache.get(
-        'full:${widget.assetId}',
-        () => MediaService().downloadRaw(vmk, widget.assetId),
-      );
-      if (!mounted) return;
-      final file = await _writeTempFile(widget.assetId, bytes);
-      final controller = VideoPlayerController.file(file);
-      try {
-        await controller.initialize();
-      } catch (_) {
-        await file.delete().catchError((_) => file);
-        rethrow;
+      final inMemory = _DecryptedMediaCache.peek('full:${widget.assetId}');
+      if (inMemory == null) {
+        try {
+          streamUri = await VideoStreamServer.instance.open(
+            vmk,
+            widget.assetId,
+          );
+        } catch (_) {
+          streamUri = null; // offline / server hiccup: try the full path
+        }
       }
       if (!mounted) {
+        if (streamUri != null) VideoStreamServer.instance.close(streamUri);
+        return;
+      }
+      if (streamUri != null) {
+        controller = VideoPlayerController.networkUrl(streamUri);
+      } else {
+        final bytes =
+            inMemory ??
+            await _DecryptedMediaCache.get(
+              'full:${widget.assetId}',
+              () => MediaService().downloadRaw(vmk, widget.assetId),
+            );
+        if (!mounted) return;
+        file = await _writeTempFile(widget.assetId, bytes);
+        controller = VideoPlayerController.file(file);
+      }
+      await controller.initialize();
+      if (!mounted) {
         // Left the screen while the video was still preparing -- clean up
-        // instead of leaking the player and the decrypted temp file.
+        // instead of leaking the player, the stream or the temp file.
         await controller.dispose();
-        await file.delete().catchError((_) => file);
+        if (streamUri != null) VideoStreamServer.instance.close(streamUri);
+        await file?.delete().catchError((_) => file!);
         return;
       }
       controller.addListener(_onTick);
       setState(() {
         _controller = controller;
         _tempFile = file;
+        _streamUri = streamUri;
       });
     } catch (_) {
+      await controller?.dispose();
+      if (streamUri != null) VideoStreamServer.instance.close(streamUri);
+      await file?.delete().catchError((_) => file!);
       if (mounted) setState(() => _error = true);
     }
   }
@@ -497,6 +527,8 @@ class _DecryptedVideoPlayerState extends State<DecryptedVideoPlayer> {
   void dispose() {
     _controller?.removeListener(_onTick);
     _controller?.dispose();
+    final uri = _streamUri;
+    if (uri != null) VideoStreamServer.instance.close(uri);
     _tempFile?.delete().catchError((_) => _tempFile!);
     super.dispose();
   }

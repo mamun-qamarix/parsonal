@@ -29,6 +29,9 @@ async def init_models():
         # added after a table already existed on a live deployment, so a
         # full database reset isn't required for every schema tweak.
         await conn.execute(text("ALTER TABLE devices ADD COLUMN IF NOT EXISTS device_uuid VARCHAR(64)"))
+        # Streamable (chunk-encrypted) videos. See DECISIONS.md.
+        await conn.execute(text("ALTER TABLE media_assets ADD COLUMN IF NOT EXISTS chunked BOOLEAN NOT NULL DEFAULT FALSE"))
+        await conn.execute(text("ALTER TABLE media_assets ADD COLUMN IF NOT EXISTS legacy_object_key VARCHAR(255)"))
         # Swipe-to-reply: quote another message by id. Self-referential FK,
         # SET NULL on delete so replying to a since-deleted message just
         # drops the quote instead of failing. See DECISIONS.md.

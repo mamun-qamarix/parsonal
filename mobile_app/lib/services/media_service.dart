@@ -1,8 +1,10 @@
 import 'dart:async';
+import 'dart:isolate';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 
+import '../core/crypto/chunked_crypto.dart';
 import '../core/crypto/vault_crypto.dart';
 import '../core/network/api_client.dart';
 import '../core/network/connectivity_status.dart';
@@ -31,13 +33,19 @@ class MediaService {
     Uint8List? thumbnailBytes,
     void Function(int sent, int total)? onSendProgress,
   }) async {
-    final encMain = await VaultCrypto.encryptBytes(vmk, bytes);
+    // Videos use the chunked (streamable) format so they can start playing
+    // before the whole file has downloaded. See DECISIONS.md.
+    final chunked = kind == 'video';
+    final encMain = chunked
+        ? await Isolate.run(() => ChunkedCrypto.encrypt(vmk, bytes))
+        : await VaultCrypto.encryptBytes(vmk, bytes);
     final encThumb = thumbnailBytes != null
         ? await VaultCrypto.encryptBytes(vmk, thumbnailBytes)
         : null;
 
     final form = FormData.fromMap({
       'kind': kind,
+      'chunked': chunked ? 'true' : 'false',
       'file': MultipartFile.fromBytes(encMain, filename: 'blob.enc'),
       if (encThumb != null)
         'thumbnail': MultipartFile.fromBytes(encThumb, filename: 'thumb.enc'),
@@ -114,5 +122,55 @@ class MediaService {
     ConnectivityStatus.instance.offline.value = false;
     unawaited(LocalCache.instance.putBlob(assetId, variant, encBytes));
     return VaultCrypto.decryptBytes(vmk, encBytes);
+  }
+
+  /// Raw ENCRYPTED bytes [start, endInclusive] of an asset via an HTTP range
+  /// request -- the building block for streaming video playback.
+  Future<Uint8List> fetchEncryptedRange(
+    String assetId,
+    int start,
+    int endInclusive,
+  ) async {
+    final res = await _dio.get<List<int>>(
+      '/media/$assetId/raw',
+      options: _transferOptions.copyWith(
+        responseType: ResponseType.bytes,
+        headers: {'Range': 'bytes=$start-$endInclusive'},
+      ),
+    );
+    final data = res.data is Uint8List
+        ? res.data as Uint8List
+        : Uint8List.fromList(res.data!);
+    if (res.statusCode == 206) return data;
+    // Server ignored the Range header and sent everything -- slice it.
+    final end = endInclusive + 1 > data.length ? data.length : endInclusive + 1;
+    return Uint8List.sublistView(data, start, end);
+  }
+
+  /// Old single-blob videos that haven't been converted to the streamable
+  /// format yet: [(id, encryptedSize)].
+  Future<List<(String, int)>> listLegacyVideos() async {
+    final res = await _dio.get('/media/legacy-videos');
+    return (res.data as List)
+        .map((e) => (e['id'] as String, (e['size_bytes'] as num).toInt()))
+        .toList();
+  }
+
+  /// Uploads the chunk-encrypted replacement for an old video. The server
+  /// keeps the old object too (never deletes media).
+  Future<void> replaceWithChunked(
+    String assetId,
+    Uint8List encChunked, {
+    void Function(int sent, int total)? onSendProgress,
+  }) async {
+    final form = FormData.fromMap({
+      'file': MultipartFile.fromBytes(encChunked, filename: 'blob.enc'),
+    });
+    await _dio.put(
+      '/media/$assetId/raw',
+      data: form,
+      options: _transferOptions,
+      onSendProgress: onSendProgress,
+    );
   }
 }

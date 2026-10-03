@@ -14,6 +14,7 @@ import 'add_device_screen.dart';
 import 'approve_password_reset_screen.dart';
 import '../trash/trash_screen.dart';
 import 'devices_screen.dart';
+import 'video_migration_screen.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -129,6 +130,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   trailing: const Icon(Iconsax.arrow_right_3),
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => const TrashScreen()),
+                  ),
+                ),
+                ListTile(
+                  leading: const Icon(Iconsax.video_play),
+                  title: const Text('ভিডিও স্ট্রিমিং রূপান্তর'),
+                  subtitle: const Text(
+                    'পুরোনো ভিডিওগুলোকে সাথে সাথে চালু হওয়ার উপযোগী করুন',
+                  ),
+                  trailing: const Icon(Iconsax.arrow_right_3),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => const VideoMigrationScreen(),
+                    ),
                   ),
                 ),
                 const Divider(),

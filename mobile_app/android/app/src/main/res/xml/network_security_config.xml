@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Plain HTTP is allowed ONLY to the phone's own loopback address, where
+     the app's in-memory video streaming server listens (see DECISIONS.md).
+     Everything else keeps the platform default. -->
+<network-security-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">127.0.0.1</domain>
+    </domain-config>
+</network-security-config>

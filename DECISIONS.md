@@ -1721,6 +1721,49 @@ shows the MB downloaded so far with an indeterminate bar.
 User follow-up: progress belongs only to the gallery download, not to
 playback -- the player's overlay was removed again.
 
+## 53. Streamable videos (chunked encryption), old videos converted
+
+Videos always had to download completely before playing: each file was one
+AES-GCM blob whose auth tag is at the very end, so nothing could be safely
+decrypted early. Decrypting early without the tag would mean playing
+unverified data, which breaks the "no security compromise" rule, so the user
+chose a new format plus converting all old videos.
+
+**Format** (`core/crypto/chunked_crypto.dart`): header `CVSTRM02` | chunk
+size | plaintext size | salt, then 1MB chunks each sealed separately as
+nonce | ciphertext | tag. Key = HKDF(VMK, salt) as before; each chunk's
+AAD is its index plus a last-chunk flag, so chunks can't be reordered,
+moved, or the file silently truncated. Every chunk is verified before a
+single byte of it is played. `VaultCrypto.decryptBytes` recognises the magic
+and decrypts either format, so downloads/gallery saves/thumbnail
+generation keep working unchanged. Covered by `test/chunked_crypto_test.dart`.
+
+**Uploads:** `MediaService.upload(kind: 'video')` now always writes the
+chunked format (in a background isolate) and sends `chunked=true`.
+
+**Playback** (`core/media/video_stream_server.dart`): a tiny HTTP server on
+127.0.0.1 (random port, per-video random 128-bit token that dies when the
+player closes) serves the video to `video_player`. For each range the player
+asks for it fetches only the covering encrypted chunks (on-disk chunk cache
+first, else an HTTP range request to the backend, 4 chunks per round trip),
+verifies + decrypts them in an isolate and writes plaintext out, with
+`flush()` back-pressure. Only ciphertext chunks are cached on disk.
+Cleartext HTTP is allowed solely to 127.0.0.1
+(`res/xml/network_security_config.xml`). Old-format videos, or opening
+while offline with only a full cached copy, fall back to the previous
+download-then-play path.
+
+**Backend:** `media_assets.chunked` + `legacy_object_key` columns
+(idempotent ALTERs); `/media/{id}/raw` honours `Range` (206, max 32MB per
+request); `GET /media/legacy-videos`; `PUT /media/{id}/raw` stores the
+re-encrypted file under a NEW object key and keeps the old one in
+`legacy_object_key`. Nothing is ever deleted (old copies double the storage
+used by converted videos; can be cleaned up later only on explicit request).
+
+**Conversion:** Settings -> "ভিডিও স্ট্রিমিং রূপান্তর" downloads each old
+video, decrypts, re-encrypts chunked and uploads, with progress; resumable
+(lists only unconverted ones), a 409 "already converted" counts as done.
+
 ## 19. Add Device (peer-to-peer pairing)
 
 **Problem:** each role (`husband`/`wife`) can only be claimed once, ever
