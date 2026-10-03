@@ -1657,6 +1657,27 @@ session or network error, no `setState` after dispose), and the home feed no
 longer reshuffles every time you come back from a post (only on first load
 and pull-to-refresh).
 
+## 48. Hotfix: media never loading, duplicate chat ids, decrypt fallback
+
+Regression from #47: `_DecryptedMediaCache`'s in-flight tracking used
+`.whenComplete(() => _inflight.remove(key))`. `remove()` returns the very
+Future being built, and `whenComplete` waits on a returned Future, so every
+media load waited on itself forever (shimmer forever, no photo/video
+anywhere). Now a statement-bodied callback. Lesson: never return a value
+from a `whenComplete` callback.
+
+Chat crashed with "Multiple widgets used the same GlobalKey" because a
+message could land in `_messages` twice (history page overlap, or the
+server's websocket echo of a just-sent media message) and each message's
+reaction row uses a GlobalKey per message id. All insertion paths now
+de-duplicate by id. Failed older-page loads also reset their "loading"
+flag instead of sticking.
+
+`VaultCrypto.decryptBytes` now retries with the pure-Dart AES-GCM/HKDF if
+the native path throws, so a native-side problem can never turn readable
+data into "ডিক্রিপ্ট করা যায়নি". If that text still shows for some items,
+those items were encrypted with a different key than this phone holds.
+
 ## 19. Add Device (peer-to-peer pairing)
 
 **Problem:** each role (`husband`/`wife`) can only be claimed once, ever

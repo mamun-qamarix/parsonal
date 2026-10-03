@@ -132,7 +132,11 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Future<void> _load() async {
     final vmk = context.read<SessionProvider>().vmk!;
-    final messages = await _chatService.getHistory(vmk, limit: _pageSize);
+    final fetched = await _chatService.getHistory(vmk, limit: _pageSize);
+    // Defensive: one entry per message id (see the GlobalKey note in
+    // _buildMessageList's reaction row).
+    final seen = <String>{};
+    final messages = fetched.where((m) => seen.add(m.id)).toList();
     if (mounted) {
       setState(() {
         _messages = messages;
@@ -165,12 +169,22 @@ class _ChatScreenState extends State<ChatScreen> {
     if (_loadingMoreHistory || !_hasMoreHistory || _messages.isEmpty) return;
     setState(() => _loadingMoreHistory = true);
     final vmk = context.read<SessionProvider>().vmk!;
-    final older = await _chatService.getHistory(
-      vmk,
-      before: _messages.first.id,
-      limit: _pageSize,
-    );
+    final List<ChatMessageModel> older;
+    try {
+      older = await _chatService.getHistory(
+        vmk,
+        before: _messages.first.id,
+        limit: _pageSize,
+      );
+    } catch (_) {
+      // Offline / transient failure -- let the next scroll to the top retry
+      // instead of leaving the "loading older" flag stuck on.
+      if (mounted) setState(() => _loadingMoreHistory = false);
+      return;
+    }
     if (!mounted) return;
+    final have = _messages.map((m) => m.id).toSet();
+    older.removeWhere((m) => have.contains(m.id));
     final addedCount = older.length;
     setState(() {
       if (addedCount > 0) _messages = [...older, ..._messages];
@@ -331,8 +345,10 @@ class _ChatScreenState extends State<ChatScreen> {
         setState(() => _hasMoreHistory = false);
         break;
       }
+      final have = _messages.map((m) => m.id).toSet();
+      final fresh = older.where((m) => !have.contains(m.id)).toList();
       setState(() {
-        _messages = [...older, ..._messages];
+        _messages = [...fresh, ..._messages];
         _hasMoreHistory = older.length >= 100;
       });
       matches = _messages
@@ -404,7 +420,14 @@ class _ChatScreenState extends State<ChatScreen> {
         mediaAssetId: asset.id,
         replyToId: replyToId,
       );
-      if (mounted) setState(() => _messages.add(msg));
+      if (mounted) {
+        // The server's websocket echo of this same message may have
+        // already added it -- never list one id twice (duplicate ids
+        // share a GlobalKey for the reaction row and crash the build).
+        setState(() {
+          if (!_messages.any((m) => m.id == msg.id)) _messages.add(msg);
+        });
+      }
       _scrollToBottom();
       ChatSoundService.playSent();
     } finally {

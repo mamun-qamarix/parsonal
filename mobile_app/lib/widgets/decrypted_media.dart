@@ -78,7 +78,11 @@ class _DecryptedMediaCache {
           _put(key, data);
           return data;
         })
-        .whenComplete(() => _inflight.remove(key));
+        .whenComplete(() {
+          // Statement body on purpose: returning remove()'s value (this very
+          // Future) would make whenComplete wait on itself forever.
+          _inflight.remove(key);
+        });
   }
 }
 

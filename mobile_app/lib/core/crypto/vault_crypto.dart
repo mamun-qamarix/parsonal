@@ -3,6 +3,7 @@ import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
+import 'package:cryptography/dart.dart';
 
 /// Client-side end-to-end encryption. The server only ever sees the bytes
 /// produced by [encryptBytes] (opaque ciphertext) — see DECISIONS.md §1.
@@ -54,14 +55,31 @@ class VaultCrypto {
     return out.toBytes();
   }
 
+  // Pure-Dart implementations, used only as a safety net if the native
+  // (cryptography_flutter) path ever fails to decrypt something -- same
+  // algorithm and wire format, just slower. See DECISIONS.md.
+  static final _dartAlgorithm = DartAesGcm.with256bits();
+  static final _dartHkdf = DartHkdf(hmac: DartHmac.sha256(), outputLength: 32);
+
   static Future<Uint8List> decryptBytes(Uint8List vmk, Uint8List packed) async {
     final salt = packed.sublist(0, 16);
     final nonce = packed.sublist(16, 28);
     final tag = packed.sublist(packed.length - 16);
     final cipherText = packed.sublist(28, packed.length - 16);
-    final key = await _deriveItemKey(vmk, salt);
-    final box = SecretBox(cipherText, nonce: nonce, mac: Mac(tag));
-    final clear = await _algorithm.decrypt(box, secretKey: key);
+    List<int> clear;
+    try {
+      final key = await _deriveItemKey(vmk, salt);
+      final box = SecretBox(cipherText, nonce: nonce, mac: Mac(tag));
+      clear = await _algorithm.decrypt(box, secretKey: key);
+    } catch (_) {
+      final key = await _dartHkdf.deriveKey(
+        secretKey: SecretKey(vmk),
+        nonce: salt,
+        info: utf8.encode('couple-vault-item'),
+      );
+      final box = SecretBox(cipherText, nonce: nonce, mac: Mac(tag));
+      clear = await _dartAlgorithm.decrypt(box, secretKey: key);
+    }
     return clear is Uint8List ? clear : Uint8List.fromList(clear);
   }
 
