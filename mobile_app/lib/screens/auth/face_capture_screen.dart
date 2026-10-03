@@ -1,3 +1,4 @@
+import '../../widgets/shimmer_loading.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -188,7 +189,7 @@ class _FaceCaptureScreenState extends State<FaceCaptureScreen> {
               ),
             )
           else
-            const CircularProgressIndicator(color: AppColors.halalGreen),
+            const ShimmerSpinner(size: 40, color: AppColors.halalGreen),
           Positioned(
             bottom: 60,
             left: 24,

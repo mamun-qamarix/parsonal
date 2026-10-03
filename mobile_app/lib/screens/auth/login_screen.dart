@@ -1,3 +1,4 @@
+import '../../widgets/shimmer_loading.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -114,7 +115,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ? const SizedBox(
                         height: 20,
                         width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        child: ShimmerSpinner(size: 16),
                       )
                     : const Text('পরবর্তী'),
               ),

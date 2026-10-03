@@ -1,3 +1,4 @@
+import '../../widgets/shimmer_loading.dart';
 import 'package:flutter/material.dart';
 
 import '../../core/network/error_helper.dart';
@@ -92,7 +93,7 @@ class _ApprovePasswordResetScreenState
                       ? const SizedBox(
                           height: 20,
                           width: 20,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                          child: ShimmerSpinner(size: 16),
                         )
                       : const Text('অনুমোদন করুন'),
                 ),

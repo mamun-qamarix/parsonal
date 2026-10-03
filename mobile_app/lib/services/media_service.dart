@@ -65,46 +65,45 @@ class MediaService {
     await _dio.put('/media/$assetId/thumbnail', data: form);
   }
 
-  /// Both download methods cache the ENCRYPTED bytes exactly as received
-  /// -- same ciphertext the server holds -- keyed by asset id, and fall
-  /// back to that disk cache on a network failure. Previously-viewed
-  /// media therefore keeps working offline with no change to what's ever
-  /// stored at rest. See DECISIONS.md and [LocalCache].
-  Future<Uint8List> downloadRaw(Uint8List vmk, String assetId) async {
-    Uint8List encBytes;
-    try {
-      final res = await _dio.get<List<int>>(
-        '/media/$assetId/raw',
-        options: _transferOptions.copyWith(responseType: ResponseType.bytes),
-      );
-      encBytes = Uint8List.fromList(res.data!);
-      ConnectivityStatus.instance.offline.value = false;
-      unawaited(LocalCache.instance.putBlob(assetId, 'raw', encBytes));
-    } on DioException {
-      final cached = await LocalCache.instance.getBlob(assetId, 'raw');
-      if (cached == null) rethrow;
-      encBytes = cached;
-      ConnectivityStatus.instance.offline.value = true;
-    }
-    return VaultCrypto.decryptBytes(vmk, encBytes);
-  }
+  /// Media assets are immutable once uploaded (looked up by id; a video's
+  /// backfilled thumbnail is only requested once the server says it has
+  /// one), so both download methods are CACHE-FIRST: previously-seen
+  /// media is read from the on-disk cache of still-ENCRYPTED bytes (same
+  /// ciphertext the server holds -- see [LocalCache]) instead of waiting on
+  /// the network again, then decrypted locally as always. On a miss the
+  /// network is used and the ciphertext is cached for next time. See
+  /// DECISIONS.md.
+  Future<Uint8List> downloadRaw(Uint8List vmk, String assetId) =>
+      _download(vmk, assetId, 'raw');
 
-  Future<Uint8List> downloadThumbnail(Uint8List vmk, String assetId) async {
-    Uint8List encBytes;
-    try {
-      final res = await _dio.get<List<int>>(
-        '/media/$assetId/thumbnail',
-        options: Options(responseType: ResponseType.bytes),
-      );
-      encBytes = Uint8List.fromList(res.data!);
-      ConnectivityStatus.instance.offline.value = false;
-      unawaited(LocalCache.instance.putBlob(assetId, 'thumb', encBytes));
-    } on DioException {
-      final cached = await LocalCache.instance.getBlob(assetId, 'thumb');
-      if (cached == null) rethrow;
-      encBytes = cached;
-      ConnectivityStatus.instance.offline.value = true;
+  Future<Uint8List> downloadThumbnail(Uint8List vmk, String assetId) =>
+      _download(vmk, assetId, 'thumb');
+
+  Future<Uint8List> _download(
+    Uint8List vmk,
+    String assetId,
+    String variant,
+  ) async {
+    final cached = await LocalCache.instance.getBlob(assetId, variant);
+    if (cached != null) {
+      try {
+        return await VaultCrypto.decryptBytes(vmk, cached);
+      } catch (_) {
+        // Corrupt/partial cache file -- fall through and refetch.
+      }
     }
+    final isRaw = variant == 'raw';
+    final res = await _dio.get<List<int>>(
+      isRaw ? '/media/$assetId/raw' : '/media/$assetId/thumbnail',
+      options: isRaw
+          ? _transferOptions.copyWith(responseType: ResponseType.bytes)
+          : Options(responseType: ResponseType.bytes),
+    );
+    final encBytes = res.data is Uint8List
+        ? res.data as Uint8List
+        : Uint8List.fromList(res.data!);
+    ConnectivityStatus.instance.offline.value = false;
+    unawaited(LocalCache.instance.putBlob(assetId, variant, encBytes));
     return VaultCrypto.decryptBytes(vmk, encBytes);
   }
 }

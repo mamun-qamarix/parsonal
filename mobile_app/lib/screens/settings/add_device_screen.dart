@@ -1,3 +1,4 @@
+import '../../widgets/shimmer_loading.dart';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
@@ -59,7 +60,7 @@ class _AddDeviceScreenState extends State<AddDeviceScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('নতুন ডিভাইস যোগ করুন')),
       body: _payload == null
-          ? const Center(child: CircularProgressIndicator())
+          ? const ShimmerTileList(count: 4)
           : SafeArea(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(24),

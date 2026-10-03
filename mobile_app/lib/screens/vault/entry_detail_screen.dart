@@ -1,3 +1,4 @@
+import '../../widgets/shimmer_loading.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -27,6 +28,7 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
   final _vaultService = VaultService();
   VaultEntry? _entry;
   bool _loading = true;
+  bool _failed = false;
 
   @override
   void initState() {
@@ -36,11 +38,25 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
 
   Future<void> _load() async {
     final vmk = context.read<SessionProvider>().vmk!;
-    final entry = await _vaultService.getEntry(vmk, widget.entryId);
+    final VaultEntry entry;
+    try {
+      entry = await _vaultService.getEntry(vmk, widget.entryId);
+    } catch (_) {
+      // Deleted/trashed since the list was loaded, or no connection --
+      // show a message instead of spinning forever.
+      if (mounted && _entry == null) {
+        setState(() {
+          _loading = false;
+          _failed = true;
+        });
+      }
+      return;
+    }
     if (!mounted) return;
     setState(() {
       _entry = entry;
       _loading = false;
+      _failed = false;
     });
     final show = await SocialService().checkMatchCelebration(
       'vault_entry',
@@ -123,7 +139,12 @@ class _EntryDetailScreenState extends State<EntryDetailScreen> {
   @override
   Widget build(BuildContext context) {
     if (_loading || _entry == null) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+      return Scaffold(
+        appBar: AppBar(),
+        body: _failed
+            ? const Center(child: Text('এন্ট্রিটা লোড করা যায়নি'))
+            : const ShimmerFeedList(count: 1),
+      );
     }
     final entry = _entry!;
     final privacyMask = context.watch<SessionProvider>().privacyMask;

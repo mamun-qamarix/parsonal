@@ -1,3 +1,4 @@
+import '../../widgets/shimmer_loading.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -58,9 +59,7 @@ class _ReelScreenState extends State<ReelScreen> {
       backgroundColor: Colors.black,
       body: SafeArea(
         child: _loading
-            ? Center(
-                child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary),
-              )
+            ? const ShimmerFill()
             : _items.isEmpty
             ? const Center(
                 child: Text(

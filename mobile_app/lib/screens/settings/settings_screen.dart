@@ -1,3 +1,4 @@
+import '../../widgets/shimmer_loading.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -117,7 +118,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('সেটিংস')),
       body: _loading
-          ? const Center(child: CircularProgressIndicator())
+          ? const ShimmerTileList(count: 8)
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [

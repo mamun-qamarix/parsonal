@@ -28,8 +28,15 @@ class _HistoryScreenState extends State<HistoryScreen> {
   }
 
   Future<void> _load() async {
-    final vmk = context.read<SessionProvider>().vmk!;
-    final entries = await VaultService().listEntries(vmk);
+    final vmk = context.read<SessionProvider>().vmk;
+    if (vmk == null) return;
+    final List<VaultEntry> entries;
+    try {
+      entries = await VaultService().listEntries(vmk);
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+      return;
+    }
     entries.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     if (mounted)
       setState(() {
@@ -78,7 +85,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                   EntryDetailScreen(entryId: _entries[i].id),
                             ),
                           );
-                          _load();
+                          if (mounted) _load();
                         },
                       ),
                     ),

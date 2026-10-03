@@ -1,3 +1,4 @@
+import '../../widgets/shimmer_loading.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -176,7 +177,7 @@ class _ProfileViewState extends State<_ProfileView> {
 
   @override
   Widget build(BuildContext context) {
-    if (_loading) return const Center(child: CircularProgressIndicator());
+    if (_loading) return const ShimmerTileList(count: 5);
     final accent = widget.role == 'husband'
         ? AppColors.husband
         : AppColors.wife;
@@ -246,10 +247,7 @@ class _ProfileViewState extends State<_ProfileView> {
                         ? const SizedBox(
                             height: 14,
                             width: 14,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
+                            child: ShimmerSpinner(size: 14, color: Colors.white),
                           )
                         : const Icon(
                             Iconsax.camera,

@@ -592,7 +592,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _buildSearchResults() {
     if (_searchLoading) {
-      return Center(child: CircularProgressIndicator(color: Theme.of(context).colorScheme.primary));
+      return const ShimmerTileList(count: 5);
     }
     if (_searchController.text.trim().isEmpty) {
       return const Center(
@@ -988,7 +988,7 @@ class _ChatScreenState extends State<ChatScreen> {
           if (_loadingMoreHistory)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 6),
-              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+              child: Center(child: ShimmerSpinner(size: 16)),
             ),
           if (_sending) const LinearProgressIndicator(),
           if (_peerTypingKind != null) _buildPeerTypingIndicator(),

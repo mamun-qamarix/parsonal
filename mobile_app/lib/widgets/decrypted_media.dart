@@ -1,9 +1,11 @@
 import 'dart:async';
+import 'dart:collection';
 import 'dart:io';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter/foundation.dart' show SynchronousFuture;
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
@@ -12,6 +14,7 @@ import 'package:video_player/video_player.dart';
 import '../core/media/video_thumbnail_helper.dart';
 import '../providers/session_provider.dart';
 import '../services/media_service.dart';
+import 'shimmer_loading.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
 
 /// Blurs [child] whenever the app-wide privacy mask (see DECISIONS.md) is
@@ -32,19 +35,69 @@ Widget _applyPrivacyBlur(BuildContext context, Widget child, {bool forceShow = f
   );
 }
 
+/// In-memory cache of decrypted media with a byte budget (least-recently-
+/// used entries are evicted -- previously this grew without limit, which
+/// could exhaust memory after browsing a lot of big photos/videos) and
+/// in-flight de-duplication (the same asset requested twice at once --
+/// e.g. a thumbnail and a full view -- is only fetched/decrypted once).
+/// Cache hits are returned as a [SynchronousFuture] so a widget can paint
+/// real content on its very first frame with no loading flash. See
+/// DECISIONS.md.
 class _DecryptedMediaCache {
-  static final Map<String, Uint8List> _cache = {};
+  static const _maxBytes = 120 * 1024 * 1024;
+  static final LinkedHashMap<String, Uint8List> _cache = LinkedHashMap();
+  static final Map<String, Future<Uint8List>> _inflight = {};
+  static int _size = 0;
+
+  static Uint8List? peek(String key) {
+    final v = _cache.remove(key);
+    if (v != null) _cache[key] = v; // mark as most recently used
+    return v;
+  }
+
+  static void _put(String key, Uint8List data) {
+    if (data.length > _maxBytes) return; // too big to keep around
+    final old = _cache.remove(key);
+    if (old != null) _size -= old.length;
+    _cache[key] = data;
+    _size += data.length;
+    while (_size > _maxBytes && _cache.length > 1) {
+      final oldest = _cache.keys.first;
+      _size -= _cache.remove(oldest)!.length;
+    }
+  }
 
   static Future<Uint8List> get(
     String key,
     Future<Uint8List> Function() loader,
-  ) async {
-    final cached = _cache[key];
-    if (cached != null) return cached;
-    final data = await loader();
-    _cache[key] = data;
-    return data;
+  ) {
+    final hit = peek(key);
+    if (hit != null) return SynchronousFuture(hit);
+    return _inflight[key] ??= loader()
+        .then((data) {
+          _put(key, data);
+          return data;
+        })
+        .whenComplete(() => _inflight.remove(key));
   }
+}
+
+/// Loading placeholder for any media area: a shimmering block that fills
+/// the available box, or a sensible fixed aspect ratio when the parent
+/// gives no bounded height (so it can never blow up a scrolling list).
+Widget _mediaShimmer({double fallbackRatio = 4 / 3}) {
+  return LayoutBuilder(
+    builder: (context, c) {
+      if (c.hasBoundedWidth && c.hasBoundedHeight) return const ShimmerFill();
+      if (c.hasBoundedWidth) {
+        return AspectRatio(
+          aspectRatio: fallbackRatio,
+          child: const ShimmerFill(),
+        );
+      }
+      return const SizedBox(width: 120, height: 120, child: ShimmerFill());
+    },
+  );
 }
 
 /// Downloads + decrypts a media asset thumbnail (or full image if no
@@ -88,6 +141,34 @@ class DecryptedThumbnail extends StatefulWidget {
 
 class _DecryptedThumbnailState extends State<DecryptedThumbnail> {
   bool _aspectReported = false;
+  late Future<Uint8List> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _start();
+  }
+
+  @override
+  void didUpdateWidget(covariant DecryptedThumbnail old) {
+    super.didUpdateWidget(old);
+    if (old.assetId != widget.assetId) {
+      _aspectReported = false;
+      _future = _start();
+    }
+  }
+
+  // Created once per asset (NOT in build) -- a fresh Future on every
+  // rebuild made FutureBuilder flash back to its loading state each time
+  // anything above it rebuilt.
+  Future<Uint8List> _start() {
+    final vmk = context.read<SessionProvider>().vmk!;
+    final service = MediaService();
+    return _DecryptedMediaCache.get(
+      'thumb:${widget.assetId}',
+      () => _load(vmk, service),
+    );
+  }
 
   void _maybeReportAspect(Uint8List bytes) {
     if (_aspectReported || widget.onAspectRatio == null) return;
@@ -124,21 +205,11 @@ class _DecryptedThumbnailState extends State<DecryptedThumbnail> {
 
   @override
   Widget build(BuildContext context) {
-    final vmk = context.read<SessionProvider>().vmk!;
-    final service = MediaService();
     return FutureBuilder<Uint8List>(
-      future: _DecryptedMediaCache.get(
-        'thumb:${widget.assetId}',
-        () => _load(vmk, service),
-      ),
+      future: _future,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          return Container(
-            color: Colors.grey.withValues(alpha: 0.15),
-            child: const Center(
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-          );
+          return _mediaShimmer();
         }
         if (snapshot.hasError || !snapshot.hasData) {
           return Container(
@@ -149,7 +220,11 @@ class _DecryptedThumbnailState extends State<DecryptedThumbnail> {
         _maybeReportAspect(snapshot.data!);
         return _applyPrivacyBlur(
           context,
-          Image.memory(snapshot.data!, fit: widget.fit),
+          Image.memory(
+            snapshot.data!,
+            fit: widget.fit,
+            gaplessPlayback: true,
+          ),
           forceShow: widget.forceShow,
         );
       },
@@ -163,7 +238,7 @@ class _DecryptedThumbnailState extends State<DecryptedThumbnail> {
 /// BoxFit.contain (default) for a full-screen zoom viewer, BoxFit.fitWidth
 /// for Reel's "width fixed, height follows the real aspect ratio" style.
 /// See DECISIONS.md.
-class DecryptedFullImage extends StatelessWidget {
+class DecryptedFullImage extends StatefulWidget {
   final String assetId;
   final BoxFit fit;
   final bool zoomable;
@@ -178,27 +253,57 @@ class DecryptedFullImage extends StatelessWidget {
   });
 
   @override
-  Widget build(BuildContext context) {
+  State<DecryptedFullImage> createState() => _DecryptedFullImageState();
+}
+
+class _DecryptedFullImageState extends State<DecryptedFullImage> {
+  late Future<Uint8List> _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _future = _start();
+  }
+
+  @override
+  void didUpdateWidget(covariant DecryptedFullImage old) {
+    super.didUpdateWidget(old);
+    if (old.assetId != widget.assetId) _future = _start();
+  }
+
+  Future<Uint8List> _start() {
     final vmk = context.read<SessionProvider>().vmk!;
-    final service = MediaService();
+    return _DecryptedMediaCache.get(
+      'full:${widget.assetId}',
+      () => MediaService().downloadRaw(vmk, widget.assetId),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return FutureBuilder<Uint8List>(
-      future: _DecryptedMediaCache.get(
-        'full:$assetId',
-        () => service.downloadRaw(vmk, assetId),
-      ),
+      future: _future,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          return const Center(child: CircularProgressIndicator());
+          return _mediaShimmer();
         }
         if (snapshot.hasError || !snapshot.hasData) {
           return const Center(child: Icon(Iconsax.gallery_slash, size: 48));
         }
+        // Decode no wider than the screen can usefully show (a 12MP photo
+        // decoded at full size is slow and memory-hungry); the zoom viewer
+        // gets extra headroom.
         final image = _applyPrivacyBlur(
           context,
-          Image.memory(snapshot.data!, fit: fit),
-          forceShow: forceShow,
+          Image.memory(
+            snapshot.data!,
+            fit: widget.fit,
+            cacheWidth: widget.zoomable ? 2400 : 1440,
+            gaplessPlayback: true,
+          ),
+          forceShow: widget.forceShow,
         );
-        return zoomable ? InteractiveViewer(child: image) : image;
+        return widget.zoomable ? InteractiveViewer(child: image) : image;
       },
     );
   }
@@ -242,11 +347,23 @@ class _DecryptedVideoPlayerState extends State<DecryptedVideoPlayer> {
         'full:${widget.assetId}',
         () => MediaService().downloadRaw(vmk, widget.assetId),
       );
+      if (!mounted) return;
       final file = await _writeTempFile(widget.assetId, bytes);
       final controller = VideoPlayerController.file(file);
-      await controller.initialize();
+      try {
+        await controller.initialize();
+      } catch (_) {
+        await file.delete().catchError((_) => file);
+        rethrow;
+      }
+      if (!mounted) {
+        // Left the screen while the video was still preparing -- clean up
+        // instead of leaking the player and the decrypted temp file.
+        await controller.dispose();
+        await file.delete().catchError((_) => file);
+        return;
+      }
       controller.addListener(_onTick);
-      if (!mounted) return;
       setState(() {
         _controller = controller;
         _tempFile = file;
@@ -262,7 +379,11 @@ class _DecryptedVideoPlayerState extends State<DecryptedVideoPlayer> {
 
   Future<File> _writeTempFile(String assetId, Uint8List bytes) async {
     final dir = await getTemporaryDirectory();
-    final file = File('${dir.path}/vault_video_$assetId.mp4');
+    // Unique per player instance: the same video can be open in two places
+    // at once (e.g. Reel and the full-screen viewer) and closing one used
+    // to delete the file the other was still playing from, which errored
+    // out playback on "back". See DECISIONS.md.
+    final file = File('${dir.path}/vault_video_${assetId}_$hashCode.mp4');
     await file.writeAsBytes(bytes, flush: true);
     return file;
   }
@@ -289,7 +410,7 @@ class _DecryptedVideoPlayerState extends State<DecryptedVideoPlayer> {
     if (_error) return const Center(child: Icon(Iconsax.danger));
     final controller = _controller;
     if (controller == null) {
-      return const Center(child: CircularProgressIndicator());
+      return const AspectRatio(aspectRatio: 16 / 9, child: ShimmerFill());
     }
     final position = controller.value.position;
     final duration = controller.value.duration;
@@ -463,7 +584,7 @@ class _DecryptedVoicePlayerState extends State<DecryptedVoicePlayer> {
       return const SizedBox(
         height: 36,
         width: 36,
-        child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+        child: Center(child: ShimmerSpinner(size: 24)),
       );
     if (_error) return Icon(Iconsax.danger, color: color);
     return Row(

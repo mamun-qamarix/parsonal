@@ -46,12 +46,12 @@ class VaultCrypto {
       secretKey: key,
       nonce: nonce,
     );
-    return Uint8List.fromList([
-      ...salt,
-      ...nonce,
-      ...box.cipherText,
-      ...box.mac.bytes,
-    ]);
+    final out = BytesBuilder(copy: false)
+      ..add(salt)
+      ..add(nonce)
+      ..add(box.cipherText)
+      ..add(box.mac.bytes);
+    return out.toBytes();
   }
 
   static Future<Uint8List> decryptBytes(Uint8List vmk, Uint8List packed) async {
@@ -62,7 +62,7 @@ class VaultCrypto {
     final key = await _deriveItemKey(vmk, salt);
     final box = SecretBox(cipherText, nonce: nonce, mac: Mac(tag));
     final clear = await _algorithm.decrypt(box, secretKey: key);
-    return Uint8List.fromList(clear);
+    return clear is Uint8List ? clear : Uint8List.fromList(clear);
   }
 
   static Future<String> encryptText(Uint8List vmk, String text) async {

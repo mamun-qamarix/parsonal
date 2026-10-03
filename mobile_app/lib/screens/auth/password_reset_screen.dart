@@ -1,3 +1,4 @@
+import '../../widgets/shimmer_loading.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -146,7 +147,7 @@ class _PasswordResetScreenState extends State<PasswordResetScreen> {
                       SizedBox(
                         height: 16,
                         width: 16,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        child: ShimmerSpinner(size: 16),
                       ),
                       SizedBox(width: 10),
                       Text(

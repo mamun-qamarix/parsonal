@@ -1620,6 +1620,43 @@ maxSdkVersion=29 broke the manifest merge).
 **Needs a backend deploy** (`docker compose up -d --build backend` on the
 VPS) before the trash screen works. Download works without it.
 
+## 47. Shimmer-only loading, faster media, "back" error hardening
+
+**Loading style:** every `CircularProgressIndicator` in the app is gone --
+replaced by shimmer: `ShimmerTileList`/`ShimmerFeedList` for full-page
+loads (settings, profile, add-device, entry detail, chat search), a
+`ShimmerFill` block for media areas and Reel, and a small `ShimmerSpinner`
+for in-button/inline spots (login, claim role, save, restore, etc.). Don't
+add new circular spinners.
+
+**Faster media:**
+- `MediaService` downloads are now cache-first: the on-disk cache of
+  still-encrypted bytes (see #45) is checked BEFORE the network (assets are
+  immutable by id), so anything seen once opens without a round trip.
+- `cryptography_flutter` + `FlutterCryptography.enable()` in `main()`:
+  AES-GCM runs natively (off the UI thread) instead of pure Dart. Same wire
+  format, so existing data is unaffected; falls back to pure Dart if the
+  native side is unavailable. If any media ever fails to open after this
+  change, removing that one `enable()` line restores the old path.
+- `_DecryptedMediaCache` now has a 120MB LRU budget (was unbounded) and
+  de-duplicates in-flight loads; hits return a `SynchronousFuture` so cached
+  media paints on the first frame.
+- `DecryptedThumbnail`/`DecryptedFullImage` keep their Future in State (they
+  built a new Future on every rebuild, flashing the loader each time
+  anything above rebuilt). Full images decode at most 1440px wide (2400 in
+  the zoom viewer) instead of full resolution.
+
+**"Back" errors:** couldn't be pinned to one screen from the report, so
+fixed the real defects found: video players shared one temp file per asset,
+so closing one (e.g. the full-screen viewer) deleted the file another (e.g.
+Reel) was playing -> now unique per player, and a player left mid-prepare
+cleans up after itself; entry detail showed an endless spinner when the
+entry was gone/unreachable -> now shows a message; home/history/favorites
+reloads after returning from a screen are now guarded (no crash on null
+session or network error, no `setState` after dispose), and the home feed no
+longer reshuffles every time you come back from a post (only on first load
+and pull-to-refresh).
+
 ## 19. Add Device (peer-to-peer pairing)
 
 **Problem:** each role (`husband`/`wife`) can only be claimed once, ever

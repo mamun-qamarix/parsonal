@@ -1,3 +1,4 @@
+import '../../widgets/shimmer_loading.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -234,7 +235,7 @@ class _CreateEntryScreenState extends State<CreateEntryScreen> {
                     ? const SizedBox(
                         height: 20,
                         width: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2),
+                        child: ShimmerSpinner(size: 16),
                       )
                     : const Text('ভল্টে সেভ করুন'),
               ),

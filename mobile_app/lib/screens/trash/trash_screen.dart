@@ -201,7 +201,7 @@ class _TrashScreenState extends State<TrashScreen> {
                         ? const SizedBox(
                             width: 14,
                             height: 14,
-                            child: CircularProgressIndicator(strokeWidth: 2),
+                            child: ShimmerSpinner(size: 16),
                           )
                         : const Icon(Iconsax.undo, size: 16),
                     label: const Text('ফিরিয়ে আনুন'),

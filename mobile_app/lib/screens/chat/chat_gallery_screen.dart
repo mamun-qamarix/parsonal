@@ -131,7 +131,7 @@ class _ChatGalleryScreenState extends State<ChatGalleryScreen> {
                                 ? const SizedBox(
                                     height: 12,
                                     width: 12,
-                                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                    child: ShimmerSpinner(size: 12, color: Colors.white),
                                   )
                                 : const Text('পোস্ট করুন'),
                           ),

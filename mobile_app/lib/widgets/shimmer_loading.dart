@@ -163,3 +163,47 @@ class ShimmerTileList extends StatelessWidget {
     );
   }
 }
+
+/// Shimmer replacement for the small in-button / inline
+/// `CircularProgressIndicator` -- a little rounded block that shimmers.
+/// The app uses shimmer for every loading state, never a spinning circle.
+/// Defaults to the surrounding text/icon colour so it reads correctly on
+/// buttons as well as on plain backgrounds.
+class ShimmerSpinner extends StatelessWidget {
+  final double size;
+  final Color? color;
+  const ShimmerSpinner({super.key, this.size = 18, this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    final c =
+        color ??
+        DefaultTextStyle.of(context).style.color ??
+        Theme.of(context).colorScheme.onSurface;
+    return SizedBox(
+      width: size,
+      height: size,
+      child: Shimmer.fromColors(
+        baseColor: c.withValues(alpha: 0.30),
+        highlightColor: c.withValues(alpha: 0.95),
+        child: Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(size / 3),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A shimmering filled box -- the loading placeholder for a photo/video
+/// thumbnail or any media area (replaces the old grey box + spinner).
+class ShimmerFill extends StatelessWidget {
+  const ShimmerFill({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return AppShimmer(child: Container(color: Colors.white));
+  }
+}

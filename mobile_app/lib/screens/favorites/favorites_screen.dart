@@ -26,8 +26,15 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
   }
 
   Future<void> _load() async {
-    final vmk = context.read<SessionProvider>().vmk!;
-    final entries = await VaultService().listEntries(vmk, favoritesOnly: true);
+    final vmk = context.read<SessionProvider>().vmk;
+    if (vmk == null) return;
+    final List<VaultEntry> entries;
+    try {
+      entries = await VaultService().listEntries(vmk, favoritesOnly: true);
+    } catch (_) {
+      if (mounted) setState(() => _loading = false);
+      return;
+    }
     if (mounted)
       setState(() {
         _entries = entries;
@@ -61,7 +68,7 @@ class _FavoritesScreenState extends State<FavoritesScreen> {
                                   EntryDetailScreen(entryId: _entries[i].id),
                             ),
                           );
-                          _load();
+                          if (mounted) _load();
                         },
                       ),
                     ),

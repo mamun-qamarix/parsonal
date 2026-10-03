@@ -46,15 +46,31 @@ class _HomeTabState extends State<HomeTab> {
     _load();
   }
 
-  Future<void> _load() async {
-    final vmk = context.read<SessionProvider>().vmk!;
-    final results = await Future.wait([
-      _service.listEntries(vmk),
-      _service.listCategories(vmk, 'vault'),
-    ]);
+  /// [reshuffle] gives a fresh random order -- on first load and on an
+  /// explicit pull-to-refresh, per request. Every other reload (coming back
+  /// from a post, after an edit/delete) keeps the order the feed already
+  /// had, so the list doesn't jump around under you on "back".
+  Future<void> _load({bool reshuffle = false}) async {
+    final vmk = context.read<SessionProvider>().vmk;
+    if (vmk == null) return;
+    final List<dynamic> results;
+    try {
+      results = await Future.wait([
+        _service.listEntries(vmk),
+        _service.listCategories(vmk, 'vault'),
+      ]);
+    } catch (_) {
+      if (mounted && _loading) setState(() => _loading = false);
+      return;
+    }
     if (!mounted) return;
     final entries = results[0] as List<VaultEntry>;
-    entries.shuffle(); // fresh random order on every refresh, per request
+    if (reshuffle || _entries.isEmpty) {
+      entries.shuffle();
+    } else {
+      final pos = {for (var i = 0; i < _entries.length; i++) _entries[i].id: i};
+      entries.sort((a, b) => (pos[a.id] ?? -1).compareTo(pos[b.id] ?? -1));
+    }
     setState(() {
       _entries = entries;
       _categories = results[1] as List<Category>;
@@ -102,7 +118,7 @@ class _HomeTabState extends State<HomeTab> {
             CreateEntryScreen(contentType: type, categories: _categories),
       ),
     );
-    if (created == true) _load();
+    if (created == true && mounted) _load();
   }
 
   @override
@@ -122,7 +138,7 @@ class _HomeTabState extends State<HomeTab> {
         child: const Icon(Iconsax.add),
       ),
       body: RefreshIndicator(
-        onRefresh: _load,
+        onRefresh: () => _load(reshuffle: true),
         child: CustomScrollView(
           slivers: [
             // Just the title bar -- floating+snap so it comes right back on
@@ -310,7 +326,7 @@ class _HomeTabState extends State<HomeTab> {
                                   EntryDetailScreen(entryId: list[i].id),
                             ),
                           );
-                          _load();
+                          if (mounted) _load();
                         },
                       ),
                       Divider(
