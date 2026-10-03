@@ -1,4 +1,3 @@
-import 'package:cryptography_flutter/cryptography_flutter.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -21,11 +20,6 @@ import 'package:iconsax_flutter/iconsax_flutter.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  // Native (Android Keystore/javax.crypto) AES-GCM instead of pure-Dart --
-  // same wire format, but far faster for big photos/videos and it runs off
-  // the UI thread. Falls back to pure Dart automatically if unavailable.
-  // See DECISIONS.md.
-  FlutterCryptography.enable();
   // Whole app is Bengali-only, per DECISIONS.md -- without this, every
   // unlocalized DateFormat (chat timestamps, date dividers, audit log,
   // devices screen, etc.) silently falls back to English month names and

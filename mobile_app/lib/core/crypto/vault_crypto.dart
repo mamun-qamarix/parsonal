@@ -1,9 +1,62 @@
 import 'dart:convert';
+import 'dart:isolate';
 import 'dart:math';
 import 'dart:typed_data';
 
 import 'package:cryptography/cryptography.dart';
 import 'package:cryptography/dart.dart';
+
+/// Payloads above this size (photos, videos) are encrypted/decrypted inside
+/// a background isolate so the pure-Dart AES-GCM -- slow for big files --
+/// never blocks the UI thread (it used to freeze the app while a photo or
+/// video was being opened). Small payloads (text, thumbnails) stay inline,
+/// where spinning up an isolate would cost more than the work itself. Same
+/// algorithm and wire format either way. See DECISIONS.md.
+const _kBackgroundThreshold = 512 * 1024;
+
+final _kHkdfInfo = utf8.encode('couple-vault-item');
+
+/// Top-level (not a closure over `this`) so it can run via `Isolate.run`.
+Future<Uint8List> _decryptPacked(Uint8List vmk, Uint8List packed) async {
+  final key = await DartHkdf(
+    hmac: DartHmac.sha256(),
+    outputLength: 32,
+  ).deriveKey(
+    secretKey: SecretKey(vmk),
+    nonce: packed.sublist(0, 16),
+    info: _kHkdfInfo,
+  );
+  final box = SecretBox(
+    packed.sublist(28, packed.length - 16),
+    nonce: packed.sublist(16, 28),
+    mac: Mac(packed.sublist(packed.length - 16)),
+  );
+  final clear = await DartAesGcm.with256bits().decrypt(box, secretKey: key);
+  return clear is Uint8List ? clear : Uint8List.fromList(clear);
+}
+
+Future<Uint8List> _encryptPacked(
+  Uint8List vmk,
+  Uint8List plaintext,
+  Uint8List salt,
+  Uint8List nonce,
+) async {
+  final key = await DartHkdf(
+    hmac: DartHmac.sha256(),
+    outputLength: 32,
+  ).deriveKey(secretKey: SecretKey(vmk), nonce: salt, info: _kHkdfInfo);
+  final box = await DartAesGcm.with256bits().encrypt(
+    plaintext,
+    secretKey: key,
+    nonce: nonce,
+  );
+  return (BytesBuilder(copy: false)
+        ..add(salt)
+        ..add(nonce)
+        ..add(box.cipherText)
+        ..add(box.mac.bytes))
+      .toBytes();
+}
 
 /// Client-side end-to-end encryption. The server only ever sees the bytes
 /// produced by [encryptBytes] (opaque ciphertext) — see DECISIONS.md §1.
@@ -13,8 +66,6 @@ import 'package:cryptography/dart.dart';
 /// A fresh per-item key is derived from the Vault Master Key (VMK) via
 /// HKDF-SHA256 using a random salt, so no two items share a key.
 class VaultCrypto {
-  static final _algorithm = AesGcm.with256bits();
-  static final _hkdfAlgo = Hkdf(hmac: Hmac.sha256(), outputLength: 32);
   static final _random = Random.secure();
 
   static Uint8List _randomBytes(int length) {
@@ -25,62 +76,25 @@ class VaultCrypto {
     return bytes;
   }
 
-  static Future<SecretKey> _deriveItemKey(Uint8List vmk, Uint8List salt) {
-    return _hkdfAlgo.deriveKey(
-      secretKey: SecretKey(vmk),
-      nonce: salt,
-      info: utf8.encode('couple-vault-item'),
-    );
-  }
-
   /// Encrypts [plaintext] and returns the raw packed bytes ready to be
   /// base64-encoded for the `enc_payload` field sent to the server.
   static Future<Uint8List> encryptBytes(
     Uint8List vmk,
     Uint8List plaintext,
-  ) async {
+  ) {
     final salt = _randomBytes(16);
-    final key = await _deriveItemKey(vmk, salt);
     final nonce = _randomBytes(12);
-    final box = await _algorithm.encrypt(
-      plaintext,
-      secretKey: key,
-      nonce: nonce,
-    );
-    final out = BytesBuilder(copy: false)
-      ..add(salt)
-      ..add(nonce)
-      ..add(box.cipherText)
-      ..add(box.mac.bytes);
-    return out.toBytes();
+    if (plaintext.length > _kBackgroundThreshold) {
+      return Isolate.run(() => _encryptPacked(vmk, plaintext, salt, nonce));
+    }
+    return _encryptPacked(vmk, plaintext, salt, nonce);
   }
 
-  // Pure-Dart implementations, used only as a safety net if the native
-  // (cryptography_flutter) path ever fails to decrypt something -- same
-  // algorithm and wire format, just slower. See DECISIONS.md.
-  static final _dartAlgorithm = DartAesGcm.with256bits();
-  static final _dartHkdf = DartHkdf(hmac: DartHmac.sha256(), outputLength: 32);
-
-  static Future<Uint8List> decryptBytes(Uint8List vmk, Uint8List packed) async {
-    final salt = packed.sublist(0, 16);
-    final nonce = packed.sublist(16, 28);
-    final tag = packed.sublist(packed.length - 16);
-    final cipherText = packed.sublist(28, packed.length - 16);
-    List<int> clear;
-    try {
-      final key = await _deriveItemKey(vmk, salt);
-      final box = SecretBox(cipherText, nonce: nonce, mac: Mac(tag));
-      clear = await _algorithm.decrypt(box, secretKey: key);
-    } catch (_) {
-      final key = await _dartHkdf.deriveKey(
-        secretKey: SecretKey(vmk),
-        nonce: salt,
-        info: utf8.encode('couple-vault-item'),
-      );
-      final box = SecretBox(cipherText, nonce: nonce, mac: Mac(tag));
-      clear = await _dartAlgorithm.decrypt(box, secretKey: key);
+  static Future<Uint8List> decryptBytes(Uint8List vmk, Uint8List packed) {
+    if (packed.length > _kBackgroundThreshold) {
+      return Isolate.run(() => _decryptPacked(vmk, packed));
     }
-    return clear is Uint8List ? clear : Uint8List.fromList(clear);
+    return _decryptPacked(vmk, packed);
   }
 
   static Future<String> encryptText(Uint8List vmk, String text) async {

@@ -1678,6 +1678,18 @@ the native path throws, so a native-side problem can never turn readable
 data into "ডিক্রিপ্ট করা যায়নি". If that text still shows for some items,
 those items were encrypted with a different key than this phone holds.
 
+## 49. Reverted native crypto; big payloads decrypt in a background isolate
+
+After #47 introduced `cryptography_flutter`, the user reported video taps
+throwing many errors, scattered "ডিক্রিপ্ট করা যায়নি" labels and the app
+hanging after the first load. Native AES-GCM could not be verified on a
+device and pushing tens of MB through a platform channel is a plausible
+cause of all three, so it is gone (dependency and `enable()` call removed,
+including from #47/#48's fallback logic). `VaultCrypto` is pure Dart again,
+but payloads over 512KB (photos/videos, up and down) run via `Isolate.run`
+so the slow part never blocks the UI thread; small payloads (text,
+thumbnails) stay inline. Wire format unchanged.
+
 ## 19. Add Device (peer-to-peer pairing)
 
 **Problem:** each role (`husband`/`wife`) can only be claimed once, ever

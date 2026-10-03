@@ -84,8 +84,6 @@ dependencies:
   get_thumbnail_video: ^0.7.3
   scrollable_positioned_list: ^0.3.8
   gal: ^2.3.3
-  cryptography_flutter: ^2.3.4
-
 dev_dependencies:
   flutter_test:
     sdk: flutter
