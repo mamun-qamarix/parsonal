@@ -1690,6 +1690,17 @@ but payloads over 512KB (photos/videos, up and down) run via `Isolate.run`
 so the slow part never blocks the UI thread; small payloads (text,
 thumbnails) stay inline. Wire format unchanged.
 
+## 50. Chat reaction rows: no GlobalKeys inside ScrollablePositionedList
+
+The "Multiple widgets used the same GlobalKey" loop (it started on any video
+tap because opening the viewer rebuilt the whole tree, chat tab included)
+wasn't duplicate message ids after all: `ScrollablePositionedList` builds
+two internal lists while scrolling/jumping, so the same message item, and
+its per-message `GlobalKey<ReactionListState>`, was legitimately in the
+tree twice. `ReactionList` now takes an optional `refresh` Listenable; chat
+keeps one `ValueNotifier<int>` per message and bumps it after a reaction is
+added. Never put a GlobalKey on an item built by ScrollablePositionedList.
+
 ## 19. Add Device (peer-to-peer pairing)
 
 **Problem:** each role (`husband`/`wife`) can only be claimed once, ever

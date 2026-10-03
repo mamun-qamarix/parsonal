@@ -76,12 +76,15 @@ class _ChatScreenState extends State<ChatScreen> {
   // Long-press a message -> react to it, WhatsApp/Telegram-style. Reuses
   // the same generic Reaction system vault entries/comments already use
   // (target_type='chat_message' was always a valid type server-side, just
-  // never wired up in the chat UI). One GlobalKey per message so its
-  // ReactionList can be told to reload after adding one, without
-  // rebuilding the whole message list. See DECISIONS.md.
-  final Map<String, GlobalKey<ReactionListState>> _reactionKeys = {};
-  GlobalKey<ReactionListState> _reactionKeyFor(String messageId) =>
-      _reactionKeys.putIfAbsent(messageId, () => GlobalKey<ReactionListState>());
+  // never wired up in the chat UI). Each message's ReactionList is told to
+  // reload after adding one, without rebuilding the whole message list.
+  // See DECISIONS.md.
+  // A plain notifier per message, NOT a GlobalKey: ScrollablePositionedList
+  // renders the same item in two internal lists while scrolling, and a
+  // GlobalKey used twice crashed the whole tree (repeating every frame).
+  final Map<String, ValueNotifier<int>> _reactionRefresh = {};
+  ValueNotifier<int> _reactionRefreshFor(String messageId) =>
+      _reactionRefresh.putIfAbsent(messageId, () => ValueNotifier<int>(0));
 
   // Swipe-right-to-reply target -- shown as a preview bar above the input
   // and quoted inside whatever gets sent next. See DECISIONS.md.
@@ -595,6 +598,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   void dispose() {
+    for (final n in _reactionRefresh.values) {
+      n.dispose();
+    }
     _wsSub?.cancel();
     _recordTimer?.cancel();
     _recordingPingTimer?.cancel();
@@ -825,7 +831,7 @@ class _ChatScreenState extends State<ChatScreen> {
                           context,
                           targetType: 'chat_message',
                           targetId: msg.id,
-                          onChanged: () => _reactionKeyFor(msg.id).currentState?.reload(),
+                          onChanged: () => _reactionRefreshFor(msg.id).value++,
                         ),
                         // A quick rightward flick anywhere on the bubble
                         // starts a reply to it -- WhatsApp/Telegram-style
@@ -985,9 +991,10 @@ class _ChatScreenState extends State<ChatScreen> {
                             child: Padding(
                               padding: const EdgeInsets.only(bottom: 4),
                               child: ReactionList(
-                                key: _reactionKeyFor(msg.id),
+                                key: ValueKey('rx-${msg.id}'),
                                 targetType: 'chat_message',
                                 targetId: msg.id,
+                                refresh: _reactionRefreshFor(msg.id),
                               ),
                             ),
                           ),

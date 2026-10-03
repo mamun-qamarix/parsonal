@@ -43,10 +43,17 @@ class ReactionBar extends StatelessWidget {
 class ReactionList extends StatefulWidget {
   final String targetType;
   final String targetId;
+  /// Optional external "reload now" signal. Lists that render the same item
+  /// more than once at a time (chat's ScrollablePositionedList builds two
+  /// internal lists while scrolling) can't use a GlobalKey to reach this
+  /// state -- duplicate GlobalKeys crash the build -- so they bump this
+  /// instead. See DECISIONS.md.
+  final Listenable? refresh;
   const ReactionList({
     super.key,
     required this.targetType,
     required this.targetId,
+    this.refresh,
   });
 
   @override
@@ -61,7 +68,23 @@ class ReactionListState extends State<ReactionList> {
   @override
   void initState() {
     super.initState();
+    widget.refresh?.addListener(reload);
     reload();
+  }
+
+  @override
+  void didUpdateWidget(covariant ReactionList old) {
+    super.didUpdateWidget(old);
+    if (old.refresh != widget.refresh) {
+      old.refresh?.removeListener(reload);
+      widget.refresh?.addListener(reload);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.refresh?.removeListener(reload);
+    super.dispose();
   }
 
   Future<void> reload() async {
