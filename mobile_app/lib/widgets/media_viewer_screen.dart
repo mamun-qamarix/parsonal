@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../widgets/decrypted_media.dart';
+import '../services/gallery_saver.dart';
 
 /// Full-screen viewer opened by tapping any image/video anywhere in the
 /// app (chat bubbles, vault entries, profile photos) -- images are
@@ -24,6 +25,29 @@ class MediaViewerScreen extends StatelessWidget {
         backgroundColor: Colors.black,
         iconTheme: const IconThemeData(color: Colors.white),
         elevation: 0,
+        actions: [
+          PopupMenuButton<String>(
+            onSelected: (v) {
+              if (v == 'download') {
+                saveMediaToGallery(
+                  context,
+                  assetId: assetId,
+                  isVideo: contentType == 'video',
+                );
+              }
+            },
+            itemBuilder: (_) => [
+              PopupMenuItem(
+                value: 'download',
+                child: Text(
+                  contentType == 'video'
+                      ? 'ভিডিও ডাউনলোড (গ্যালারিতে)'
+                      : 'ছবি ডাউনলোড (গ্যালারিতে)',
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
       body: Center(
         child: contentType == 'video'

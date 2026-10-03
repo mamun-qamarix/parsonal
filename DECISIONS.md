@@ -1586,6 +1586,40 @@ lint count, 41, only, two of which are new but same category as
 existing ones elsewhere), and a `--split-per-abi` release build
 succeeded. No backend changes -- this feature is entirely client-side.
 
+## 46. Trash + restore, never purge media, download to gallery
+
+User asked for: (1) removed videos/photos to land in a trash they can
+restore from, (2) deleted media must NEVER be removed from storage, even by
+accident, (3) any photo/video downloadable straight into the phone gallery
+from a three-dot menu.
+
+**Trash:** deleting was already a soft-delete (`is_deleted = true`); the
+media rows and encrypted files were never touched. Added
+`GET /vault/trash` (soft-deleted entries) and
+`POST /vault/entries/{id}/restore` (audit-logged as `content.restore`),
+and a client `TrashScreen` (Settings -> ট্র্যাশ, and a trash icon on the
+History screen) with a "ফিরিয়ে আনুন" button per row. Delete dialogs now say
+"ট্র্যাশে পাঠান" instead of "can't be undone". There is deliberately no
+"delete forever" button and no auto-purge.
+
+**Never purge:** the unused `delete_object()` helper in
+`services/storage.py` was removed (replaced by a warning comment) so nothing
+can start wiping MinIO objects by accident later. Do not re-add one without
+an explicit request.
+
+**Gallery download:** new `gal` dependency (native plugin, so needs a full
+rebuild, not a hot restart). `saveMediaToGallery()` in
+`services/gallery_saver.dart` downloads+decrypts the asset, writes a temp
+file, hands it to the gallery, then deletes the temp file. Offered in the
+feed card three-dot menu, the entry-detail three-dot menu, and the full-screen
+`MediaViewerScreen` (so chat/profile/trash media can be saved too). No new
+manifest permission: Android 10+ uses MediaStore, and the camera plugin
+already declares WRITE_EXTERNAL_STORAGE up to API 28 (adding our own with
+maxSdkVersion=29 broke the manifest merge).
+
+**Needs a backend deploy** (`docker compose up -d --build backend` on the
+VPS) before the trash screen works. Download works without it.
+
 ## 19. Add Device (peer-to-peer pairing)
 
 **Problem:** each role (`husband`/`wife`) can only be claimed once, ever

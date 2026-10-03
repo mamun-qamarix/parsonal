@@ -6,7 +6,9 @@ import '../../providers/session_provider.dart';
 import '../../services/vault_service.dart';
 import '../../widgets/shimmer_loading.dart';
 import '../../widgets/vault_entry_card.dart';
+import '../trash/trash_screen.dart';
 import '../vault/entry_detail_screen.dart';
+import 'package:iconsax_flutter/iconsax_flutter.dart';
 
 class HistoryScreen extends StatefulWidget {
   const HistoryScreen({super.key});
@@ -39,7 +41,21 @@ class _HistoryScreenState extends State<HistoryScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('হিস্টরি')),
+      appBar: AppBar(
+        title: const Text('হিস্টরি'),
+        actions: [
+          IconButton(
+            icon: const Icon(Iconsax.trash),
+            tooltip: 'ট্র্যাশ',
+            onPressed: () async {
+              await Navigator.of(
+                context,
+              ).push(MaterialPageRoute(builder: (_) => const TrashScreen()));
+              _load();
+            },
+          ),
+        ],
+      ),
       body: _loading
           ? const ShimmerFeedList()
           : RefreshIndicator(

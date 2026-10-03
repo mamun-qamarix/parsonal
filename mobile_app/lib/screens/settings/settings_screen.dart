@@ -11,6 +11,7 @@ import '../../widgets/password_field.dart';
 import '../onboarding/welcome_screen.dart';
 import 'add_device_screen.dart';
 import 'approve_password_reset_screen.dart';
+import '../trash/trash_screen.dart';
 import 'devices_screen.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
 
@@ -120,6 +121,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
           : ListView(
               padding: const EdgeInsets.all(16),
               children: [
+                ListTile(
+                  leading: const Icon(Iconsax.trash),
+                  title: const Text('ট্র্যাশ'),
+                  subtitle: const Text('মুছে ফেলা ছবি/ভিডিও/লেখা ফিরিয়ে আনুন'),
+                  trailing: const Icon(Iconsax.arrow_right_3),
+                  onTap: () => Navigator.of(context).push(
+                    MaterialPageRoute(builder: (_) => const TrashScreen()),
+                  ),
+                ),
+                const Divider(),
                 const _SectionTitle('চেহারা'),
                 SwitchListTile(
                   title: const Text('"প্রিয় লাইন" স্ক্রিন দেখান'),

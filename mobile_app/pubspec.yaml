@@ -83,6 +83,7 @@ dependencies:
   iconsax_flutter: ^1.0.1
   get_thumbnail_video: ^0.7.3
   scrollable_positioned_list: ^0.3.8
+  gal: ^2.3.3
 
 dev_dependencies:
   flutter_test:

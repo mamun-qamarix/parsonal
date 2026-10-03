@@ -61,9 +61,7 @@ async def get_object(object_key: str) -> bytes:
     return await run_in_threadpool(_get_object_sync, object_key)
 
 
-def _delete_object_sync(object_key: str) -> None:
-    _client.remove_object(settings.minio_bucket, object_key)
-
-
-async def delete_object(object_key: str) -> None:
-    await run_in_threadpool(_delete_object_sync, object_key)
+# Deliberately NO delete function here. Deleted vault entries go to the
+# trash (soft-delete) and their encrypted media must NEVER be removed from
+# storage -- the user wants deleted photos/videos always recoverable. Do not
+# add a remove_object() helper without an explicit request. See DECISIONS.md.

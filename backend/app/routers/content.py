@@ -204,6 +204,41 @@ async def delete_entry(entry_id: uuid.UUID, spouse: Spouse = Depends(get_current
     return {"ok": True}
 
 
+@router.get("/vault/trash", response_model=list[VaultEntryOut])
+async def list_trash(
+    limit: int = 200,
+    offset: int = 0,
+    spouse: Spouse = Depends(get_current_spouse),
+    db: AsyncSession = Depends(get_db),
+):
+    """Soft-deleted entries (the "trash"), newest-deleted first. Nothing is
+    ever purged from here automatically -- neither the DB row nor the
+    encrypted media files in storage. See DECISIONS.md."""
+    query = (
+        select(VaultEntry)
+        .where(VaultEntry.is_deleted == True)  # noqa: E712
+        .order_by(VaultEntry.updated_at.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    result = await db.execute(query)
+    return [await _entry_to_out(db, e, spouse) for e in result.scalars().all()]
+
+
+@router.post("/vault/entries/{entry_id}/restore")
+async def restore_entry(entry_id: uuid.UUID, spouse: Spouse = Depends(get_current_spouse), db: AsyncSession = Depends(get_db)):
+    """Brings a trashed entry back into the feed."""
+    result = await db.execute(select(VaultEntry).where(VaultEntry.id == entry_id, VaultEntry.is_deleted == True))  # noqa: E712
+    entry = result.scalar_one_or_none()
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    entry.is_deleted = False
+    db.add(AuditLogEntry(actor_id=spouse.id, action="content.restore", target_type="vault_entry", target_id=entry.id))
+    await db.commit()
+    return {"ok": True}
+
+
 @router.post("/vault/entries/{entry_id}/favorite")
 async def toggle_favorite(entry_id: uuid.UUID, spouse: Spouse = Depends(get_current_spouse), db: AsyncSession = Depends(get_db)):
     result = await db.execute(

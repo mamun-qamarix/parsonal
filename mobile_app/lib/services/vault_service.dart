@@ -152,9 +152,26 @@ class VaultService {
     return entry;
   }
 
-  /// Deletes an entry immediately -- no spouse approval. See DECISIONS.md.
+  /// Moves an entry to the trash immediately -- no spouse approval. The
+  /// entry and its media are never purged; see [listTrash]/[restoreEntry]
+  /// and DECISIONS.md.
   Future<void> deleteEntry(String entryId) async {
     await _dio.delete('/vault/entries/$entryId');
+  }
+
+  Future<List<VaultEntry>> listTrash(Uint8List vmk) async {
+    final res = await _dio.get('/vault/trash');
+    final entries = (res.data as List)
+        .map((e) => VaultEntry.fromJson(e))
+        .toList();
+    for (final entry in entries) {
+      entry.decryptedText = await _safeDecrypt(vmk, entry.encPayload);
+    }
+    return entries;
+  }
+
+  Future<void> restoreEntry(String entryId) async {
+    await _dio.post('/vault/entries/$entryId/restore');
   }
 
   Future<ConsentRequestModel> requestEdit(

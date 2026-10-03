@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../models/models.dart';
 import '../providers/session_provider.dart';
+import '../services/gallery_saver.dart';
 import '../services/vault_service.dart';
 import 'author_badge.dart';
 import 'comment_preview.dart';
@@ -107,8 +108,8 @@ class _VaultEntryCardState extends State<VaultEntryCard> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('এন্ট্রিটা মুছে ফেলবেন?'),
-        content: const Text('এটা আর ফেরত আনা যাবে না।'),
+        title: const Text('ট্র্যাশে পাঠাবেন?'),
+        content: const Text('ট্র্যাশ থেকে যেকোনো সময় ফিরিয়ে আনা যাবে।'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -116,7 +117,7 @@ class _VaultEntryCardState extends State<VaultEntryCard> {
           ),
           FilledButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('মুছে ফেলুন'),
+            child: const Text('ট্র্যাশে পাঠান'),
           ),
         ],
       ),
@@ -276,14 +277,30 @@ class _VaultEntryCardState extends State<VaultEntryCard> {
                     if (v == 'favorite') _toggleFavorite();
                     if (v == 'edit') _edit();
                     if (v == 'delete') _delete();
+                    if (v == 'download' && asset != null) {
+                      saveMediaToGallery(
+                        context,
+                        assetId: asset.id,
+                        isVideo: entry.contentType == 'video',
+                      );
+                    }
                   },
                   itemBuilder: (_) => [
                     PopupMenuItem(
                       value: 'favorite',
                       child: Text(_favorite ? 'ফেভারিট থেকে সরান' : 'ফেভারিটে যোগ করুন'),
                     ),
+                    if (asset != null)
+                      PopupMenuItem(
+                        value: 'download',
+                        child: Text(
+                          entry.contentType == 'video'
+                              ? 'ভিডিও ডাউনলোড (গ্যালারিতে)'
+                              : 'ছবি ডাউনলোড (গ্যালারিতে)',
+                        ),
+                      ),
                     const PopupMenuItem(value: 'edit', child: Text('এডিট করুন')),
-                    const PopupMenuItem(value: 'delete', child: Text('মুছে ফেলুন')),
+                    const PopupMenuItem(value: 'delete', child: Text('ট্র্যাশে পাঠান')),
                   ],
                 ),
               ],
