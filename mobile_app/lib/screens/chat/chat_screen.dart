@@ -40,7 +40,7 @@ class ChatScreen extends StatefulWidget {
 class _ChatScreenState extends State<ChatScreen> {
   final _chatService = ChatService();
   final _mediaService = MediaService();
-  final _textController = TextEditingController();
+  final _textController = _MaskableTextController();
   final _itemScrollController = ItemScrollController();
   final _itemPositionsListener = ItemPositionsListener.create();
   final _recorder = AudioRecorder();
@@ -244,7 +244,9 @@ class _ChatScreenState extends State<ChatScreen> {
       if (!mounted) return;
       setState(() {
         _partnerOnline = data['online'] == true;
-        if (!_partnerOnline) _partnerLastSeen = DateTime.tryParse(data['at'] as String? ?? '') ?? DateTime.now();
+        if (!_partnerOnline)
+          _partnerLastSeen =
+              DateTime.tryParse(data['at'] as String? ?? '') ?? DateTime.now();
       });
       return;
     }
@@ -654,7 +656,9 @@ class _ChatScreenState extends State<ChatScreen> {
     _peerTypingClearTimer?.cancel();
     _amplitudeSub?.cancel();
     _recorder.dispose();
-    _itemPositionsListener.itemPositions.removeListener(_onScrollPositionsChanged);
+    _itemPositionsListener.itemPositions.removeListener(
+      _onScrollPositionsChanged,
+    );
     _textController.removeListener(_onComposingChanged);
     _textController.removeListener(_onTextChanged);
     _searchController.dispose();
@@ -675,13 +679,19 @@ class _ChatScreenState extends State<ChatScreen> {
       return const Center(
         child: Padding(
           padding: EdgeInsets.all(24),
-          child: Text('একটা শব্দ বা লাইন লিখে সার্চ করুন।', style: TextStyle(color: Colors.grey)),
+          child: Text(
+            'একটা শব্দ বা লাইন লিখে সার্চ করুন।',
+            style: TextStyle(color: Colors.grey),
+          ),
         ),
       );
     }
     if (_searchResults.isEmpty) {
       return Center(
-        child: Text(_searchStatus ?? 'কিছু পাওয়া যায়নি।', style: const TextStyle(color: Colors.grey)),
+        child: Text(
+          _searchStatus ?? 'কিছু পাওয়া যায়নি।',
+          style: const TextStyle(color: Colors.grey),
+        ),
       );
     }
     final query = _searchController.text.trim();
@@ -693,12 +703,24 @@ class _ChatScreenState extends State<ChatScreen> {
         final msg = _searchResults[i];
         final text = msg.decryptedText ?? '';
         final matchIndex = text.toLowerCase().indexOf(query.toLowerCase());
+        final shown = _isRevealed(msg);
         return ListTile(
           leading: const Icon(Iconsax.message_2),
-          title: matchIndex < 0
+          trailing: _hidden
+              ? _EyeButton(
+                  revealed: shown,
+                  color: const Color(0xFFE6EEE9),
+                  onTap: () => _toggleReveal(msg.id),
+                )
+              : null,
+          title: !shown
+              ? const Text('• • • •')
+              : matchIndex < 0
               ? Text(text, maxLines: 2, overflow: TextOverflow.ellipsis)
               : _highlightedSnippet(text, matchIndex, query.length),
-          subtitle: Text(DateFormat.yMMMd().add_jm().format(msg.createdAt.toLocal())),
+          subtitle: Text(
+            DateFormat.yMMMd().add_jm().format(msg.createdAt.toLocal()),
+          ),
           onTap: () => _jumpToSearchResult(msg),
         );
       },
@@ -720,9 +742,14 @@ class _ChatScreenState extends State<ChatScreen> {
           TextSpan(text: '$prefix${text.substring(start, matchIndex)}'),
           TextSpan(
             text: text.substring(matchIndex, matchIndex + matchLength),
-            style: const TextStyle(fontWeight: FontWeight.bold, backgroundColor: Color(0x552F9E63)),
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              backgroundColor: Color(0x552F9E63),
+            ),
           ),
-          TextSpan(text: '${text.substring(matchIndex + matchLength, end)}$suffix'),
+          TextSpan(
+            text: '${text.substring(matchIndex + matchLength, end)}$suffix',
+          ),
         ],
       ),
     );
@@ -737,7 +764,11 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _seenTick(ChatMessageModel msg) {
     if (msg.readAt != null) {
-      return const Icon(Icons.done_all_rounded, size: 14, color: AppColors.mint);
+      return const Icon(
+        Icons.done_all_rounded,
+        size: 14,
+        color: AppColors.mint,
+      );
     }
     return Icon(
       msg.deliveredAt != null ? Icons.done_all_rounded : Icons.done_rounded,
@@ -746,7 +777,12 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  bool _isRevealed(ChatMessageModel msg) => !_hidden || _revealed.contains(msg.id);
+  bool _isRevealed(ChatMessageModel msg) =>
+      !_hidden || _revealed.contains(msg.id);
+
+  /// Same reveal state, for things that aren't a message (the partner's
+  /// name, a quick-reply chip, a search result) -- keyed by a string.
+  bool _isKeyRevealed(String key) => !_hidden || _revealed.contains(key);
 
   void _toggleReveal(String id) {
     setState(() {
@@ -757,8 +793,9 @@ class _ChatScreenState extends State<ChatScreen> {
   void _togglePrivacy() {
     setState(() {
       _hidden = !_hidden;
-      // Every message starts hidden again each time privacy mode is
-      // switched on -- a reveal never "sticks" across sessions.
+      _textController.masked = _hidden;
+      // Everything starts hidden again each time privacy mode is switched
+      // on -- a reveal never "sticks" across sessions.
       _revealed.clear();
     });
   }
@@ -768,13 +805,16 @@ class _ChatScreenState extends State<ChatScreen> {
     final diff = DateTime.now().difference(local);
     if (diff.inMinutes < 1) return 'এইমাত্র দেখেছে';
     if (diff.inMinutes < 60) return '${diff.inMinutes} মিনিট আগে দেখেছে';
-    if (_isSameDay(local, DateTime.now())) return 'আজ ${DateFormat.jm().format(local)} এ দেখেছে';
+    if (_isSameDay(local, DateTime.now()))
+      return 'আজ ${DateFormat.jm().format(local)} এ দেখেছে';
     return '${DateFormat.MMMd().format(local)} এ দেখেছে';
   }
 
   Widget _buildHeaderTitle(SessionProvider session) {
     final partnerRole = session.otherRole;
-    final partnerColor = partnerRole == 'wife' ? AppColors.wife : AppColors.husband;
+    final partnerColor = partnerRole == 'wife'
+        ? AppColors.wife
+        : AppColors.husband;
     final name = _partnerName ?? (partnerRole == 'wife' ? 'স্ত্রী' : 'স্বামী');
     String status;
     Color statusColor = AppColors.muted;
@@ -797,10 +837,20 @@ class _ChatScreenState extends State<ChatScreen> {
             CircleAvatar(
               radius: 18,
               backgroundColor: partnerColor,
-              child: Text(
-                name.characters.first,
-                style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600),
-              ),
+              child: _isKeyRevealed('name')
+                  ? Text(
+                      name.characters.first,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    )
+                  : const Icon(
+                      Iconsax.lock_1_copy,
+                      size: 16,
+                      color: Colors.white,
+                    ),
             ),
             if (_partnerOnline)
               Positioned(
@@ -824,9 +874,30 @@ class _ChatScreenState extends State<ChatScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleMedium),
+              Row(
+                children: [
+                  Flexible(
+                    child: Text(
+                      _isKeyRevealed('name') ? name : '• • • •',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                  ),
+                  if (_hidden)
+                    _EyeButton(
+                      revealed: _isKeyRevealed('name'),
+                      color: const Color(0xFFE6EEE9),
+                      onTap: () => _toggleReveal('name'),
+                    ),
+                ],
+              ),
               if (status.isNotEmpty)
-                Text(status, maxLines: 1, style: TextStyle(fontSize: 11.5, color: statusColor)),
+                Text(
+                  status,
+                  maxLines: 1,
+                  style: TextStyle(fontSize: 11.5, color: statusColor),
+                ),
             ],
           ),
         ),
@@ -836,7 +907,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   Widget _buildPinnedBar() {
     final pin = _pinned!;
-    final shown = _isRevealed(pin) ? _previewFor(pin) : '★ ★ ★ ★';
+    final shown = _isRevealed(pin) ? _previewFor(pin) : '• • • •';
     return Material(
       color: AppColors.surface,
       child: InkWell(
@@ -844,20 +915,48 @@ class _ChatScreenState extends State<ChatScreen> {
         child: Container(
           padding: const EdgeInsets.fromLTRB(14, 8, 4, 8),
           decoration: const BoxDecoration(
-            border: Border(bottom: BorderSide(color: AppColors.line, width: 0.5)),
+            border: Border(
+              bottom: BorderSide(color: AppColors.line, width: 0.5),
+            ),
           ),
           child: Row(
             children: [
-              const Icon(Iconsax.attach_square_copy, size: 16, color: AppColors.mint),
+              const Icon(
+                Iconsax.attach_square_copy,
+                size: 16,
+                color: AppColors.mint,
+              ),
               const SizedBox(width: 8),
-              const Text('পিন', style: TextStyle(fontSize: 12, color: AppColors.mint, fontWeight: FontWeight.w600)),
+              const Text(
+                'পিন',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: AppColors.mint,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
               const SizedBox(width: 8),
               Expanded(
-                child: Text(shown, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12.5)),
+                child: Text(
+                  shown,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(fontSize: 12.5),
+                ),
               ),
+              if (_hidden)
+                _EyeButton(
+                  revealed: _isRevealed(pin),
+                  color: const Color(0xFFE6EEE9),
+                  onTap: () => _toggleReveal(pin.id),
+                ),
               IconButton(
                 visualDensity: VisualDensity.compact,
-                icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.muted),
+                icon: const Icon(
+                  Icons.close_rounded,
+                  size: 18,
+                  color: AppColors.muted,
+                ),
                 tooltip: 'আনপিন',
                 onPressed: () => _setPin(null),
               ),
@@ -901,9 +1000,13 @@ class _ChatScreenState extends State<ChatScreen> {
   Future<void> _loadPartnerName() async {
     try {
       final session = context.read<SessionProvider>();
-      final p = await ProfileCache.instance.get(session.vmk!, session.otherRole);
+      final p = await ProfileCache.instance.get(
+        session.vmk!,
+        session.otherRole,
+      );
       final n = p?.decryptedName;
-      if (mounted && n != null && n.trim().isNotEmpty) setState(() => _partnerName = n.trim());
+      if (mounted && n != null && n.trim().isNotEmpty)
+        setState(() => _partnerName = n.trim());
     } catch (_) {}
   }
 
@@ -927,7 +1030,11 @@ class _ChatScreenState extends State<ChatScreen> {
                       borderRadius: BorderRadius.circular(22),
                       onTap: () async {
                         Navigator.pop(sheetCtx);
-                        final matched = await SocialService().addReaction('chat_message', msg.id, e);
+                        final matched = await SocialService().addReaction(
+                          'chat_message',
+                          msg.id,
+                          e,
+                        );
                         _reactionRefreshFor(msg.id).value++;
                         if (matched && mounted) showMatchCelebration(context);
                       },
@@ -950,22 +1057,44 @@ class _ChatScreenState extends State<ChatScreen> {
                     child: Container(
                       width: 38,
                       height: 38,
-                      decoration: const BoxDecoration(color: AppColors.surfaceHigh, shape: BoxShape.circle),
-                      child: const Icon(Icons.add_rounded, color: AppColors.muted),
+                      decoration: const BoxDecoration(
+                        color: AppColors.surfaceHigh,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.add_rounded,
+                        color: AppColors.muted,
+                      ),
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 10),
               const Divider(),
-              _actionTile(sheetCtx, Iconsax.undo_copy, 'উত্তর দিন', () => _startReply(msg)),
-              if (msg.contentType == 'text' && (msg.decryptedText ?? '').isNotEmpty && _isRevealed(msg))
+              _actionTile(
+                sheetCtx,
+                Iconsax.undo_copy,
+                'উত্তর দিন',
+                () => _startReply(msg),
+              ),
+              if (msg.contentType == 'text' &&
+                  (msg.decryptedText ?? '').isNotEmpty &&
+                  _isRevealed(msg))
                 _actionTile(sheetCtx, Iconsax.copy_copy, 'কপি করুন', () {
                   Clipboard.setData(ClipboardData(text: msg.decryptedText!));
-                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('কপি হয়েছে')));
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(const SnackBar(content: Text('কপি হয়েছে')));
                 }),
-              if (msg.contentType == 'text' && (msg.decryptedText ?? '').isNotEmpty && _isRevealed(msg))
-                _actionTile(sheetCtx, Iconsax.text_block_copy, 'সিলেক্ট করে কপি', () => _openSelectableText(msg)),
+              if (msg.contentType == 'text' &&
+                  (msg.decryptedText ?? '').isNotEmpty &&
+                  _isRevealed(msg))
+                _actionTile(
+                  sheetCtx,
+                  Iconsax.text_block_copy,
+                  'সিলেক্ট করে কপি',
+                  () => _openSelectableText(msg),
+                ),
               _actionTile(
                 sheetCtx,
                 Iconsax.attach_square_copy,
@@ -975,8 +1104,12 @@ class _ChatScreenState extends State<ChatScreen> {
               if (_hidden)
                 _actionTile(
                   sheetCtx,
-                  _revealed.contains(msg.id) ? Iconsax.eye_slash_copy : Iconsax.eye_copy,
-                  _revealed.contains(msg.id) ? 'আবার লুকান' : 'এই মেসেজটা দেখুন',
+                  _revealed.contains(msg.id)
+                      ? Iconsax.eye_slash_copy
+                      : Iconsax.eye_copy,
+                  _revealed.contains(msg.id)
+                      ? 'আবার লুকান'
+                      : 'এই মেসেজটা দেখুন',
                   () => _toggleReveal(msg.id),
                 ),
             ],
@@ -995,7 +1128,9 @@ class _ChatScreenState extends State<ChatScreen> {
       isScrollControlled: true,
       builder: (ctx) => SafeArea(
         child: ConstrainedBox(
-          constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.7),
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(ctx).size.height * 0.7,
+          ),
           child: Padding(
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
             child: Column(
@@ -1018,9 +1153,13 @@ class _ChatScreenState extends State<ChatScreen> {
                 const SizedBox(height: 12),
                 OutlinedButton.icon(
                   onPressed: () {
-                    Clipboard.setData(ClipboardData(text: msg.decryptedText ?? ''));
+                    Clipboard.setData(
+                      ClipboardData(text: msg.decryptedText ?? ''),
+                    );
                     Navigator.pop(ctx);
-                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('পুরোটা কপি হয়েছে')));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('পুরোটা কপি হয়েছে')),
+                    );
                   },
                   icon: const Icon(Iconsax.copy_copy, size: 18),
                   label: const Text('পুরোটা কপি করুন'),
@@ -1033,7 +1172,12 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Widget _actionTile(BuildContext sheetCtx, IconData icon, String label, VoidCallback onTap) {
+  Widget _actionTile(
+    BuildContext sheetCtx,
+    IconData icon,
+    String label,
+    VoidCallback onTap,
+  ) {
     return ListTile(
       dense: true,
       leading: Icon(icon, size: 20),
@@ -1052,7 +1196,14 @@ class _ChatScreenState extends State<ChatScreen> {
       children: [
         Icon(Iconsax.lock_1_copy, size: 13, color: c.withValues(alpha: 0.65)),
         const SizedBox(width: 6),
-        Text('★ ★ ★ ★', style: TextStyle(color: c.withValues(alpha: 0.85), letterSpacing: 2, fontSize: 13)),
+        Text(
+          '• • • •',
+          style: TextStyle(
+            color: c.withValues(alpha: 0.85),
+            letterSpacing: 2,
+            fontSize: 13,
+          ),
+        ),
         const SizedBox(width: 4),
         _EyeButton(revealed: false, color: c, onTap: () => _toggleReveal(id)),
       ],
@@ -1081,19 +1232,32 @@ class _ChatScreenState extends State<ChatScreen> {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Icon(
-                    msg.contentType == 'video' ? Iconsax.video_slash_copy : Iconsax.gallery_slash_copy,
+                    msg.contentType == 'video'
+                        ? Iconsax.video_slash_copy
+                        : Iconsax.gallery_slash_copy,
                     color: AppColors.muted,
                     size: 26,
                   ),
                   const SizedBox(height: 6),
-                  Text(label, style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+                  Text(
+                    label,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.muted,
+                    ),
+                  ),
                 ],
               ),
             ),
             Positioned(
               top: 6,
               right: 6,
-              child: _EyeButton(revealed: false, color: Colors.white, filled: true, onTap: () => _toggleReveal(msg.id)),
+              child: _EyeButton(
+                revealed: false,
+                color: Colors.white,
+                filled: true,
+                onTap: () => _toggleReveal(msg.id),
+              ),
             ),
           ],
         ),
@@ -1106,7 +1270,10 @@ class _ChatScreenState extends State<ChatScreen> {
     final media = GestureDetector(
       onTap: () => Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (_) => MediaViewerScreen(assetId: msg.mediaAssetId!, contentType: msg.contentType),
+          builder: (_) => MediaViewerScreen(
+            assetId: msg.mediaAssetId!,
+            contentType: msg.contentType,
+          ),
         ),
       ),
       child: ClipRRect(
@@ -1132,7 +1299,13 @@ class _ChatScreenState extends State<ChatScreen> {
                       forceShow: true,
                     ),
               if (isVideo)
-                const Center(child: Icon(Iconsax.play_circle_copy, color: Colors.white, size: 44)),
+                const Center(
+                  child: Icon(
+                    Iconsax.play_circle_copy,
+                    color: Colors.white,
+                    size: 44,
+                  ),
+                ),
             ],
           ),
         ),
@@ -1145,17 +1318,31 @@ class _ChatScreenState extends State<ChatScreen> {
         Positioned(
           top: 6,
           right: 6,
-          child: _EyeButton(revealed: true, color: Colors.white, filled: true, onTap: () => _toggleReveal(msg.id)),
+          child: _EyeButton(
+            revealed: true,
+            color: Colors.white,
+            filled: true,
+            onTap: () => _toggleReveal(msg.id),
+          ),
         ),
       ],
     );
   }
 
-  Widget _buildBubble(ChatMessageModel msg, {required bool mine, required bool groupedWithPrev, required Color mineColor}) {
+  Widget _buildBubble(
+    ChatMessageModel msg, {
+    required bool mine,
+    required bool groupedWithPrev,
+    required Color mineColor,
+  }) {
     final revealed = _isRevealed(msg);
-    final isMedia = (msg.contentType == 'photo' || msg.contentType == 'video') && msg.mediaAssetId != null;
+    final isMedia =
+        (msg.contentType == 'photo' || msg.contentType == 'video') &&
+        msg.mediaAssetId != null;
     final fg = mine ? Colors.white : const Color(0xFFE6EEE9);
-    final metaColor = mine ? Colors.white.withValues(alpha: 0.65) : AppColors.muted;
+    final metaColor = mine
+        ? Colors.white.withValues(alpha: 0.65)
+        : AppColors.muted;
 
     Widget content;
     if (!revealed) {
@@ -1165,10 +1352,19 @@ class _ChatScreenState extends State<ChatScreen> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.end,
         children: [
-          Flexible(child: LinkifiedText(msg.decryptedText ?? '', style: TextStyle(color: fg, fontSize: 14.5, height: 1.35))),
+          Flexible(
+            child: LinkifiedText(
+              msg.decryptedText ?? '',
+              style: TextStyle(color: fg, fontSize: 14.5, height: 1.35),
+            ),
+          ),
           if (_hidden) ...[
             const SizedBox(width: 4),
-            _EyeButton(revealed: true, color: fg, onTap: () => _toggleReveal(msg.id)),
+            _EyeButton(
+              revealed: true,
+              color: fg,
+              onTap: () => _toggleReveal(msg.id),
+            ),
           ],
         ],
       );
@@ -1179,9 +1375,17 @@ class _ChatScreenState extends State<ChatScreen> {
         mainAxisSize: MainAxisSize.min,
         children: [
           Flexible(
-            child: DecryptedVoicePlayer(assetId: msg.mediaAssetId!, color: mine ? Colors.white : AppColors.mint),
+            child: DecryptedVoicePlayer(
+              assetId: msg.mediaAssetId!,
+              color: mine ? Colors.white : AppColors.mint,
+            ),
           ),
-          if (_hidden) _EyeButton(revealed: true, color: fg, onTap: () => _toggleReveal(msg.id)),
+          if (_hidden)
+            _EyeButton(
+              revealed: true,
+              color: fg,
+              onTap: () => _toggleReveal(msg.id),
+            ),
         ],
       );
     } else {
@@ -1219,8 +1423,13 @@ class _ChatScreenState extends State<ChatScreen> {
           padding: isMedia && revealed
               ? const EdgeInsets.all(4)
               : const EdgeInsets.fromLTRB(12, 8, 12, 6),
-          constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.76),
-          decoration: BoxDecoration(color: mine ? mineColor : AppColors.bubbleTheirs, borderRadius: radius),
+          constraints: BoxConstraints(
+            maxWidth: MediaQuery.of(context).size.width * 0.76,
+          ),
+          decoration: BoxDecoration(
+            color: mine ? mineColor : AppColors.bubbleTheirs,
+            borderRadius: radius,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             mainAxisSize: MainAxisSize.min,
@@ -1233,15 +1442,26 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
               content,
               Padding(
-                padding: EdgeInsets.only(top: 3, right: isMedia && revealed ? 6 : 0, bottom: isMedia && revealed ? 2 : 0),
+                padding: EdgeInsets.only(
+                  top: 3,
+                  right: isMedia && revealed ? 6 : 0,
+                  bottom: isMedia && revealed ? 2 : 0,
+                ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     if (_pinned?.id == msg.id) ...[
-                      Icon(Iconsax.attach_square_copy, size: 11, color: metaColor),
+                      Icon(
+                        Iconsax.attach_square_copy,
+                        size: 11,
+                        color: metaColor,
+                      ),
                       const SizedBox(width: 3),
                     ],
-                    Text(DateFormat.jm().format(msg.createdAt.toLocal()), style: TextStyle(fontSize: 10.5, color: metaColor)),
+                    Text(
+                      DateFormat.jm().format(msg.createdAt.toLocal()),
+                      style: TextStyle(fontSize: 10.5, color: metaColor),
+                    ),
                     if (mine) ...[const SizedBox(width: 3), _seenTick(msg)],
                   ],
                 ),
@@ -1257,13 +1477,17 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget build(BuildContext context) {
     final session = context.watch<SessionProvider>();
     final myId = session.spouseId;
-    final mineColor = session.intimateMode ? AppColors.bubbleMineIntimate : AppColors.bubbleMine;
+    final mineColor = session.intimateMode
+        ? AppColors.bubbleMineIntimate
+        : AppColors.bubbleMine;
     return Scaffold(
       backgroundColor: AppColors.bg,
       appBar: AppBar(
         backgroundColor: AppColors.surface,
         titleSpacing: 0,
-        shape: const Border(bottom: BorderSide(color: AppColors.line, width: 0.5)),
+        shape: const Border(
+          bottom: BorderSide(color: AppColors.line, width: 0.5),
+        ),
         title: _searching
             ? TextField(
                 controller: _searchController,
@@ -1279,7 +1503,10 @@ class _ChatScreenState extends State<ChatScreen> {
               )
             : _buildHeaderTitle(session),
         leading: _searching
-            ? IconButton(icon: const Icon(Iconsax.arrow_left_2), onPressed: _closeSearch)
+            ? IconButton(
+                icon: const Icon(Iconsax.arrow_left_2),
+                onPressed: _closeSearch,
+              )
             : (Navigator.of(context).canPop() ? const BackButton() : null),
         actions: _searching
             ? [
@@ -1293,7 +1520,9 @@ class _ChatScreenState extends State<ChatScreen> {
                   icon: const Icon(Iconsax.gallery_copy, size: 21),
                   tooltip: 'চ্যাট গ্যালারি',
                   onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const ChatGalleryScreen()),
+                    MaterialPageRoute(
+                      builder: (_) => const ChatGalleryScreen(),
+                    ),
                   ),
                 ),
                 IconButton(
@@ -1302,7 +1531,9 @@ class _ChatScreenState extends State<ChatScreen> {
                     size: 21,
                     color: _hidden ? AppColors.mint : null,
                   ),
-                  tooltip: _hidden ? 'প্রাইভেসি মোড বন্ধ করুন' : 'প্রাইভেসি মোড (শুধু এই ফোনে)',
+                  tooltip: _hidden
+                      ? 'প্রাইভেসি মোড বন্ধ করুন'
+                      : 'প্রাইভেসি মোড (শুধু এই ফোনে)',
                   onPressed: _togglePrivacy,
                 ),
                 PopupMenuButton<String>(
@@ -1314,16 +1545,35 @@ class _ChatScreenState extends State<ChatScreen> {
                   itemBuilder: (_) => [
                     const PopupMenuItem(
                       value: 'search',
-                      child: Row(children: [Icon(Iconsax.search_normal_1_copy, size: 18), SizedBox(width: 10), Text('মেসেজ খুঁজুন')]),
+                      child: Row(
+                        children: [
+                          Icon(Iconsax.search_normal_1_copy, size: 18),
+                          SizedBox(width: 10),
+                          Text('মেসেজ খুঁজুন'),
+                        ],
+                      ),
                     ),
                     PopupMenuItem(
                       value: 'intimate',
-                      child: Row(children: [
-                        Icon(session.intimateMode ? Iconsax.moon_copy : Iconsax.moon, size: 18,
-                            color: session.intimateMode ? AppColors.intimateBlue : null),
-                        const SizedBox(width: 10),
-                        Text(session.intimateMode ? 'গোপন মুহূর্ত বন্ধ' : 'গোপন মুহূর্তের মোড'),
-                      ]),
+                      child: Row(
+                        children: [
+                          Icon(
+                            session.intimateMode
+                                ? Iconsax.moon_copy
+                                : Iconsax.moon,
+                            size: 18,
+                            color: session.intimateMode
+                                ? AppColors.intimateBlue
+                                : null,
+                          ),
+                          const SizedBox(width: 10),
+                          Text(
+                            session.intimateMode
+                                ? 'গোপন মুহূর্ত বন্ধ'
+                                : 'গোপন মুহূর্তের মোড',
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -1337,7 +1587,10 @@ class _ChatScreenState extends State<ChatScreen> {
                 if (_hidden)
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 5,
+                    ),
                     color: AppColors.mint.withValues(alpha: 0.08),
                     child: const Text(
                       'প্রাইভেসি মোড চালু — প্রতিটা মেসেজের চোখে চাপ দিয়ে দেখুন',
@@ -1354,32 +1607,55 @@ class _ChatScreenState extends State<ChatScreen> {
                               itemPositionsListener: _itemPositionsListener,
                               // Land on the newest message on the very first
                               // frame (see DECISIONS.md #40).
-                              initialScrollIndex: _messages.isEmpty ? 0 : _messages.length - 1,
+                              initialScrollIndex: _messages.isEmpty
+                                  ? 0
+                                  : _messages.length - 1,
                               padding: const EdgeInsets.fromLTRB(10, 6, 10, 10),
                               itemCount: _messages.length,
                               itemBuilder: (context, i) {
                                 final msg = _messages[i];
                                 final mine = msg.senderId == myId;
                                 final prev = i > 0 ? _messages[i - 1] : null;
-                                final newDay = prev == null ||
-                                    !_isSameDay(prev.createdAt.toLocal(), msg.createdAt.toLocal());
-                                final grouped = !newDay &&
+                                final newDay =
+                                    prev == null ||
+                                    !_isSameDay(
+                                      prev.createdAt.toLocal(),
+                                      msg.createdAt.toLocal(),
+                                    );
+                                final grouped =
+                                    !newDay &&
                                     prev.senderId == msg.senderId &&
-                                    msg.createdAt.difference(prev.createdAt).inMinutes.abs() < 3;
+                                    msg.createdAt
+                                            .difference(prev.createdAt)
+                                            .inMinutes
+                                            .abs() <
+                                        3;
                                 return Column(
-                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
                                   children: [
-                                    if (newDay) _DateDivider(date: msg.createdAt.toLocal()),
-                                    _buildBubble(msg, mine: mine, groupedWithPrev: grouped, mineColor: mineColor),
-                                    Align(
-                                      alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
-                                      child: ReactionList(
-                                        key: ValueKey('rx-${msg.id}'),
-                                        targetType: 'chat_message',
-                                        targetId: msg.id,
-                                        refresh: _reactionRefreshFor(msg.id),
+                                    if (newDay)
+                                      _DateDivider(
+                                        date: msg.createdAt.toLocal(),
                                       ),
+                                    _buildBubble(
+                                      msg,
+                                      mine: mine,
+                                      groupedWithPrev: grouped,
+                                      mineColor: mineColor,
                                     ),
+                                    if (_isRevealed(msg))
+                                      Align(
+                                        alignment: mine
+                                            ? Alignment.centerRight
+                                            : Alignment.centerLeft,
+                                        child: ReactionList(
+                                          key: ValueKey('rx-${msg.id}'),
+                                          targetType: 'chat_message',
+                                          targetId: msg.id,
+                                          refresh: _reactionRefreshFor(msg.id),
+                                        ),
+                                      ),
                                   ],
                                 );
                               },
@@ -1390,13 +1666,21 @@ class _ChatScreenState extends State<ChatScreen> {
                                 bottom: 12,
                                 child: Material(
                                   color: AppColors.surfaceHigh,
-                                  shape: const CircleBorder(side: BorderSide(color: AppColors.line, width: 0.5)),
+                                  shape: const CircleBorder(
+                                    side: BorderSide(
+                                      color: AppColors.line,
+                                      width: 0.5,
+                                    ),
+                                  ),
                                   child: InkWell(
                                     customBorder: const CircleBorder(),
                                     onTap: _scrollToBottom,
                                     child: const Padding(
                                       padding: EdgeInsets.all(10),
-                                      child: Icon(Iconsax.arrow_down_1_copy, size: 20),
+                                      child: Icon(
+                                        Iconsax.arrow_down_1_copy,
+                                        size: 20,
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -1411,17 +1695,22 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                 if (_sending) const LinearProgressIndicator(minHeight: 2),
                 if (_replyingTo != null) _buildReplyPreviewBar(),
-                if (!_recording && !_hasText && _replyingTo == null) _buildQuickReplies(myId),
+                if (!_recording && !_hasText && _replyingTo == null)
+                  _buildQuickReplies(myId),
                 Container(
                   decoration: const BoxDecoration(
                     color: AppColors.surface,
-                    border: Border(top: BorderSide(color: AppColors.line, width: 0.5)),
+                    border: Border(
+                      top: BorderSide(color: AppColors.line, width: 0.5),
+                    ),
                   ),
                   child: SafeArea(
                     top: false,
                     child: Padding(
                       padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
-                      child: _recording ? _buildRecordingBar() : _buildNormalInputBar(),
+                      child: _recording
+                          ? _buildRecordingBar()
+                          : _buildNormalInputBar(),
                     ),
                   ),
                 ),
@@ -1433,7 +1722,8 @@ class _ChatScreenState extends State<ChatScreen> {
   /// One-tap replies, offered when the last message is from your partner
   /// and you haven't started typing.
   Widget _buildQuickReplies(String? myId) {
-    if (_messages.isEmpty || _messages.last.senderId == myId) return const SizedBox.shrink();
+    if (_messages.isEmpty || _messages.last.senderId == myId)
+      return const SizedBox.shrink();
     const replies = ['ঠিক আছে', 'আসছি', 'ইনশাআল্লাহ', 'মাশাআল্লাহ', '❤️'];
     return SizedBox(
       height: 40,
@@ -1442,23 +1732,45 @@ class _ChatScreenState extends State<ChatScreen> {
         padding: const EdgeInsets.fromLTRB(10, 4, 10, 6),
         itemCount: replies.length,
         separatorBuilder: (_, _) => const SizedBox(width: 6),
-        itemBuilder: (context, i) => InkWell(
-          borderRadius: BorderRadius.circular(16),
-          onTap: () async {
-            final vmk = context.read<SessionProvider>().vmk!;
-            await _chatService.sendTextViaWs(vmk, replies[i]);
-            ChatSoundService.playSent();
-          },
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            alignment: Alignment.center,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: const Color(0x24FFFFFF), width: 0.5),
+        itemBuilder: (context, i) {
+          final key = 'quick-$i';
+          final shown = _isKeyRevealed(key);
+          return InkWell(
+            borderRadius: BorderRadius.circular(16),
+            onTap: () async {
+              if (!shown) {
+                _toggleReveal(key);
+                return;
+              }
+              final vmk = context.read<SessionProvider>().vmk!;
+              await _chatService.sendTextViaWs(vmk, replies[i]);
+              ChatSoundService.playSent();
+            },
+            child: Container(
+              padding: EdgeInsets.only(left: 12, right: _hidden ? 4 : 12),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0x24FFFFFF), width: 0.5),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    shown ? replies[i] : '• • • •',
+                    style: const TextStyle(fontSize: 12.5),
+                  ),
+                  if (_hidden)
+                    _EyeButton(
+                      revealed: shown,
+                      color: const Color(0xFFE6EEE9),
+                      onTap: () => _toggleReveal(key),
+                    ),
+                ],
+              ),
             ),
-            child: Text(replies[i], style: const TextStyle(fontSize: 12.5)),
-          ),
-        ),
+          );
+        },
       ),
     );
   }
@@ -1476,7 +1788,14 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
       child: Row(
         children: [
-          Container(width: 3, height: 32, decoration: BoxDecoration(color: AppColors.mint, borderRadius: BorderRadius.circular(2))),
+          Container(
+            width: 3,
+            height: 32,
+            decoration: BoxDecoration(
+              color: AppColors.mint,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -1485,10 +1804,14 @@ class _ChatScreenState extends State<ChatScreen> {
               children: [
                 Text(
                   mine ? 'নিজের মেসেজের উত্তর' : 'সঙ্গীর মেসেজের উত্তর',
-                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.mint),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: AppColors.mint,
+                  ),
                 ),
                 Text(
-                  _isRevealed(target) ? _previewFor(target) : '★ ★ ★ ★',
+                  _isRevealed(target) ? _previewFor(target) : '• • • •',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(fontSize: 12, color: AppColors.muted),
@@ -1496,8 +1819,18 @@ class _ChatScreenState extends State<ChatScreen> {
               ],
             ),
           ),
+          if (_hidden)
+            _EyeButton(
+              revealed: _isRevealed(target),
+              color: AppColors.muted,
+              onTap: () => _toggleReveal(target.id),
+            ),
           IconButton(
-            icon: const Icon(Icons.close_rounded, size: 20, color: AppColors.muted),
+            icon: const Icon(
+              Icons.close_rounded,
+              size: 20,
+              color: AppColors.muted,
+            ),
             onPressed: () => setState(() => _replyingTo = null),
           ),
         ],
@@ -1506,29 +1839,38 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _openAttachSheet() {
-    Widget tile(BuildContext ctx, IconData icon, String label, Color color, VoidCallback onTap) => InkWell(
-          borderRadius: BorderRadius.circular(12),
-          onTap: () {
-            Navigator.pop(ctx);
-            onTap();
-          },
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 54,
-                  height: 54,
-                  decoration: BoxDecoration(color: color.withValues(alpha: 0.16), borderRadius: BorderRadius.circular(16)),
-                  child: Icon(icon, color: color, size: 24),
-                ),
-                const SizedBox(height: 6),
-                Text(label, style: const TextStyle(fontSize: 12)),
-              ],
+    Widget tile(
+      BuildContext ctx,
+      IconData icon,
+      String label,
+      Color color,
+      VoidCallback onTap,
+    ) => InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () {
+        Navigator.pop(ctx);
+        onTap();
+      },
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 54,
+              height: 54,
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.16),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Icon(icon, color: color, size: 24),
             ),
-          ),
-        );
+            const SizedBox(height: 6),
+            Text(label, style: const TextStyle(fontSize: 12)),
+          ],
+        ),
+      ),
+    );
     showModalBottomSheet(
       context: context,
       builder: (ctx) => SafeArea(
@@ -1537,10 +1879,34 @@ class _ChatScreenState extends State<ChatScreen> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              tile(ctx, Iconsax.gallery_copy, 'ছবি', AppColors.mint, _pickImage),
-              tile(ctx, Iconsax.video_copy, 'ভিডিও', AppColors.wife, _pickVideo),
-              tile(ctx, Iconsax.camera_copy, 'ক্যামেরা', AppColors.pending, _takePhoto),
-              tile(ctx, Iconsax.document_copy, 'ফাইল', AppColors.husband, _pickFile),
+              tile(
+                ctx,
+                Iconsax.gallery_copy,
+                'ছবি',
+                AppColors.mint,
+                _pickImage,
+              ),
+              tile(
+                ctx,
+                Iconsax.video_copy,
+                'ভিডিও',
+                AppColors.wife,
+                _pickVideo,
+              ),
+              tile(
+                ctx,
+                Iconsax.camera_copy,
+                'ক্যামেরা',
+                AppColors.pending,
+                _takePhoto,
+              ),
+              tile(
+                ctx,
+                Iconsax.document_copy,
+                'ফাইল',
+                AppColors.husband,
+                _pickFile,
+              ),
             ],
           ),
         ),
@@ -1549,11 +1915,18 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> _takePhoto() async {
-    final file = await ImagePicker().pickImage(source: ImageSource.camera, imageQuality: 90);
+    final file = await ImagePicker().pickImage(
+      source: ImageSource.camera,
+      imageQuality: 90,
+    );
     if (file != null) await _sendMediaFile('photo', 'image', File(file.path));
   }
 
-  Widget _roundAction({required IconData icon, required VoidCallback onTap, String? tooltip}) {
+  Widget _roundAction({
+    required IconData icon,
+    required VoidCallback onTap,
+    String? tooltip,
+  }) {
     final primary = Theme.of(context).colorScheme.primary;
     return Tooltip(
       message: tooltip ?? '',
@@ -1566,7 +1939,11 @@ class _ChatScreenState extends State<ChatScreen> {
           child: SizedBox(
             width: 44,
             height: 44,
-            child: Icon(icon, color: Theme.of(context).colorScheme.onPrimary, size: 20),
+            child: Icon(
+              icon,
+              color: Theme.of(context).colorScheme.onPrimary,
+              size: 20,
+            ),
           ),
         ),
       ),
@@ -1591,11 +1968,12 @@ class _ChatScreenState extends State<ChatScreen> {
                 Expanded(
                   child: TextField(
                     controller: _textController,
-                    // While chat privacy is on, what's being typed shows as
-                    // dots too (DECISIONS.md #44); obscureText needs one line.
-                    obscureText: _hidden,
+                    // While chat privacy is on, what's being typed is DRAWN
+                    // as dots by _MaskableTextController -- NOT obscureText,
+                    // which switches Android to an English-only password
+                    // keyboard (no Bangla). See DECISIONS.md #57.
                     minLines: 1,
-                    maxLines: _hidden ? 1 : 5,
+                    maxLines: 5,
                     textCapitalization: TextCapitalization.sentences,
                     decoration: const InputDecoration(
                       hintText: 'মেসেজ…',
@@ -1610,13 +1988,21 @@ class _ChatScreenState extends State<ChatScreen> {
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Iconsax.paperclip_2, size: 21, color: AppColors.muted),
+                  icon: const Icon(
+                    Iconsax.paperclip_2,
+                    size: 21,
+                    color: AppColors.muted,
+                  ),
                   tooltip: 'সংযুক্ত করুন',
                   onPressed: _openAttachSheet,
                 ),
                 if (!_hasText)
                   IconButton(
-                    icon: const Icon(Iconsax.camera, size: 21, color: AppColors.muted),
+                    icon: const Icon(
+                      Iconsax.camera,
+                      size: 21,
+                      color: AppColors.muted,
+                    ),
                     tooltip: 'ক্যামেরা',
                     onPressed: _takePhoto,
                   ),
@@ -1626,8 +2012,16 @@ class _ChatScreenState extends State<ChatScreen> {
         ),
         const SizedBox(width: 6),
         _hasText
-            ? _roundAction(icon: Iconsax.send_1_copy, onTap: _sendText, tooltip: 'পাঠান')
-            : _roundAction(icon: Iconsax.microphone_2_copy, onTap: _startRecording, tooltip: 'ভয়েস মেসেজ'),
+            ? _roundAction(
+                icon: Iconsax.send_1_copy,
+                onTap: _sendText,
+                tooltip: 'পাঠান',
+              )
+            : _roundAction(
+                icon: Iconsax.microphone_2_copy,
+                onTap: _startRecording,
+                tooltip: 'ভয়েস মেসেজ',
+              ),
       ],
     );
   }
@@ -1645,26 +2039,79 @@ class _ChatScreenState extends State<ChatScreen> {
           child: Container(
             height: 44,
             padding: const EdgeInsets.symmetric(horizontal: 14),
-            decoration: BoxDecoration(color: AppColors.surfaceHigh, borderRadius: BorderRadius.circular(22)),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceHigh,
+              borderRadius: BorderRadius.circular(22),
+            ),
             child: Row(
               children: [
-                Icon(Icons.fiber_manual_record_rounded, color: _paused ? Colors.grey : Colors.redAccent, size: 12),
+                Icon(
+                  Icons.fiber_manual_record_rounded,
+                  color: _paused ? Colors.grey : Colors.redAccent,
+                  size: 12,
+                ),
                 const SizedBox(width: 8),
-                Expanded(child: _WaveformBars(levels: _waveform, color: _paused ? Colors.grey : AppColors.mint)),
+                Expanded(
+                  child: _WaveformBars(
+                    levels: _waveform,
+                    color: _paused ? Colors.grey : AppColors.mint,
+                  ),
+                ),
                 const SizedBox(width: 8),
-                Text(_fmtDuration(_recordDuration), style: const TextStyle(fontSize: 12.5)),
+                Text(
+                  _fmtDuration(_recordDuration),
+                  style: const TextStyle(fontSize: 12.5),
+                ),
               ],
             ),
           ),
         ),
         IconButton(
-          icon: Icon(_paused ? Iconsax.play_circle_copy : Iconsax.pause_circle_copy, color: primary),
+          icon: Icon(
+            _paused ? Iconsax.play_circle_copy : Iconsax.pause_circle_copy,
+            color: primary,
+          ),
           tooltip: _paused ? 'আবার শুরু করুন' : 'থামান',
           onPressed: _togglePause,
         ),
-        _roundAction(icon: Iconsax.send_1_copy, onTap: _finishAndSendRecording, tooltip: 'পাঠান'),
+        _roundAction(
+          icon: Iconsax.send_1_copy,
+          onTap: _finishAndSendRecording,
+          tooltip: 'পাঠান',
+        ),
       ],
     );
+  }
+}
+
+/// Draws its text as dots while [masked] is on, without touching the
+/// real value (which is still what gets encrypted and sent) and without
+/// obscureText -- so the keyboard stays the user's normal one (Bangla
+/// included) instead of Android's English-only password keyboard. One dot
+/// per UTF-16 unit keeps cursor/selection offsets identical. DECISIONS.md #57.
+class _MaskableTextController extends TextEditingController {
+  bool _masked = false;
+  bool get masked => _masked;
+  set masked(bool v) {
+    if (v == _masked) return;
+    _masked = v;
+    notifyListeners();
+  }
+
+  @override
+  TextSpan buildTextSpan({
+    required BuildContext context,
+    TextStyle? style,
+    required bool withComposing,
+  }) {
+    if (!_masked) {
+      return super.buildTextSpan(
+        context: context,
+        style: style,
+        withComposing: withComposing,
+      );
+    }
+    return TextSpan(style: style, text: '\u2022' * text.length);
   }
 }
 
@@ -1675,11 +2122,20 @@ class _EyeButton extends StatelessWidget {
   final Color color;
   final bool filled;
   final VoidCallback onTap;
-  const _EyeButton({required this.revealed, required this.color, required this.onTap, this.filled = false});
+  const _EyeButton({
+    required this.revealed,
+    required this.color,
+    required this.onTap,
+    this.filled = false,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final icon = Icon(revealed ? Iconsax.eye_slash_copy : Iconsax.eye_copy, size: 15, color: color.withValues(alpha: 0.85));
+    final icon = Icon(
+      revealed ? Iconsax.eye_slash_copy : Iconsax.eye_copy,
+      size: 15,
+      color: color.withValues(alpha: 0.85),
+    );
     return Semantics(
       button: true,
       label: revealed ? 'মেসেজ লুকান' : 'মেসেজ দেখুন',
@@ -1690,7 +2146,10 @@ class _EyeButton extends StatelessWidget {
             ? Container(
                 width: 28,
                 height: 28,
-                decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.45), shape: BoxShape.circle),
+                decoration: BoxDecoration(
+                  color: Colors.black.withValues(alpha: 0.45),
+                  shape: BoxShape.circle,
+                ),
                 child: Center(child: icon),
               )
             : Padding(padding: const EdgeInsets.all(5), child: icon),
@@ -1705,7 +2164,11 @@ class _QuotedReply extends StatelessWidget {
   final String preview;
   final bool mine;
   final VoidCallback onTap;
-  const _QuotedReply({required this.preview, required this.mine, required this.onTap});
+  const _QuotedReply({
+    required this.preview,
+    required this.mine,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1715,7 +2178,9 @@ class _QuotedReply extends StatelessWidget {
         margin: const EdgeInsets.only(bottom: 6),
         padding: const EdgeInsets.fromLTRB(8, 5, 10, 5),
         decoration: BoxDecoration(
-          color: (mine ? Colors.black : Colors.white).withValues(alpha: mine ? 0.18 : 0.06),
+          color: (mine ? Colors.black : Colors.white).withValues(
+            alpha: mine ? 0.18 : 0.06,
+          ),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
@@ -1735,7 +2200,12 @@ class _QuotedReply extends StatelessWidget {
                 preview,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(fontSize: 12, color: mine ? Colors.white.withValues(alpha: 0.85) : AppColors.muted),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: mine
+                      ? Colors.white.withValues(alpha: 0.85)
+                      : AppColors.muted,
+                ),
               ),
             ),
           ],
@@ -1767,8 +2237,14 @@ class _DateDivider extends StatelessWidget {
       child: Center(
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
-          decoration: BoxDecoration(color: AppColors.surfaceHigh, borderRadius: BorderRadius.circular(10)),
-          child: Text(_label(), style: const TextStyle(fontSize: 11, color: AppColors.muted)),
+          decoration: BoxDecoration(
+            color: AppColors.surfaceHigh,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            _label(),
+            style: const TextStyle(fontSize: 11, color: AppColors.muted),
+          ),
         ),
       ),
     );

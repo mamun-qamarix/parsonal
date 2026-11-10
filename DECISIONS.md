@@ -1881,3 +1881,21 @@ Chat:
 - Quick replies (ঠিক আছে / আসছি / ইনশাআল্লাহ …) when the last message is
   your partner's and you haven't started typing; pill composer with
   attach sheet (photo/video/camera/file), camera shortcut, mic ↔ send.
+
+## 57. Chat privacy mode masks everything; Bangla keyboard fix
+
+- With privacy mode on, every piece of content is dots (`• • • •`) with
+  its own eye button: each message, the partner's name in the header
+  (avatar initial becomes a lock), the pinned bar, the reply preview,
+  each quick-reply chip (a masked chip's tap reveals it instead of
+  sending something unseen), each search result. Reactions under a
+  masked message are hidden until it's revealed. Toggling privacy mode
+  resets every reveal. UI labels (পিন, উত্তর, অনলাইন, the privacy banner)
+  stay readable since they aren't your content.
+- **Keyboard:** #44 masked the composer with `obscureText`, which makes
+  Android open a password keyboard -- English only, no Bangla. Replaced
+  with `_MaskableTextController`, which only DRAWS the text as dots (one
+  per UTF-16 unit, so cursor offsets stay exact) while the field remains a
+  normal text field. Remaining limitation: the keyboard's own suggestion
+  strip can still show typed words; turning that off
+  (`enableSuggestions: false`) would bring back the English-only keyboard.
