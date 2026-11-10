@@ -117,17 +117,23 @@ actual app content — see `backend/app/services/notifications.py`.
 ### Admin panel
 
 Visit `https://<your-domain>/admin`, set your admin password on first
-visit, then click **Generate Setup Code** whenever a spouse needs to
-onboard a new device. The code/QR is single-use per role (husband/wife) and
-expires after 24 hours.
+visit, then set the **master password** -- the one password you both use
+to open the app. When a new phone enters it, the phone shows a short code
+and waits; the same code appears in the admin panel under "অনুমতির
+অপেক্ষায়" -- approve it as husband or wife. From then on that phone only
+needs the master password. Approved phones can be removed here too. See
+[DECISIONS.md](DECISIONS.md) §54.
 
 ## 2. Build and install the Flutter app
 
 ```bash
 cd mobile_app
 flutter pub get
-flutter build apk --release --split-per-abi
+flutter build apk --release --split-per-abi --dart-define=SERVER_URL=https://<your-domain>
 ```
+
+(`SERVER_URL` is optional -- without it, the login screen's ⚙ button asks
+for the server address once.)
 
 **Always build with `--split-per-abi`.** Without it, `flutter build apk`
 bundles native code for every CPU architecture into one "fat" APK --
@@ -145,14 +151,13 @@ phone (`adb install ...`, or transfer and sideload directly — you'll need
 to allow "install from unknown sources" since this is not distributed via
 any app store).
 
-On first launch, each spouse scans (or manually enters) the setup code from
-the admin panel, picks their role, sets a password, and registers their
-face.
+On first launch, type the master password, then approve the phone from the
+admin panel. That's all.
 
 ## 3. Everyday use
 
-- Both spouses authenticate with password **and** face verification every
-  time the app opens.
+- The master password is needed at most once an hour; a fingerprint covers
+  re-entry in between.
 - Editing or deleting vault content always requires the other spouse's
   approval — see the in-app consent requests.
 - A daily reminder notification nudges each spouse back to the app with a

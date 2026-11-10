@@ -8,7 +8,7 @@ from app.config import get_settings
 from app.database import init_models
 from app.services.scheduler import start_scheduler, stop_scheduler
 from app.services.storage import ensure_bucket
-from app.routers import auth, admin, content, media, social, chat, wishlist, phrase, profile, audit, reel, device, notifications
+from app.routers import auth, admin, content, media, social, chat, wishlist, phrase, profile, audit, reel, device, notifications, master_auth
 
 settings = get_settings()
 logging.basicConfig(level=logging.INFO)
@@ -37,6 +37,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router)
+app.include_router(master_auth.router)
 app.include_router(admin.router)
 app.include_router(content.router)
 app.include_router(media.router)

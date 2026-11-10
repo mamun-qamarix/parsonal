@@ -9,9 +9,6 @@ import '../../providers/session_provider.dart';
 import '../../services/auth_service.dart';
 import '../../services/profile_service.dart';
 import '../../widgets/password_field.dart';
-import '../onboarding/welcome_screen.dart';
-import 'add_device_screen.dart';
-import 'approve_password_reset_screen.dart';
 import '../trash/trash_screen.dart';
 import 'devices_screen.dart';
 import 'video_migration_screen.dart';
@@ -89,7 +86,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (_) => AlertDialog(
         title: const Text('এই ডিভাইস থেকে লগ আউট করবেন?'),
         content: const Text(
-          'আবার এই ডিভাইস যুক্ত করতে হলে নতুন করে সেটআপ কোড লাগবে।',
+          'আবার ঢুকতে শুধু মাস্টার পাসওয়ার্ড লাগবে।',
         ),
         actions: [
           TextButton(
@@ -106,10 +103,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     if (confirm != true || !mounted) return;
     await context.read<SessionProvider>().logoutAndForget();
     if (mounted) {
-      Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const WelcomeScreen()),
-        (route) => false,
-      );
+      Navigator.of(context).popUntil((route) => route.isFirst);
     }
   }
 
@@ -248,41 +242,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ),
                   title: const Text('ডিভাইসসমূহ'),
                   subtitle: const Text(
-                    'কোন ডিভাইস কার, দেখুন ও হারানো/পুরনো ডিভাইস সরিয়ে দিন',
+                    'কোন ডিভাইস কার, দেখুন ও হারানো/পুরনো ডিভাইস সরিয়ে দিন। নতুন ফোন অনুমোদন হয় অ্যাডমিন প্যানেল থেকে।',
                     style: TextStyle(fontSize: 12),
                   ),
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => const DevicesScreen()),
-                  ),
-                ),
-                ListTile(
-                  leading: Icon(
-                    Iconsax.scan_barcode,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                  title: const Text('নতুন ডিভাইস যোগ করুন'),
-                  subtitle: const Text(
-                    'আপনার নতুন বা দ্বিতীয় ফোনে এই অ্যাকাউন্টটাই যোগ করুন',
-                    style: TextStyle(fontSize: 12),
-                  ),
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const AddDeviceScreen()),
-                  ),
-                ),
-                ListTile(
-                  leading: Icon(
-                    Iconsax.shield_tick,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
-                  title: const Text('পাসওয়ার্ড রিসেট অনুমোদন করুন'),
-                  subtitle: const Text(
-                    'অন্য ডিভাইসে পাসওয়ার্ড রিসেট শুরু হলে এখান থেকে অনুমোদন দিন',
-                    style: TextStyle(fontSize: 12),
-                  ),
-                  onTap: () => Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (_) => const ApprovePasswordResetScreen(),
-                    ),
                   ),
                 ),
                 ListTile(

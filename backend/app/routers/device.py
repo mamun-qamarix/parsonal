@@ -52,7 +52,6 @@ async def list_devices(
     result = await db.execute(
         select(Device, Spouse.role)
         .join(Spouse, Spouse.id == Device.spouse_id)
-        .where(Device.totp_confirmed == True)  # noqa: E712
         .order_by(Device.last_seen_at.desc())
     )
     rows = result.all()

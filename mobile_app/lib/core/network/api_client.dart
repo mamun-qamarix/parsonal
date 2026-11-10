@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 
 import '../storage/secure_storage_service.dart';
+import 'server_config.dart';
 
 class ApiClient {
   ApiClient._internal() {
@@ -16,6 +17,8 @@ class ApiClient {
           final token = await SecureStorageService.instance.accessToken;
           if (token != null &&
               !options.path.contains('/auth/login') &&
+              !options.path.contains('/auth/master/login') &&
+              !options.path.contains('/auth/master/status') &&
               !options.path.contains('/auth/setup')) {
             options.headers['Authorization'] = 'Bearer $token';
           }
@@ -42,6 +45,8 @@ class ApiClient {
 
   bool _isAuthPath(String path) =>
       path.contains('/auth/login') ||
+      path.contains('/auth/master/login') ||
+      path.contains('/auth/master/status') ||
       path.contains('/auth/refresh') ||
       path.contains('/auth/setup');
 
@@ -50,7 +55,7 @@ class ApiClient {
   }
 
   Future<void> ensureConfigured() async {
-    final server = await SecureStorageService.instance.server;
+    final server = await ServerConfig.get();
     if (server != null) {
       _dio.options.baseUrl = server;
     }

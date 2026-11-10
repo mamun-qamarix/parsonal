@@ -1,4 +1,5 @@
 import json
+from datetime import datetime, timezone
 
 from fastapi import WebSocket
 
@@ -6,6 +7,10 @@ from fastapi import WebSocket
 class WSManager:
     def __init__(self) -> None:
         self._connections: dict[str, set[WebSocket]] = {}
+        # When each spouse's LAST live connection closed -- powers the
+        # chat header's "last seen" line. In memory only; after a server
+        # restart the chat falls back to Device.last_seen_at.
+        self.last_seen: dict[str, datetime] = {}
 
     async def connect(self, spouse_id: str, websocket: WebSocket) -> None:
         await websocket.accept()
@@ -17,6 +22,7 @@ class WSManager:
             conns.remove(websocket)
             if not conns:
                 self._connections.pop(spouse_id, None)
+                self.last_seen[spouse_id] = datetime.now(timezone.utc)
 
     async def send_to_spouse(self, spouse_id: str, payload: dict) -> bool:
         """Returns True only if the message actually reached at least one

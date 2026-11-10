@@ -2,6 +2,7 @@ import json
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, Query
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -147,6 +148,80 @@ async def mark_read(message_id: uuid.UUID, spouse: Spouse = Depends(get_current_
     return {"ok": True}
 
 
+async def _partner_of(db: AsyncSession, spouse: Spouse) -> Spouse | None:
+    result = await db.execute(select(Spouse).where(Spouse.role == RoleEnum(other_role(_role_of(spouse)))))
+    return result.scalar_one_or_none()
+
+
+async def _broadcast_presence(role: str | None, online: bool) -> None:
+    """Tells the OTHER spouse that this one just came online / went
+    offline, so their chat header updates live. Best effort."""
+    if role not in ("husband", "wife"):
+        return
+    try:
+        async with AsyncSessionLocal() as db:
+            target = (await db.execute(select(Spouse.id).where(Spouse.role == RoleEnum(other_role(role))))).scalar_one_or_none()
+        if target:
+            await ws_manager.send_to_spouse(str(target), {"type": "presence", "online": online, "at": utcnow().isoformat()})
+    except Exception:
+        pass
+
+
+@router.get("/chat/partner-status")
+async def partner_status(spouse: Spouse = Depends(get_current_spouse), db: AsyncSession = Depends(get_db)):
+    """Online right now, or when last seen -- for the chat header."""
+    partner = await _partner_of(db, spouse)
+    if partner is None:
+        return {"online": False, "last_seen_at": None}
+    from sqlalchemy import func
+    pid = str(partner.id)
+    last = ws_manager.last_seen.get(pid)
+    if last is None:
+        last = (await db.execute(select(func.max(Device.last_seen_at)).where(Device.spouse_id == partner.id))).scalar_one_or_none()
+    return {"online": ws_manager.is_online(pid), "last_seen_at": last}
+
+
+_PIN_KEY = "chat_pinned_message_id"
+
+
+class _PinBody(BaseModel):
+    message_id: uuid.UUID | None = None
+
+
+@router.get("/chat/pin")
+async def get_pin(spouse: Spouse = Depends(get_current_spouse), db: AsyncSession = Depends(get_db)):
+    from app.models.misc import AppSetting
+    row = await db.get(AppSetting, _PIN_KEY)
+    if row is None or not row.value:
+        return {"message": None}
+    msg = await db.get(ChatMessage, uuid.UUID(row.value))
+    if msg is None:
+        return {"message": None}
+    return {"message": json.loads((await _msg_to_out(db, msg)).model_dump_json())}
+
+
+@router.put("/chat/pin")
+async def set_pin(body: _PinBody, spouse: Spouse = Depends(get_current_spouse), db: AsyncSession = Depends(get_db)):
+    """One shared pinned message for the conversation (both see it).
+    message_id=null unpins."""
+    from app.models.misc import AppSetting
+    if body.message_id is not None and await db.get(ChatMessage, body.message_id) is None:
+        raise HTTPException(status_code=404, detail="Not found")
+    row = await db.get(AppSetting, _PIN_KEY)
+    value = str(body.message_id) if body.message_id else ""
+    if row is None:
+        db.add(AppSetting(key=_PIN_KEY, value=value))
+    else:
+        row.value = value
+    await db.commit()
+    event = {"type": "chat_pin", "message_id": value or None}
+    await ws_manager.send_to_spouse(str(spouse.id), event)
+    partner = await _partner_of(db, spouse)
+    if partner is not None:
+        await ws_manager.send_to_spouse(str(partner.id), event)
+    return {"ok": True}
+
+
 @router.websocket("/ws/chat")
 async def chat_ws(websocket: WebSocket, token: str = Query(...)):
     try:
@@ -169,6 +244,7 @@ async def chat_ws(websocket: WebSocket, token: str = Query(...)):
             return
 
     await ws_manager.connect(spouse_id, websocket)
+    await _broadcast_presence(role, online=True)
     try:
         while True:
             raw = await websocket.receive_text()
@@ -216,4 +292,8 @@ async def chat_ws(websocket: WebSocket, token: str = Query(...)):
             except Exception:
                 await websocket.send_text(json.dumps({"type": "error", "detail": "malformed message"}))
     except WebSocketDisconnect:
+        pass
+    finally:
         ws_manager.disconnect(spouse_id, websocket)
+        if not ws_manager.is_online(spouse_id):
+            await _broadcast_presence(role, online=False)

@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
 import 'package:provider/provider.dart';
 
+import '../../core/theme/app_theme.dart';
 import '../../models/models.dart';
 import '../../providers/session_provider.dart';
 import '../../services/vault_service.dart';
@@ -11,9 +12,9 @@ import '../../widgets/linkified_text.dart';
 import '../../widgets/media_viewer_screen.dart';
 import '../../widgets/shimmer_loading.dart';
 
-/// Everything that was deleted from the feed lands here and can be
-/// restored. Nothing is ever purged from the server automatically, and
-/// there's deliberately no "delete forever" button. See DECISIONS.md.
+/// Everything deleted from the feed lands here. From here it can be
+/// restored, or deleted for good -- which removes it (and its files) from
+/// the server too. Nothing is purged automatically. See DECISIONS.md #55.
 class TrashScreen extends StatefulWidget {
   const TrashScreen({super.key});
 
@@ -72,11 +73,90 @@ class _TrashScreenState extends State<TrashScreen> {
     }
   }
 
+  Future<bool> _confirm(String title, String body) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Text(body),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('বাতিল')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: AppColors.rejected),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('চিরতরে মুছুন'),
+          ),
+        ],
+      ),
+    );
+    return ok == true;
+  }
+
+  Future<void> _deleteForever(VaultEntry entry) async {
+    if (!await _confirm(
+      'চিরতরে মুছে ফেলবেন?',
+      'এটা সার্ভার থেকেও পুরোপুরি মুছে যাবে, ছবি/ভিডিওসহ। আর কখনো ফিরিয়ে আনা যাবে না।',
+    )) {
+      return;
+    }
+    setState(() => _restoring.add(entry.id));
+    try {
+      await _service.deleteForever(entry.id);
+      if (!mounted) return;
+      setState(() => _entries.removeWhere((e) => e.id == entry.id));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('চিরতরে মুছে ফেলা হয়েছে')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('মোছা যায়নি, আবার চেষ্টা করুন')),
+      );
+    } finally {
+      if (mounted) setState(() => _restoring.remove(entry.id));
+    }
+  }
+
+  Future<void> _emptyTrash() async {
+    if (!await _confirm(
+      'ট্র্যাশ খালি করবেন?',
+      'ট্র্যাশের ${_entries.length}টি জিনিস সার্ভার থেকেও পুরোপুরি মুছে যাবে। আর কখনো ফিরিয়ে আনা যাবে না।',
+    )) {
+      return;
+    }
+    setState(() => _loading = true);
+    try {
+      await _service.emptyTrash();
+      if (!mounted) return;
+      setState(() {
+        _entries = [];
+        _loading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('খালি করা যায়নি, আবার চেষ্টা করুন')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final privacyMask = context.watch<SessionProvider>().privacyMask;
     return Scaffold(
-      appBar: AppBar(title: const Text('ট্র্যাশ')),
+      appBar: AppBar(
+        title: const Text('ট্র্যাশ'),
+        actions: [
+          if (_entries.isNotEmpty && !_loading)
+            TextButton.icon(
+              style: TextButton.styleFrom(foregroundColor: AppColors.rejected),
+              onPressed: _emptyTrash,
+              icon: const Icon(Iconsax.trash_copy, size: 18),
+              label: const Text('সব মুছুন'),
+            ),
+        ],
+      ),
       body: _loading
           ? const ShimmerFeedList()
           : RefreshIndicator(
@@ -106,7 +186,7 @@ class _TrashScreenState extends State<TrashScreen> {
                           return const Padding(
                             padding: EdgeInsets.all(14),
                             child: Text(
-                              'মুছে ফেলা ছবি/ভিডিও/লেখা এখানে সুরক্ষিত থাকে — সার্ভার থেকে কখনো মুছে যায় না। চাইলে ফিরিয়ে আনতে পারবেন।',
+                              'মুছে ফেলা ছবি/ভিডিও/লেখা এখানে থাকে, চাইলে ফিরিয়ে আনতে পারবেন। "চিরতরে মুছুন" দিলে সার্ভার থেকেও পুরোপুরি মুছে যাবে।',
                               style: TextStyle(fontSize: 12, color: Colors.grey),
                             ),
                           );
@@ -193,19 +273,28 @@ class _TrashScreenState extends State<TrashScreen> {
                     style: const TextStyle(color: Colors.grey),
                   ),
                 const SizedBox(height: 6),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: FilledButton.tonalIcon(
-                    onPressed: busy ? null : () => _restore(entry),
-                    icon: busy
-                        ? const SizedBox(
-                            width: 14,
-                            height: 14,
-                            child: ShimmerSpinner(size: 16),
-                          )
-                        : const Icon(Iconsax.undo, size: 16),
-                    label: const Text('ফিরিয়ে আনুন'),
-                  ),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  children: [
+                    FilledButton.tonalIcon(
+                      onPressed: busy ? null : () => _restore(entry),
+                      icon: busy
+                          ? const SizedBox(width: 14, height: 14, child: ShimmerSpinner(size: 16))
+                          : const Icon(Iconsax.undo, size: 16),
+                      label: const Text('ফিরিয়ে আনুন'),
+                    ),
+                    OutlinedButton.icon(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.rejected,
+                        side: BorderSide(color: AppColors.rejected.withValues(alpha: 0.5), width: 0.5),
+                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                      ),
+                      onPressed: busy ? null : () => _deleteForever(entry),
+                      icon: const Icon(Iconsax.trash, size: 16),
+                      label: const Text('চিরতরে মুছুন'),
+                    ),
+                  ],
                 ),
               ],
             ),

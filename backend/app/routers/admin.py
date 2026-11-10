@@ -76,6 +76,8 @@ async def admin_status(db: AsyncSession = Depends(get_db)):
         "husband_registered": husband.scalar_one_or_none() is not None,
         "wife_registered": wife.scalar_one_or_none() is not None,
         "domain": settings.domain,
+        "master_password_set": (await get_master_hash(db)) is not None,
+        "vault_key_present": (await db.execute(select(VaultKey))).scalars().first() is not None,
     }
 
 
@@ -148,5 +150,82 @@ async def delete_setup_code(token: str, db: AsyncSession = Depends(get_db)):
     if code is None:
         raise HTTPException(status_code=404, detail="Setup code not found")
     await db.delete(code)
+    await db.commit()
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Master password + device approval (DECISIONS.md #54)
+# ---------------------------------------------------------------------------
+import uuid as _uuid
+
+from pydantic import BaseModel as _BaseModel
+
+from app.models.device_request import DeviceRequest
+from app.models.user import Device
+from app.routers.master_auth import get_master_hash, set_master_hash, resolve_request, ensure_vault_key_if_fresh
+
+
+class _MasterPasswordSet(_BaseModel):
+    password: str
+
+
+class _ApproveBody(_BaseModel):
+    role: str
+
+
+@router.post("/api/master-password", dependencies=[Depends(require_admin)])
+async def admin_set_master_password(body: _MasterPasswordSet, db: AsyncSession = Depends(get_db)):
+    """Sets or changes the one shared password both of you type to open
+    the app. Changing it never touches the vault key, so nothing already
+    stored becomes unreadable -- already-approved phones just need the new
+    password next time."""
+    if len(body.password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    await ensure_vault_key_if_fresh(db)
+    await set_master_hash(db, hash_secret(body.password))
+    return {"ok": True}
+
+
+@router.get("/api/devices", dependencies=[Depends(require_admin)])
+async def admin_list_devices(db: AsyncSession = Depends(get_db)):
+    pending = await db.execute(
+        select(DeviceRequest).where(DeviceRequest.status == "pending").order_by(DeviceRequest.created_at.desc())
+    )
+    devices = await db.execute(
+        select(Device, Spouse.role).join(Spouse, Spouse.id == Device.spouse_id).order_by(Device.last_seen_at.desc())
+    )
+    return {
+        "pending": [
+            {"id": str(r.id), "device_name": r.device_name, "code": r.code, "created_at": r.created_at}
+            for r in pending.scalars().all()
+        ],
+        "devices": [
+            {"id": str(d.id), "device_name": d.device_name, "role": role.value, "created_at": d.created_at, "last_seen_at": d.last_seen_at}
+            for d, role in devices.all()
+        ],
+    }
+
+
+@router.post("/api/device-requests/{request_id}/approve", dependencies=[Depends(require_admin)])
+async def admin_approve_device(request_id: _uuid.UUID, body: _ApproveBody, db: AsyncSession = Depends(get_db)):
+    await resolve_request(db, request_id, approve=True, role=body.role)
+    return {"ok": True}
+
+
+@router.post("/api/device-requests/{request_id}/reject", dependencies=[Depends(require_admin)])
+async def admin_reject_device(request_id: _uuid.UUID, db: AsyncSession = Depends(get_db)):
+    await resolve_request(db, request_id, approve=False, role=None)
+    return {"ok": True}
+
+
+@router.delete("/api/devices/{device_id}", dependencies=[Depends(require_admin)])
+async def admin_revoke_device(device_id: _uuid.UUID, db: AsyncSession = Depends(get_db)):
+    """Revoked phones lose their refresh token immediately (/auth/refresh
+    401s once the Device row is gone) and must be approved again."""
+    device = await db.get(Device, device_id)
+    if device is None:
+        raise HTTPException(status_code=404, detail="Device not found")
+    await db.delete(device)
     await db.commit()
     return {"ok": True}

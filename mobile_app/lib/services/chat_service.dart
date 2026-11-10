@@ -101,4 +101,36 @@ class ChatService {
     final res = await _dio.get('/chat/media');
     return (res.data as List).map((e) => ChatMediaItem.fromJson(e)).toList();
   }
+
+  /// The one shared pinned message (both of you see it), decrypted, or
+  /// null. See DECISIONS.md #56.
+  Future<ChatMessageModel?> getPin(Uint8List vmk) async {
+    final res = await _dio.get('/chat/pin');
+    final raw = res.data['message'];
+    if (raw == null) return null;
+    final m = ChatMessageModel.fromJson(raw as Map<String, dynamic>);
+    if (m.encPayload != null) {
+      try {
+        m.decryptedText = await VaultCrypto.decryptText(vmk, m.encPayload!);
+      } catch (_) {
+        m.decryptedText = '[ডিক্রিপ্ট করা যায়নি]';
+      }
+    }
+    return m;
+  }
+
+  /// Pass null to unpin.
+  Future<void> setPin(String? messageId) async {
+    await _dio.put('/chat/pin', data: {'message_id': messageId});
+  }
+
+  /// {online: bool, last_seen_at: iso|null} for the chat header.
+  Future<({bool online, DateTime? lastSeen})> partnerStatus() async {
+    final res = await _dio.get('/chat/partner-status');
+    final ls = res.data['last_seen_at'] as String?;
+    return (
+      online: res.data['online'] == true,
+      lastSeen: ls == null ? null : DateTime.tryParse(ls),
+    );
+  }
 }

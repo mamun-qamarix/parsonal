@@ -9,7 +9,6 @@ import '../../providers/session_provider.dart';
 import '../../services/device_service.dart';
 import '../../widgets/error_message_box.dart';
 import '../../widgets/shimmer_loading.dart';
-import '../onboarding/welcome_screen.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
 
 class DevicesScreen extends StatefulWidget {
@@ -82,10 +81,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
         if (!mounted) return;
         await context.read<SessionProvider>().logoutAndForget();
         if (mounted) {
-          Navigator.of(context).pushAndRemoveUntil(
-            MaterialPageRoute(builder: (_) => const WelcomeScreen()),
-            (route) => false,
-          );
+          Navigator.of(context).popUntil((route) => route.isFirst);
         }
         return;
       }

@@ -5,14 +5,17 @@ import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../core/network/api_client.dart';
+import '../core/network/server_config.dart';
 import '../core/network/ws_client.dart';
 import '../core/notifications/push_notification_service.dart';
 import '../core/storage/secure_storage_service.dart';
+import '../services/auth_service.dart';
 import '../services/profile_service.dart';
 
 enum SessionState {
   unknown,
-  needsSetup,
+  needsSetup, // no session on this phone yet -- master password screen
+  awaitingApproval, // password was right, waiting for the admin panel to approve this phone
   locked, // needs the PASSWORD (>1hr since last password entry, or never entered on this device yet)
   needsBiometric, // needs just a fingerprint/face/device-PIN tap (<1hr since last password entry)
   needsFaceVerify, // optional extra CompreFace step, only if the spouse turned it on
@@ -167,36 +170,82 @@ class SessionProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> completeClaim({
-    required String server,
-    required String role,
-    required String spouseId,
-    required String deviceId,
-    required String accessToken,
-    required String refreshToken,
-    required String vmkB64,
-  }) async {
-    await ApiClient.instance.configureBaseUrl(server);
+  // Pending device-approval request (DECISIONS.md #54) -- only meaningful
+  // while state == awaitingApproval.
+  String? pendingRequestId;
+  String? pendingPollToken;
+  String? pendingCode;
+  String? pendingDeviceName;
+
+  void beginAwaitingApproval({
+    required String requestId,
+    required String pollToken,
+    required String code,
+    required String deviceName,
+  }) {
+    pendingRequestId = requestId;
+    pendingPollToken = pollToken;
+    pendingCode = code;
+    pendingDeviceName = deviceName;
+    state = SessionState.awaitingApproval;
+    notifyListeners();
+  }
+
+  /// Back to the password screen (rejected, cancelled, or the request
+  /// expired server-side).
+  void cancelAwaitingApproval() {
+    pendingRequestId = null;
+    pendingPollToken = null;
+    pendingCode = null;
+    pendingDeviceName = null;
+    state = role == null ? SessionState.needsSetup : SessionState.locked;
+    notifyListeners();
+  }
+
+  /// Finishes a master-password login (straight away for an approved
+  /// phone, or once the waiting screen sees the approval). The vault key:
+  /// a phone that already has one keeps it (it's the one its content was
+  /// encrypted with); a new phone takes the server's. If the server has
+  /// none yet (older deployment), this phone uploads its own so that the
+  /// next newly-approved phone can get it.
+  Future<void> completeMasterLogin(Map<String, dynamic> result) async {
+    final server = ApiClient.instance.dio.options.baseUrl;
+    await ServerConfig.set(server);
+    final localVmk = await SecureStorageService.instance.vmkB64;
+    final serverVmk = result['vmk_b64'] as String?;
+    final vmkB64 = (localVmk != null && localVmk.isNotEmpty) ? localVmk : serverVmk;
+    if (vmkB64 == null || vmkB64.isEmpty) {
+      throw StateError(
+        'সার্ভারে এখনো এনক্রিপশন চাবি নেই। আগে থেকে চালু থাকা ফোনে একবার লগইন করুন, তারপর আবার চেষ্টা করুন।',
+      );
+    }
     await SecureStorageService.instance.saveSession(
       server: server,
-      accessToken: accessToken,
-      refreshToken: refreshToken,
+      accessToken: result['access_token'] as String,
+      refreshToken: result['refresh_token'] as String,
       vmkB64: vmkB64,
-      role: role,
-      spouseId: spouseId,
-      deviceId: deviceId,
+      role: result['role'] as String,
+      spouseId: result['spouse_id'] as String,
+      deviceId: result['device_id'] as String?,
     );
     await _recordPasswordAuth();
-    this.role = role;
-    this.spouseId = spouseId;
-    this.deviceId = deviceId;
+    role = result['role'] as String;
+    spouseId = result['spouse_id'] as String;
+    deviceId = result['device_id'] as String?;
     vmk = base64Decode(vmkB64);
+    pendingRequestId = null;
+    pendingPollToken = null;
+    pendingCode = null;
+    _pendingFaceChallengeToken = null;
     state = SessionState.authenticated;
     WsClient.instance.connect();
     PushNotificationService.instance.registerToken();
     loadIntimateMode();
     resetAutoLockTimer();
     notifyListeners();
+    if (serverVmk == null) {
+      AuthService().escrowVaultKey(vmkB64).catchError((_) {});
+    }
   }
 
   void setPendingFaceChallenge(String token) {
@@ -262,33 +311,6 @@ class SessionProvider extends ChangeNotifier {
     state = SessionState.authenticated;
     WsClient.instance.connect();
     resetAutoLockTimer();
-    notifyListeners();
-  }
-
-  /// Starts a device-pairing login: another already-authenticated device
-  /// handed us its role+VMK peer-to-peer (QR/paste, never through the
-  /// server). We stash them locally right away so that by the time the
-  /// normal password->(face) flow finishes and calls completeLogin,
-  /// server/vmkB64 are already on disk for it to read. See DECISIONS.md.
-  Future<void> beginPairing({
-    required String server,
-    required String role,
-    required String spouseId,
-    required String vmkB64,
-  }) async {
-    await ApiClient.instance.configureBaseUrl(server);
-    await SecureStorageService.instance.saveSession(
-      server: server,
-      accessToken: '',
-      refreshToken: '',
-      vmkB64: vmkB64,
-      role: role,
-      spouseId: spouseId,
-    );
-    this.role = role;
-    this.spouseId = spouseId;
-    vmk = base64Decode(vmkB64);
-    state = SessionState.locked;
     notifyListeners();
   }
 

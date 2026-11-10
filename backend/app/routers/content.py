@@ -212,8 +212,8 @@ async def list_trash(
     db: AsyncSession = Depends(get_db),
 ):
     """Soft-deleted entries (the "trash"), newest-deleted first. Nothing is
-    ever purged from here automatically -- neither the DB row nor the
-    encrypted media files in storage. See DECISIONS.md."""
+    purged automatically; DELETE /vault/trash/{id} (or DELETE /vault/trash)
+    removes an entry for good, server files included. See DECISIONS.md #55."""
     query = (
         select(VaultEntry)
         .where(VaultEntry.is_deleted == True)  # noqa: E712
@@ -237,6 +237,65 @@ async def restore_entry(entry_id: uuid.UUID, spouse: Spouse = Depends(get_curren
     db.add(AuditLogEntry(actor_id=spouse.id, action="content.restore", target_type="vault_entry", target_id=entry.id))
     await db.commit()
     return {"ok": True}
+
+
+async def _purge_entry(db: AsyncSession, entry: VaultEntry) -> list[str]:
+    """Hard-deletes one trashed entry and everything hanging off it.
+    Returns the storage keys to remove once the DB commit succeeded (so a
+    failed commit never leaves rows pointing at already-deleted blobs)."""
+    from sqlalchemy import delete as sql_delete
+    from app.models.social import Reaction, Comment, MatchCelebrationSeen
+
+    assets = (await db.execute(select(MediaAsset).where(MediaAsset.entry_id == entry.id))).scalars().all()
+    keys: list[str] = []
+    for a in assets:
+        keys += [k for k in (a.object_key, a.thumbnail_object_key, a.legacy_object_key) if k]
+
+    comment_ids = (await db.execute(select(Comment.id).where(Comment.target_id == entry.id))).scalars().all()
+    if comment_ids:
+        await db.execute(sql_delete(Reaction).where(Reaction.target_id.in_(comment_ids)))
+    for model in (Reaction, Comment, Favorite, MatchCelebrationSeen):
+        await db.execute(sql_delete(model).where(model.target_id == entry.id))
+    await db.delete(entry)  # media_assets / views / consent rows cascade
+    return keys
+
+
+async def _remove_blobs(keys: list[str]) -> None:
+    from app.services.storage import remove_object
+    import logging
+    for k in keys:
+        try:
+            await remove_object(k)
+        except Exception as exc:  # storage hiccup shouldn't fail the request
+            logging.getLogger(__name__).warning("Could not remove %s: %s", k, exc)
+
+
+@router.delete("/vault/trash/{entry_id}")
+async def delete_forever(entry_id: uuid.UUID, spouse: Spouse = Depends(get_current_spouse), db: AsyncSession = Depends(get_db)):
+    """Deletes a trashed entry for good -- database row AND its encrypted
+    files on the server. Cannot be undone. See DECISIONS.md #55."""
+    result = await db.execute(select(VaultEntry).where(VaultEntry.id == entry_id, VaultEntry.is_deleted == True))  # noqa: E712
+    entry = result.scalar_one_or_none()
+    if entry is None:
+        raise HTTPException(status_code=404, detail="Not found")
+    keys = await _purge_entry(db, entry)
+    db.add(AuditLogEntry(actor_id=spouse.id, action="content.purge", target_type="vault_entry", target_id=entry_id))
+    await db.commit()
+    await _remove_blobs(keys)
+    return {"ok": True}
+
+
+@router.delete("/vault/trash")
+async def empty_trash(spouse: Spouse = Depends(get_current_spouse), db: AsyncSession = Depends(get_db)):
+    """Empties the whole trash permanently, server files included."""
+    entries = (await db.execute(select(VaultEntry).where(VaultEntry.is_deleted == True))).scalars().all()  # noqa: E712
+    keys: list[str] = []
+    for e in entries:
+        keys += await _purge_entry(db, e)
+    db.add(AuditLogEntry(actor_id=spouse.id, action="content.empty_trash", target_type="vault_entry", detail=str(len(entries))))
+    await db.commit()
+    await _remove_blobs(keys)
+    return {"ok": True, "deleted": len(entries)}
 
 
 @router.post("/vault/entries/{entry_id}/favorite")

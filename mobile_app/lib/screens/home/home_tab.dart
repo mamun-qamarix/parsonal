@@ -151,42 +151,50 @@ class _HomeTabState extends State<HomeTab> {
             SliverAppBar(
               floating: true,
               snap: true,
-              title: Row(
+              toolbarHeight: 64,
+              title: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Iconsax.heart_copy, size: 20, color: Theme.of(context).colorScheme.primary),
-                  const SizedBox(width: 8),
-                  const Text('পার্সোনাল'),
+                  Text('আসসালামু আলাইকুম', style: Theme.of(context).textTheme.labelSmall),
+                  Text('আমাদের মুহূর্ত', style: Theme.of(context).textTheme.titleLarge),
                 ],
               ),
               actions: [
                 const NotificationBell(),
                 IconButton(
-                  icon: const Icon(Iconsax.clock),
-                  tooltip: 'হিস্টরি',
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const HistoryScreen()),
+                  icon: Icon(
+                    session.privacyMask ? Iconsax.eye_slash_copy : Iconsax.eye_copy,
+                    color: session.privacyMask ? AppColors.mint : null,
                   ),
-                ),
-                IconButton(
-                  icon: const Icon(Iconsax.heart),
-                  tooltip: 'ফেভারিট',
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const FavoritesScreen()),
-                  ),
-                ),
-                IconButton(
-                  icon: Icon(session.privacyMask ? Iconsax.eye_slash : Iconsax.eye),
                   tooltip: session.privacyMask
                       ? 'সবকিছু আবার দেখান'
                       : 'পুরো অ্যাপে ছবি ঝাপসা করুন, টেক্সট ও নাম লুকান',
                   onPressed: session.togglePrivacyMask,
                 ),
-                IconButton(
-                  icon: const Icon(Iconsax.setting_2),
-                  tooltip: 'সেটিংস',
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute(builder: (_) => const SettingsScreen()),
-                  ),
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert_rounded),
+                  onSelected: (v) {
+                    final Widget page = switch (v) {
+                      'history' => const HistoryScreen(),
+                      'favorites' => const FavoritesScreen(),
+                      _ => const SettingsScreen(),
+                    };
+                    Navigator.of(context).push(MaterialPageRoute(builder: (_) => page));
+                  },
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(
+                      value: 'favorites',
+                      child: Row(children: [Icon(Iconsax.heart_copy, size: 18), SizedBox(width: 10), Text('ফেভারিট')]),
+                    ),
+                    PopupMenuItem(
+                      value: 'history',
+                      child: Row(children: [Icon(Iconsax.clock_copy, size: 18), SizedBox(width: 10), Text('হিস্টরি')]),
+                    ),
+                    PopupMenuItem(
+                      value: 'settings',
+                      child: Row(children: [Icon(Iconsax.setting_2_copy, size: 18), SizedBox(width: 10), Text('সেটিংস')]),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -238,7 +246,7 @@ class _HomeTabState extends State<HomeTab> {
                           Container(
                             width: 1,
                             height: 28,
-                            color: Colors.grey.withValues(alpha: 0.3),
+                            color: AppColors.line,
                             margin: const EdgeInsets.symmetric(horizontal: 8),
                           ),
                           _FilterPill(
@@ -306,7 +314,16 @@ class _HomeTabState extends State<HomeTab> {
               const SliverFillRemaining(child: ShimmerFeedList())
             else if (list.isEmpty)
               const SliverFillRemaining(
-                child: Center(child: Text('এখনো কিছু নেই')),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Iconsax.heart_add_copy, size: 40, color: AppColors.faint),
+                      SizedBox(height: 10),
+                      Text('প্রথম মুহূর্তটা যোগ করুন', style: TextStyle(color: AppColors.muted)),
+                    ],
+                  ),
+                ),
               )
             else
               // Full-bleed, edge-to-edge -- no per-card box/margin anymore,
@@ -329,11 +346,7 @@ class _HomeTabState extends State<HomeTab> {
                           if (mounted) _load();
                         },
                       ),
-                      Divider(
-                        height: 1,
-                        thickness: 1,
-                        color: Colors.grey.withValues(alpha: 0.15),
-                      ),
+                      const Divider(height: 1),
                     ],
                   ),
                   childCount: list.length,
@@ -363,31 +376,33 @@ class _FilterPill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Soft-rect chips: unselected = transparent + hairline border,
+    // selected = solid fill + white text (no border).
     return InkWell(
-      borderRadius: BorderRadius.circular(999),
+      borderRadius: BorderRadius.circular(8),
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
         decoration: BoxDecoration(
-          color: selected ? color.withValues(alpha: 0.16) : Colors.transparent,
-          borderRadius: BorderRadius.circular(999),
+          color: selected ? color : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
           border: Border.all(
-            color: selected ? color : Colors.grey.withValues(alpha: 0.35),
-            width: 0.75,
+            color: selected ? color : const Color(0x24FFFFFF),
+            width: 0.5,
           ),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 16, color: selected ? color : Colors.grey),
+            Icon(icon, size: 15, color: selected ? Colors.white : AppColors.muted),
             const SizedBox(width: 5),
             Text(
               label,
               style: TextStyle(
-                fontWeight: FontWeight.w600,
-                color: selected ? color : Colors.grey,
-                fontSize: 12,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                color: selected ? Colors.white : AppColors.muted,
+                fontSize: 12.5,
               ),
             ),
           ],

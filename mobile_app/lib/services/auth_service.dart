@@ -7,25 +7,42 @@ import '../core/storage/device_identity_service.dart';
 class AuthService {
   final _dio = ApiClient.instance.dio;
 
-  Future<Map<String, dynamic>> claimRole({
-    required String server,
-    required String token,
-    required String role,
+  /// One shared master password for both of you (DECISIONS.md #54).
+  /// Returns {status: "approved", access_token, refresh_token, role,
+  /// spouse_id, device_id, vmk_b64} for a phone the server already
+  /// approved, or {status: "pending", request_id, poll_token, code} for a
+  /// phone still waiting on the admin panel.
+  Future<Map<String, dynamic>> masterLogin({
     required String password,
     required String deviceName,
   }) async {
-    await ApiClient.instance.configureBaseUrl(server);
     final res = await _dio.post(
-      '/auth/setup/claim',
+      '/auth/master/login',
       data: {
-        'token': token,
-        'role': role,
         'password': password,
         'device_name': deviceName,
         'device_uuid': await DeviceIdentityService.getOrCreate(),
       },
     );
     return res.data as Map<String, dynamic>;
+  }
+
+  /// Polled by the waiting screen: pending | rejected | approved(+tokens).
+  Future<Map<String, dynamic>> masterStatus({
+    required String requestId,
+    required String pollToken,
+  }) async {
+    final res = await _dio.post(
+      '/auth/master/status',
+      data: {'request_id': requestId, 'poll_token': pollToken},
+    );
+    return res.data as Map<String, dynamic>;
+  }
+
+  /// Uploads this phone's vault key if the server has none yet (older
+  /// deployments) so newly approved phones can receive it.
+  Future<void> escrowVaultKey(String vmkB64) async {
+    await _dio.post('/auth/master/vault-key', data: {'vmk_b64': vmkB64});
   }
 
   Future<Map<String, dynamic>> getMe() async {
@@ -86,38 +103,5 @@ class AuthService {
 
   Future<void> setDuressPin(String pin) async {
     await _dio.post('/auth/duress/set', data: {'pin': pin});
-  }
-
-  Future<Map<String, dynamic>> passwordResetInitiate(String role) async {
-    final res = await _dio.post(
-      '/auth/password-reset/initiate',
-      data: {'role': role},
-    );
-    return res.data as Map<String, dynamic>;
-  }
-
-  Future<void> passwordResetApprove(String resetToken) async {
-    await _dio.post(
-      '/auth/password-reset/approve',
-      data: {'reset_token': resetToken},
-    );
-  }
-
-  Future<bool> passwordResetStatus(String resetToken) async {
-    final res = await _dio.post(
-      '/auth/password-reset/status',
-      data: {'reset_token': resetToken},
-    );
-    return res.data['approved'] as bool;
-  }
-
-  Future<void> passwordResetComplete({
-    required String resetToken,
-    required String newPassword,
-  }) async {
-    await _dio.post(
-      '/auth/password-reset/complete',
-      data: {'reset_token': resetToken, 'new_password': newPassword},
-    );
   }
 }

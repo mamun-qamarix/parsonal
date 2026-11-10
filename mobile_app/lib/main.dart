@@ -15,7 +15,7 @@ import 'screens/auth/decoy_home_screen.dart';
 import 'screens/auth/face_verify_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/home/home_shell.dart';
-import 'screens/onboarding/welcome_screen.dart';
+import 'screens/auth/awaiting_approval_screen.dart';
 import 'package:iconsax_flutter/iconsax_flutter.dart';
 
 void main() async {
@@ -94,7 +94,9 @@ class AuthGate extends StatelessWidget {
       case SessionState.unknown:
         return const _Splash();
       case SessionState.needsSetup:
-        return const WelcomeScreen();
+        return const LoginScreen();
+      case SessionState.awaitingApproval:
+        return const AwaitingApprovalScreen();
       case SessionState.locked:
         return const LoginScreen();
       case SessionState.needsBiometric:

@@ -11,6 +11,7 @@ from app.models.audit import AuditLogEntry, ContentView
 from app.models.misc import CountdownTarget, AppSetting
 from app.models.profile import Profile
 from app.models.reset_session import PasswordResetSession
+from app.models.device_request import DeviceRequest
 
 __all__ = [
     "Spouse", "Device", "RoleEnum",
@@ -26,4 +27,5 @@ __all__ = [
     "CountdownTarget", "AppSetting",
     "Profile",
     "PasswordResetSession",
+    "DeviceRequest",
 ]

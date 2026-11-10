@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -18,8 +19,11 @@ import '../../models/models.dart';
 import '../../providers/session_provider.dart';
 import '../../services/chat_service.dart';
 import '../../services/media_service.dart';
+import '../../services/profile_cache.dart';
+import '../../services/social_service.dart';
 import '../../widgets/decrypted_media.dart';
 import '../../widgets/linkified_text.dart';
+import '../../widgets/match_celebration_overlay.dart';
 import '../../widgets/reaction_bar.dart';
 import '../../widgets/shimmer_loading.dart';
 import '../../widgets/media_viewer_screen.dart';
@@ -68,6 +72,17 @@ class _ChatScreenState extends State<ChatScreen> {
   // only affects what THIS device renders, never synced or visible to the
   // other spouse unless they independently toggle their own.
   bool _hidden = false;
+  // While privacy mode is on, the ids of the individual messages the user
+  // has tapped the eye on to show -- everything else stays masked. Cleared
+  // every time privacy mode is toggled. See DECISIONS.md #56.
+  final Set<String> _revealed = {};
+
+  // Header + pinned message state (DECISIONS.md #56).
+  ChatMessageModel? _pinned;
+  bool _partnerOnline = false;
+  DateTime? _partnerLastSeen;
+  String? _partnerName;
+  bool _hasText = false;
 
   // Shows a floating "jump to latest" button once the user has scrolled up
   // away from the bottom of the conversation. See DECISIONS.md.
@@ -117,6 +132,15 @@ class _ChatScreenState extends State<ChatScreen> {
     _wsSub = WsClient.instance.events.listen(_onWsEvent);
     _itemPositionsListener.itemPositions.addListener(_onScrollPositionsChanged);
     _textController.addListener(_onComposingChanged);
+    _textController.addListener(_onTextChanged);
+    _loadPin();
+    _loadPartnerStatus();
+    _loadPartnerName();
+  }
+
+  void _onTextChanged() {
+    final has = _textController.text.trim().isNotEmpty;
+    if (has != _hasText) setState(() => _hasText = has);
   }
 
   /// Pings the other spouse that this device is actively typing --
@@ -216,6 +240,28 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _onWsEvent(Map<String, dynamic> data) async {
+    if (data['type'] == 'presence') {
+      if (!mounted) return;
+      setState(() {
+        _partnerOnline = data['online'] == true;
+        if (!_partnerOnline) _partnerLastSeen = DateTime.tryParse(data['at'] as String? ?? '') ?? DateTime.now();
+      });
+      return;
+    }
+    if (data['type'] == 'chat_pin') {
+      final id = data['message_id'] as String?;
+      if (id == null) {
+        if (mounted) setState(() => _pinned = null);
+      } else if (_pinned?.id != id) {
+        final local = _messages.where((m) => m.id == id);
+        if (local.isNotEmpty) {
+          if (mounted) setState(() => _pinned = local.first);
+        } else {
+          _loadPin();
+        }
+      }
+      return;
+    }
     if (data['type'] == 'typing') {
       final kind = data['kind'] as String? ?? 'text';
       _peerTypingClearTimer?.cancel();
@@ -262,6 +308,7 @@ class _ChatScreenState extends State<ChatScreen> {
       if (isNewIncoming) {
         _peerTypingClearTimer?.cancel();
         _peerTypingKind = null;
+        _partnerOnline = true;
       }
       setState(() {
         final existingIndex = _messages.indexWhere((m) => m.id == msg.id);
@@ -609,6 +656,7 @@ class _ChatScreenState extends State<ChatScreen> {
     _recorder.dispose();
     _itemPositionsListener.itemPositions.removeListener(_onScrollPositionsChanged);
     _textController.removeListener(_onComposingChanged);
+    _textController.removeListener(_onTextChanged);
     _searchController.dispose();
     super.dispose();
   }
@@ -680,46 +728,528 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
+  // ---------------------------------------------------------------------
+  // "Modern messenger" UI (DECISIONS.md #56): partner header with live
+  // presence, a shared pinned message, rounded bubbles grouped by sender,
+  // per-message eye buttons in privacy mode, quick replies, a long-press
+  // action sheet, and a single pill-shaped composer.
+  // ---------------------------------------------------------------------
+
   Widget _seenTick(ChatMessageModel msg) {
-    // Always sits on top of "mine"'s primary-colored bubble -- must use
-    // onPrimary, not a hardcoded white, or it goes near-invisible in dark
-    // mode where primary is a deliberately pale color. See DECISIONS.md.
-    final onPrimary = Theme.of(context).colorScheme.onPrimary;
-    IconData icon;
-    Color color;
     if (msg.readAt != null) {
-      icon = Iconsax.tick_circle_copy;
-      color = Colors.lightBlueAccent;
-    } else if (msg.deliveredAt != null) {
-      icon = Iconsax.tick_circle_copy;
-      color = onPrimary.withValues(alpha: 0.7);
-    } else {
-      icon = Iconsax.tick_circle;
-      color = onPrimary.withValues(alpha: 0.7);
+      return const Icon(Icons.done_all_rounded, size: 14, color: AppColors.mint);
     }
-    return Icon(icon, size: 14, color: color);
+    return Icon(
+      msg.deliveredAt != null ? Icons.done_all_rounded : Icons.done_rounded,
+      size: 14,
+      color: Colors.white.withValues(alpha: 0.6),
+    );
   }
 
-  Widget _hiddenPlaceholder(bool mine) {
-    final onPrimary = Theme.of(context).colorScheme.onPrimary;
+  bool _isRevealed(ChatMessageModel msg) => !_hidden || _revealed.contains(msg.id);
+
+  void _toggleReveal(String id) {
+    setState(() {
+      if (!_revealed.remove(id)) _revealed.add(id);
+    });
+  }
+
+  void _togglePrivacy() {
+    setState(() {
+      _hidden = !_hidden;
+      // Every message starts hidden again each time privacy mode is
+      // switched on -- a reveal never "sticks" across sessions.
+      _revealed.clear();
+    });
+  }
+
+  String _lastSeenLabel(DateTime t) {
+    final local = t.toLocal();
+    final diff = DateTime.now().difference(local);
+    if (diff.inMinutes < 1) return 'এইমাত্র দেখেছে';
+    if (diff.inMinutes < 60) return '${diff.inMinutes} মিনিট আগে দেখেছে';
+    if (_isSameDay(local, DateTime.now())) return 'আজ ${DateFormat.jm().format(local)} এ দেখেছে';
+    return '${DateFormat.MMMd().format(local)} এ দেখেছে';
+  }
+
+  Widget _buildHeaderTitle(SessionProvider session) {
+    final partnerRole = session.otherRole;
+    final partnerColor = partnerRole == 'wife' ? AppColors.wife : AppColors.husband;
+    final name = _partnerName ?? (partnerRole == 'wife' ? 'স্ত্রী' : 'স্বামী');
+    String status;
+    Color statusColor = AppColors.muted;
+    if (_peerTypingKind != null) {
+      status = _peerTypingKind == 'voice' ? 'ভয়েস রেকর্ড করছে…' : 'লিখছে…';
+      statusColor = AppColors.mint;
+    } else if (_partnerOnline) {
+      status = 'অনলাইন';
+      statusColor = AppColors.mint;
+    } else if (_partnerLastSeen != null) {
+      status = _lastSeenLabel(_partnerLastSeen!);
+    } else {
+      status = '';
+    }
     return Row(
-      mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(
-          Iconsax.lock,
-          size: 13,
-          color: mine ? onPrimary.withValues(alpha: 0.7) : Colors.grey,
+        Stack(
+          clipBehavior: Clip.none,
+          children: [
+            CircleAvatar(
+              radius: 18,
+              backgroundColor: partnerColor,
+              child: Text(
+                name.characters.first,
+                style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.w600),
+              ),
+            ),
+            if (_partnerOnline)
+              Positioned(
+                right: -1,
+                bottom: -1,
+                child: Container(
+                  width: 11,
+                  height: 11,
+                  decoration: BoxDecoration(
+                    color: AppColors.halalGreen,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: AppColors.surface, width: 2),
+                  ),
+                ),
+              ),
+          ],
         ),
-        const SizedBox(width: 5),
-        Text(
-          '★ ★ ★ ★',
-          style: TextStyle(
-            color: mine ? onPrimary : Colors.grey.shade700,
-            letterSpacing: 2,
-            fontSize: 13,
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(name, maxLines: 1, overflow: TextOverflow.ellipsis, style: Theme.of(context).textTheme.titleMedium),
+              if (status.isNotEmpty)
+                Text(status, maxLines: 1, style: TextStyle(fontSize: 11.5, color: statusColor)),
+            ],
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildPinnedBar() {
+    final pin = _pinned!;
+    final shown = _isRevealed(pin) ? _previewFor(pin) : '★ ★ ★ ★';
+    return Material(
+      color: AppColors.surface,
+      child: InkWell(
+        onTap: () => _scrollToMessageId(pin.id),
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(14, 8, 4, 8),
+          decoration: const BoxDecoration(
+            border: Border(bottom: BorderSide(color: AppColors.line, width: 0.5)),
+          ),
+          child: Row(
+            children: [
+              const Icon(Iconsax.attach_square_copy, size: 16, color: AppColors.mint),
+              const SizedBox(width: 8),
+              const Text('পিন', style: TextStyle(fontSize: 12, color: AppColors.mint, fontWeight: FontWeight.w600)),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(shown, maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(fontSize: 12.5)),
+              ),
+              IconButton(
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(Icons.close_rounded, size: 18, color: AppColors.muted),
+                tooltip: 'আনপিন',
+                onPressed: () => _setPin(null),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _setPin(ChatMessageModel? msg) async {
+    final before = _pinned;
+    setState(() => _pinned = msg);
+    try {
+      await _chatService.setPin(msg?.id);
+    } catch (_) {
+      if (mounted) setState(() => _pinned = before);
+    }
+  }
+
+  Future<void> _loadPin() async {
+    try {
+      final vmk = context.read<SessionProvider>().vmk!;
+      final p = await _chatService.getPin(vmk);
+      if (mounted) setState(() => _pinned = p);
+    } catch (_) {}
+  }
+
+  Future<void> _loadPartnerStatus() async {
+    try {
+      final s = await _chatService.partnerStatus();
+      if (mounted) {
+        setState(() {
+          _partnerOnline = s.online;
+          _partnerLastSeen = s.lastSeen;
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _loadPartnerName() async {
+    try {
+      final session = context.read<SessionProvider>();
+      final p = await ProfileCache.instance.get(session.vmk!, session.otherRole);
+      final n = p?.decryptedName;
+      if (mounted && n != null && n.trim().isNotEmpty) setState(() => _partnerName = n.trim());
+    } catch (_) {}
+  }
+
+  /// Long-press menu: one-tap reactions, reply, copy, pin, show/hide.
+  void _showMessageActions(ChatMessageModel msg) {
+    const quick = ['❤️', '😍', '😂', '👍', '🥰', '😢'];
+    final isPinned = _pinned?.id == msg.id;
+    showModalBottomSheet(
+      context: context,
+      builder: (sheetCtx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  for (final e in quick)
+                    InkWell(
+                      borderRadius: BorderRadius.circular(22),
+                      onTap: () async {
+                        Navigator.pop(sheetCtx);
+                        final matched = await SocialService().addReaction('chat_message', msg.id, e);
+                        _reactionRefreshFor(msg.id).value++;
+                        if (matched && mounted) showMatchCelebration(context);
+                      },
+                      child: Padding(
+                        padding: const EdgeInsets.all(6),
+                        child: Text(e, style: const TextStyle(fontSize: 26)),
+                      ),
+                    ),
+                  InkWell(
+                    borderRadius: BorderRadius.circular(22),
+                    onTap: () {
+                      Navigator.pop(sheetCtx);
+                      openReactionSheet(
+                        context,
+                        targetType: 'chat_message',
+                        targetId: msg.id,
+                        onChanged: () => _reactionRefreshFor(msg.id).value++,
+                      );
+                    },
+                    child: Container(
+                      width: 38,
+                      height: 38,
+                      decoration: const BoxDecoration(color: AppColors.surfaceHigh, shape: BoxShape.circle),
+                      child: const Icon(Icons.add_rounded, color: AppColors.muted),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              const Divider(),
+              _actionTile(sheetCtx, Iconsax.undo_copy, 'উত্তর দিন', () => _startReply(msg)),
+              if (msg.contentType == 'text' && (msg.decryptedText ?? '').isNotEmpty && _isRevealed(msg))
+                _actionTile(sheetCtx, Iconsax.copy_copy, 'কপি করুন', () {
+                  Clipboard.setData(ClipboardData(text: msg.decryptedText!));
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('কপি হয়েছে')));
+                }),
+              if (msg.contentType == 'text' && (msg.decryptedText ?? '').isNotEmpty && _isRevealed(msg))
+                _actionTile(sheetCtx, Iconsax.text_block_copy, 'সিলেক্ট করে কপি', () => _openSelectableText(msg)),
+              _actionTile(
+                sheetCtx,
+                Iconsax.attach_square_copy,
+                isPinned ? 'আনপিন করুন' : 'পিন করুন',
+                () => _setPin(isPinned ? null : msg),
+              ),
+              if (_hidden)
+                _actionTile(
+                  sheetCtx,
+                  _revealed.contains(msg.id) ? Iconsax.eye_slash_copy : Iconsax.eye_copy,
+                  _revealed.contains(msg.id) ? 'আবার লুকান' : 'এই মেসেজটা দেখুন',
+                  () => _toggleReveal(msg.id),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Shows the full message text as selectable text, so any part of it can
+  /// be selected and copied (long-press on the bubble itself opens the
+  /// action menu, so selection lives here instead).
+  void _openSelectableText(ChatMessageModel msg) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.7),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'যতটুকু দরকার চেপে ধরে সিলেক্ট করুন, তারপর কপি করুন',
+                  style: TextStyle(fontSize: 12, color: AppColors.muted),
+                ),
+                const SizedBox(height: 12),
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: SelectableText(
+                      msg.decryptedText ?? '',
+                      style: const TextStyle(fontSize: 16, height: 1.5),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: () {
+                    Clipboard.setData(ClipboardData(text: msg.decryptedText ?? ''));
+                    Navigator.pop(ctx);
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('পুরোটা কপি হয়েছে')));
+                  },
+                  icon: const Icon(Iconsax.copy_copy, size: 18),
+                  label: const Text('পুরোটা কপি করুন'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _actionTile(BuildContext sheetCtx, IconData icon, String label, VoidCallback onTap) {
+    return ListTile(
+      dense: true,
+      leading: Icon(icon, size: 20),
+      title: Text(label),
+      onTap: () {
+        Navigator.pop(sheetCtx);
+        onTap();
+      },
+    );
+  }
+
+  Widget _maskedText(bool mine, String id) {
+    final c = mine ? Colors.white : const Color(0xFFE6EEE9);
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(Iconsax.lock_1_copy, size: 13, color: c.withValues(alpha: 0.65)),
+        const SizedBox(width: 6),
+        Text('★ ★ ★ ★', style: TextStyle(color: c.withValues(alpha: 0.85), letterSpacing: 2, fontSize: 13)),
+        const SizedBox(width: 4),
+        _EyeButton(revealed: false, color: c, onTap: () => _toggleReveal(id)),
+      ],
+    );
+  }
+
+  Widget _maskedMedia(ChatMessageModel msg) {
+    final label = switch (msg.contentType) {
+      'photo' => 'ছবি লুকানো',
+      'video' => 'ভিডিও লুকানো',
+      _ => 'লুকানো',
+    };
+    return GestureDetector(
+      onTap: () => _toggleReveal(msg.id),
+      child: Container(
+        width: 180,
+        height: 130,
+        decoration: BoxDecoration(
+          color: const Color(0xFF24332B),
+          borderRadius: BorderRadius.circular(14),
+        ),
+        child: Stack(
+          children: [
+            Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    msg.contentType == 'video' ? Iconsax.video_slash_copy : Iconsax.gallery_slash_copy,
+                    color: AppColors.muted,
+                    size: 26,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(label, style: const TextStyle(fontSize: 12, color: AppColors.muted)),
+                ],
+              ),
+            ),
+            Positioned(
+              top: 6,
+              right: 6,
+              child: _EyeButton(revealed: false, color: Colors.white, filled: true, onTap: () => _toggleReveal(msg.id)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _mediaContent(ChatMessageModel msg) {
+    final isVideo = msg.contentType == 'video';
+    final media = GestureDetector(
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => MediaViewerScreen(assetId: msg.mediaAssetId!, contentType: msg.contentType),
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: SizedBox(
+          height: 200,
+          width: 200,
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              isVideo
+                  ? DecryptedThumbnail(
+                      assetId: msg.mediaAssetId!,
+                      hasThumbnail: msg.mediaHasThumbnail,
+                      isVideo: true,
+                      fit: BoxFit.cover,
+                      forceShow: true,
+                    )
+                  : DecryptedFullImage(
+                      assetId: msg.mediaAssetId!,
+                      fit: BoxFit.cover,
+                      zoomable: false,
+                      forceShow: true,
+                    ),
+              if (isVideo)
+                const Center(child: Icon(Iconsax.play_circle_copy, color: Colors.white, size: 44)),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (!_hidden) return media;
+    return Stack(
+      children: [
+        media,
+        Positioned(
+          top: 6,
+          right: 6,
+          child: _EyeButton(revealed: true, color: Colors.white, filled: true, onTap: () => _toggleReveal(msg.id)),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildBubble(ChatMessageModel msg, {required bool mine, required bool groupedWithPrev, required Color mineColor}) {
+    final revealed = _isRevealed(msg);
+    final isMedia = (msg.contentType == 'photo' || msg.contentType == 'video') && msg.mediaAssetId != null;
+    final fg = mine ? Colors.white : const Color(0xFFE6EEE9);
+    final metaColor = mine ? Colors.white.withValues(alpha: 0.65) : AppColors.muted;
+
+    Widget content;
+    if (!revealed) {
+      content = isMedia ? _maskedMedia(msg) : _maskedText(mine, msg.id);
+    } else if (msg.contentType == 'text') {
+      content = Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          Flexible(child: LinkifiedText(msg.decryptedText ?? '', style: TextStyle(color: fg, fontSize: 14.5, height: 1.35))),
+          if (_hidden) ...[
+            const SizedBox(width: 4),
+            _EyeButton(revealed: true, color: fg, onTap: () => _toggleReveal(msg.id)),
+          ],
+        ],
+      );
+    } else if (isMedia) {
+      content = _mediaContent(msg);
+    } else if (msg.contentType == 'voice' && msg.mediaAssetId != null) {
+      content = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Flexible(
+            child: DecryptedVoicePlayer(assetId: msg.mediaAssetId!, color: mine ? Colors.white : AppColors.mint),
+          ),
+          if (_hidden) _EyeButton(revealed: true, color: fg, onTap: () => _toggleReveal(msg.id)),
+        ],
+      );
+    } else {
+      content = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Iconsax.document_copy, size: 18, color: fg),
+          const SizedBox(width: 6),
+          Text('ফাইল', style: TextStyle(color: fg)),
+        ],
+      );
+    }
+
+    final radius = BorderRadius.only(
+      topLeft: Radius.circular(!mine && groupedWithPrev ? 6 : 18),
+      topRight: Radius.circular(mine && groupedWithPrev ? 6 : 18),
+      bottomLeft: Radius.circular(mine ? 18 : 6),
+      bottomRight: Radius.circular(mine ? 6 : 18),
+    );
+    final quoted = _repliedMessage(msg.replyToId);
+
+    return Align(
+      alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+      child: GestureDetector(
+        onLongPress: () {
+          HapticFeedback.selectionClick();
+          _showMessageActions(msg);
+        },
+        // Quick rightward flick = reply, WhatsApp/Telegram-style.
+        onHorizontalDragEnd: (details) {
+          if ((details.primaryVelocity ?? 0) > 250) _startReply(msg);
+        },
+        child: Container(
+          margin: EdgeInsets.only(top: groupedWithPrev ? 2 : 8),
+          padding: isMedia && revealed
+              ? const EdgeInsets.all(4)
+              : const EdgeInsets.fromLTRB(12, 8, 12, 6),
+          constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.76),
+          decoration: BoxDecoration(color: mine ? mineColor : AppColors.bubbleTheirs, borderRadius: radius),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (revealed && msg.replyToId != null)
+                _QuotedReply(
+                  mine: mine,
+                  preview: quoted != null ? _previewFor(quoted) : 'মূল মেসেজ',
+                  onTap: () => _scrollToMessageId(msg.replyToId!),
+                ),
+              content,
+              Padding(
+                padding: EdgeInsets.only(top: 3, right: isMedia && revealed ? 6 : 0, bottom: isMedia && revealed ? 2 : 0),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (_pinned?.id == msg.id) ...[
+                      Icon(Iconsax.attach_square_copy, size: 11, color: metaColor),
+                      const SizedBox(width: 3),
+                    ],
+                    Text(DateFormat.jm().format(msg.createdAt.toLocal()), style: TextStyle(fontSize: 10.5, color: metaColor)),
+                    if (mine) ...[const SizedBox(width: 3), _seenTick(msg)],
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -727,58 +1257,75 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget build(BuildContext context) {
     final session = context.watch<SessionProvider>();
     final myId = session.spouseId;
-    // Chat's own local eye toggle has full, independent authority here --
-    // deliberately has NO relationship to the home screen's global privacy
-    // mask in either direction. See DECISIONS.md.
-    final hidden = _hidden;
+    final mineColor = session.intimateMode ? AppColors.bubbleMineIntimate : AppColors.bubbleMine;
     return Scaffold(
+      backgroundColor: AppColors.bg,
       appBar: AppBar(
+        backgroundColor: AppColors.surface,
+        titleSpacing: 0,
+        shape: const Border(bottom: BorderSide(color: AppColors.line, width: 0.5)),
         title: _searching
             ? TextField(
                 controller: _searchController,
                 autofocus: true,
                 decoration: const InputDecoration(
-                  hintText: 'মেসেজ খুঁজুন...',
+                  hintText: 'মেসেজ খুঁজুন…',
                   border: InputBorder.none,
+                  enabledBorder: InputBorder.none,
+                  focusedBorder: InputBorder.none,
+                  filled: false,
                 ),
                 onSubmitted: _runSearch,
               )
-            : const Text('চ্যাট'),
+            : _buildHeaderTitle(session),
         leading: _searching
             ? IconButton(icon: const Icon(Iconsax.arrow_left_2), onPressed: _closeSearch)
-            : null,
+            : (Navigator.of(context).canPop() ? const BackButton() : null),
         actions: _searching
             ? [
                 IconButton(
-                  icon: const Icon(Iconsax.search_normal_1),
+                  icon: const Icon(Iconsax.search_normal_1_copy),
                   onPressed: () => _runSearch(_searchController.text),
                 ),
               ]
             : [
                 IconButton(
-                  icon: const Icon(Iconsax.gallery),
-                  tooltip: 'গ্যালারি',
+                  icon: const Icon(Iconsax.gallery_copy, size: 21),
+                  tooltip: 'চ্যাট গ্যালারি',
                   onPressed: () => Navigator.of(context).push(
                     MaterialPageRoute(builder: (_) => const ChatGalleryScreen()),
                   ),
                 ),
-                IconButton(icon: const Icon(Iconsax.search_normal_1), onPressed: _openSearch),
-                Consumer<SessionProvider>(
-                  builder: (context, session, _) => IconButton(
-                    icon: Icon(
-                      session.intimateMode ? Iconsax.moon_copy : Iconsax.moon,
-                      color: session.intimateMode ? AppColors.intimateBlue : null,
-                    ),
-                    tooltip: session.intimateMode
-                        ? 'গোপন মুহূর্তের মোড বন্ধ করুন'
-                        : 'গোপন মুহূর্তের মোড চালু করুন',
-                    onPressed: session.toggleIntimateMode,
-                  ),
-                ),
                 IconButton(
-                  icon: Icon(_hidden ? Iconsax.eye_slash : Iconsax.eye),
-                  tooltip: _hidden ? 'মেসেজ দেখান' : 'মেসেজ লুকান (শুধু এই ফোনে)',
-                  onPressed: () => setState(() => _hidden = !_hidden),
+                  icon: Icon(
+                    _hidden ? Iconsax.eye_slash_copy : Iconsax.eye_copy,
+                    size: 21,
+                    color: _hidden ? AppColors.mint : null,
+                  ),
+                  tooltip: _hidden ? 'প্রাইভেসি মোড বন্ধ করুন' : 'প্রাইভেসি মোড (শুধু এই ফোনে)',
+                  onPressed: _togglePrivacy,
+                ),
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert_rounded),
+                  onSelected: (v) {
+                    if (v == 'search') _openSearch();
+                    if (v == 'intimate') session.toggleIntimateMode();
+                  },
+                  itemBuilder: (_) => [
+                    const PopupMenuItem(
+                      value: 'search',
+                      child: Row(children: [Icon(Iconsax.search_normal_1_copy, size: 18), SizedBox(width: 10), Text('মেসেজ খুঁজুন')]),
+                    ),
+                    PopupMenuItem(
+                      value: 'intimate',
+                      child: Row(children: [
+                        Icon(session.intimateMode ? Iconsax.moon_copy : Iconsax.moon, size: 18,
+                            color: session.intimateMode ? AppColors.intimateBlue : null),
+                        const SizedBox(width: 10),
+                        Text(session.intimateMode ? 'গোপন মুহূর্ত বন্ধ' : 'গোপন মুহূর্তের মোড'),
+                      ]),
+                    ),
+                  ],
                 ),
               ],
       ),
@@ -786,302 +1333,151 @@ class _ChatScreenState extends State<ChatScreen> {
           ? _buildSearchResults()
           : Column(
               children: [
+                if (_pinned != null) _buildPinnedBar(),
+                if (_hidden)
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
+                    color: AppColors.mint.withValues(alpha: 0.08),
+                    child: const Text(
+                      'প্রাইভেসি মোড চালু — প্রতিটা মেসেজের চোখে চাপ দিয়ে দেখুন',
+                      style: TextStyle(fontSize: 11.5, color: AppColors.mint),
+                    ),
+                  ),
                 Expanded(
                   child: _loading
                       ? const ShimmerTileList()
                       : Stack(
                           children: [
                             ScrollablePositionedList.builder(
-                          itemScrollController: _itemScrollController,
-                          itemPositionsListener: _itemPositionsListener,
-                          // Land exactly on the newest message on first
-                          // open -- without this the list defaults to
-                          // index 0 (the oldest loaded message) for its
-                          // very first frame, which was long enough for
-                          // `_onScrollPositionsChanged` to see the top of
-                          // the list and prematurely trigger
-                          // `_loadMoreHistory()` before the animated
-                          // scroll-to-bottom in `_load()` ever got a
-                          // chance to run -- that history prepend's own
-                          // `jumpTo()` then won the race, landing
-                          // somewhere in the middle of the conversation
-                          // instead of the latest message. See
-                          // DECISIONS.md.
-                          initialScrollIndex: _messages.isEmpty ? 0 : _messages.length - 1,
-                          padding: const EdgeInsets.all(12),
-                          itemCount: _messages.length,
-                          itemBuilder: (context, i) {
-                            final msg = _messages[i];
-                            final mine = msg.senderId == myId;
-                            final isMedia =
-                                msg.contentType == 'photo' ||
-                                msg.contentType == 'video';
-                            final showDateDivider =
-                                i == 0 ||
-                                !_isSameDay(
-                                  _messages[i - 1].createdAt.toLocal(),
-                                  msg.createdAt.toLocal(),
-                                );
-                            final bubble = Align(
-                        alignment: mine
-                            ? Alignment.centerRight
-                            : Alignment.centerLeft,
-                        child: GestureDetector(
-                        onLongPress: () => openReactionSheet(
-                          context,
-                          targetType: 'chat_message',
-                          targetId: msg.id,
-                          onChanged: () => _reactionRefreshFor(msg.id).value++,
-                        ),
-                        // A quick rightward flick anywhere on the bubble
-                        // starts a reply to it -- WhatsApp/Telegram-style
-                        // swipe-to-reply. See DECISIONS.md.
-                        onHorizontalDragEnd: (details) {
-                          if ((details.primaryVelocity ?? 0) > 250) _startReply(msg);
-                        },
-                        child: Container(
-                          margin: const EdgeInsets.symmetric(vertical: 4),
-                          padding: const EdgeInsets.all(10),
-                          constraints: BoxConstraints(
-                            maxWidth: MediaQuery.of(context).size.width * 0.72,
-                          ),
-                          decoration: BoxDecoration(
-                            color: mine
-                                ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.85)
-                                : Colors.grey.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              if (!hidden && msg.replyToId != null)
-                                _QuotedReply(
-                                  message: _repliedMessage(msg.replyToId),
-                                  mine: mine,
-                                  preview: _repliedMessage(msg.replyToId) != null
-                                      ? _previewFor(_repliedMessage(msg.replyToId)!)
-                                      : 'মূল মেসেজ',
-                                  onTap: () => _scrollToMessageId(msg.replyToId!),
-                                ),
-                              if (hidden)
-                                _hiddenPlaceholder(mine)
-                              else if (msg.contentType == 'text')
-                                LinkifiedText(
-                                  msg.decryptedText ?? '',
-                                  style: TextStyle(
-                                    color: mine
-                                        ? Theme.of(context).colorScheme.onPrimary
-                                        : null,
-                                  ),
-                                )
-                              else if (msg.contentType == 'photo' &&
-                                  msg.mediaAssetId != null)
-                                GestureDetector(
-                                  onTap: () => Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) => MediaViewerScreen(
-                                        assetId: msg.mediaAssetId!,
-                                        contentType: 'photo',
+                              itemScrollController: _itemScrollController,
+                              itemPositionsListener: _itemPositionsListener,
+                              // Land on the newest message on the very first
+                              // frame (see DECISIONS.md #40).
+                              initialScrollIndex: _messages.isEmpty ? 0 : _messages.length - 1,
+                              padding: const EdgeInsets.fromLTRB(10, 6, 10, 10),
+                              itemCount: _messages.length,
+                              itemBuilder: (context, i) {
+                                final msg = _messages[i];
+                                final mine = msg.senderId == myId;
+                                final prev = i > 0 ? _messages[i - 1] : null;
+                                final newDay = prev == null ||
+                                    !_isSameDay(prev.createdAt.toLocal(), msg.createdAt.toLocal());
+                                final grouped = !newDay &&
+                                    prev.senderId == msg.senderId &&
+                                    msg.createdAt.difference(prev.createdAt).inMinutes.abs() < 3;
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                                  children: [
+                                    if (newDay) _DateDivider(date: msg.createdAt.toLocal()),
+                                    _buildBubble(msg, mine: mine, groupedWithPrev: grouped, mineColor: mineColor),
+                                    Align(
+                                      alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
+                                      child: ReactionList(
+                                        key: ValueKey('rx-${msg.id}'),
+                                        targetType: 'chat_message',
+                                        targetId: msg.id,
+                                        refresh: _reactionRefreshFor(msg.id),
                                       ),
                                     ),
-                                  ),
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(10),
-                                    child: SizedBox(
-                                      height: 180,
-                                      width: 180,
-                                      child: DecryptedFullImage(
-                                        assetId: msg.mediaAssetId!,
-                                        fit: BoxFit.cover,
-                                        zoomable: false,
-                                        forceShow: true,
-                                      ),
-                                    ),
-                                  ),
-                                )
-                              else if (msg.contentType == 'video' &&
-                                  msg.mediaAssetId != null)
-                                GestureDetector(
-                                  onTap: () => Navigator.of(context).push(
-                                    MaterialPageRoute(
-                                      builder: (_) => MediaViewerScreen(
-                                        assetId: msg.mediaAssetId!,
-                                        contentType: 'video',
-                                      ),
-                                    ),
-                                  ),
-                                  child: Stack(
-                                    alignment: Alignment.center,
-                                    children: [
-                                      ClipRRect(
-                                        borderRadius: BorderRadius.circular(10),
-                                        child: SizedBox(
-                                          height: 180,
-                                          width: 180,
-                                          child: DecryptedThumbnail(
-                                            assetId: msg.mediaAssetId!,
-                                            hasThumbnail: msg.mediaHasThumbnail,
-                                            isVideo: true,
-                                            fit: BoxFit.cover,
-                                            forceShow: true,
-                                          ),
-                                        ),
-                                      ),
-                                      const Icon(
-                                        Iconsax.play_circle_copy,
-                                        color: Colors.white,
-                                        size: 40,
-                                      ),
-                                    ],
-                                  ),
-                                )
-                              else if (msg.contentType == 'voice' &&
-                                  msg.mediaAssetId != null)
-                                DecryptedVoicePlayer(
-                                  assetId: msg.mediaAssetId!,
-                                  color: mine
-                                      ? Theme.of(context).colorScheme.onPrimary
-                                      : Theme.of(context).colorScheme.primary,
-                                )
-                              else
-                                Text(
-                                  '[${msg.contentType}]',
-                                  style: TextStyle(
-                                    color: mine
-                                        ? Theme.of(context).colorScheme.onPrimary
-                                        : null,
-                                    fontStyle: FontStyle.italic,
-                                  ),
-                                ),
-                              const SizedBox(height: 4),
-                              Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(
-                                    DateFormat.jm().format(
-                                      msg.createdAt.toLocal(),
-                                    ),
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      color: mine && !isMedia
-                                          ? Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.7)
-                                          : Colors.grey,
-                                    ),
-                                  ),
-                                  if (mine) ...[
-                                    const SizedBox(width: 4),
-                                    _seenTick(msg),
                                   ],
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                        ),
-                      );
-                      return Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          if (showDateDivider) _DateDivider(date: msg.createdAt.toLocal()),
-                          bubble,
-                          Align(
-                            alignment: mine
-                                ? Alignment.centerRight
-                                : Alignment.centerLeft,
-                            child: Padding(
-                              padding: const EdgeInsets.only(bottom: 4),
-                              child: ReactionList(
-                                key: ValueKey('rx-${msg.id}'),
-                                targetType: 'chat_message',
-                                targetId: msg.id,
-                                refresh: _reactionRefreshFor(msg.id),
-                              ),
+                                );
+                              },
                             ),
-                          ),
-                        ],
-                      );
-                    },
-                  ),
                             if (_showScrollToBottom)
                               Positioned(
                                 right: 12,
                                 bottom: 12,
-                                child: FloatingActionButton.small(
-                                  heroTag: 'scrollToBottom',
-                                  onPressed: _scrollToBottom,
-                                  child: const Icon(Iconsax.arrow_down_1),
+                                child: Material(
+                                  color: AppColors.surfaceHigh,
+                                  shape: const CircleBorder(side: BorderSide(color: AppColors.line, width: 0.5)),
+                                  child: InkWell(
+                                    customBorder: const CircleBorder(),
+                                    onTap: _scrollToBottom,
+                                    child: const Padding(
+                                      padding: EdgeInsets.all(10),
+                                      child: Icon(Iconsax.arrow_down_1_copy, size: 20),
+                                    ),
+                                  ),
                                 ),
                               ),
                           ],
                         ),
-          ),
-          if (_loadingMoreHistory)
-            const Padding(
-              padding: EdgeInsets.symmetric(vertical: 6),
-              child: Center(child: ShimmerSpinner(size: 16)),
+                ),
+                if (_loadingMoreHistory)
+                  const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 6),
+                    child: Center(child: ShimmerSpinner(size: 16)),
+                  ),
+                if (_sending) const LinearProgressIndicator(minHeight: 2),
+                if (_replyingTo != null) _buildReplyPreviewBar(),
+                if (!_recording && !_hasText && _replyingTo == null) _buildQuickReplies(myId),
+                Container(
+                  decoration: const BoxDecoration(
+                    color: AppColors.surface,
+                    border: Border(top: BorderSide(color: AppColors.line, width: 0.5)),
+                  ),
+                  child: SafeArea(
+                    top: false,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+                      child: _recording ? _buildRecordingBar() : _buildNormalInputBar(),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          if (_sending) const LinearProgressIndicator(),
-          if (_peerTypingKind != null) _buildPeerTypingIndicator(),
-          if (_replyingTo != null) _buildReplyPreviewBar(),
-          SafeArea(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              child: _recording ? _buildRecordingBar() : _buildNormalInputBar(),
+    );
+  }
+
+  /// One-tap replies, offered when the last message is from your partner
+  /// and you haven't started typing.
+  Widget _buildQuickReplies(String? myId) {
+    if (_messages.isEmpty || _messages.last.senderId == myId) return const SizedBox.shrink();
+    const replies = ['ঠিক আছে', 'আসছি', 'ইনশাআল্লাহ', 'মাশাআল্লাহ', '❤️'];
+    return SizedBox(
+      height: 40,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.fromLTRB(10, 4, 10, 6),
+        itemCount: replies.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 6),
+        itemBuilder: (context, i) => InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () async {
+            final vmk = context.read<SessionProvider>().vmk!;
+            await _chatService.sendTextViaWs(vmk, replies[i]);
+            ChatSoundService.playSent();
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: const Color(0x24FFFFFF), width: 0.5),
             ),
+            child: Text(replies[i], style: const TextStyle(fontSize: 12.5)),
           ),
-        ],
+        ),
       ),
     );
   }
 
-  /// Live "সঙ্গী টাইপ করছেন" / "সঙ্গী ভয়েস রেকর্ড করছেন" row, driven by the
-  /// periodic WS pings in `_onComposingChanged`/`_startRecording` on the
-  /// OTHER device. See DECISIONS.md.
-  Widget _buildPeerTypingIndicator() {
-    final isVoice = _peerTypingKind == 'voice';
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      alignment: Alignment.centerLeft,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            isVoice ? Iconsax.microphone : Iconsax.edit_2,
-            size: 14,
-            color: Theme.of(context).colorScheme.primary,
-          ),
-          const SizedBox(width: 6),
-          Text(
-            isVoice ? 'সঙ্গী ভয়েস রেকর্ড করছেন...' : 'সঙ্গী টাইপ করছেন...',
-            style: TextStyle(
-              fontSize: 12,
-              fontStyle: FontStyle.italic,
-              color: Theme.of(context).colorScheme.primary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  /// Shows what's about to be replied to, above the input bar, with a way
-  /// to cancel it -- the swipe gesture just sets `_replyingTo`, this is
-  /// what makes that state visible before actually sending. See
-  /// DECISIONS.md.
   Widget _buildReplyPreviewBar() {
     final target = _replyingTo!;
     final myId = context.read<SessionProvider>().spouseId;
     final mine = target.senderId == myId;
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      margin: const EdgeInsets.fromLTRB(10, 0, 10, 6),
+      padding: const EdgeInsets.fromLTRB(12, 8, 4, 8),
       decoration: BoxDecoration(
-        color: Colors.grey.withValues(alpha: 0.1),
-        border: Border(
-          left: BorderSide(color: Theme.of(context).colorScheme.primary, width: 3),
-        ),
+        color: AppColors.surfaceHigh,
+        borderRadius: BorderRadius.circular(10),
       ),
       child: Row(
         children: [
+          Container(width: 3, height: 32, decoration: BoxDecoration(color: AppColors.mint, borderRadius: BorderRadius.circular(2))),
+          const SizedBox(width: 10),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1089,23 +1485,19 @@ class _ChatScreenState extends State<ChatScreen> {
               children: [
                 Text(
                   mine ? 'নিজের মেসেজের উত্তর' : 'সঙ্গীর মেসেজের উত্তর',
-                  style: TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: Theme.of(context).colorScheme.primary,
-                  ),
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.mint),
                 ),
                 Text(
-                  _previewFor(target),
+                  _isRevealed(target) ? _previewFor(target) : '★ ★ ★ ★',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 12, color: Colors.grey),
+                  style: const TextStyle(fontSize: 12, color: AppColors.muted),
                 ),
               ],
             ),
           ),
           IconButton(
-            icon: const Icon(Iconsax.close_circle, size: 20),
+            icon: const Icon(Icons.close_rounded, size: 20, color: AppColors.muted),
             onPressed: () => setState(() => _replyingTo = null),
           ),
         ],
@@ -1113,152 +1505,247 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Widget _buildNormalInputBar() {
-    return Row(
-      children: [
-        PopupMenuButton<String>(
-          icon: const Icon(Iconsax.add_circle),
-          onSelected: (v) {
-            if (v == 'image') _pickImage();
-            if (v == 'video') _pickVideo();
-            if (v == 'file') _pickFile();
+  void _openAttachSheet() {
+    Widget tile(BuildContext ctx, IconData icon, String label, Color color, VoidCallback onTap) => InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: () {
+            Navigator.pop(ctx);
+            onTap();
           },
-          itemBuilder: (_) => const [
-            PopupMenuItem(value: 'image', child: Text('ছবি')),
-            PopupMenuItem(value: 'video', child: Text('ভিডিও')),
-            PopupMenuItem(value: 'file', child: Text('ফাইল')),
-          ],
-        ),
-        IconButton(
-          icon: const Icon(Iconsax.microphone),
-          onPressed: _startRecording,
-        ),
-        Expanded(
-          child: TextField(
-            controller: _textController,
-            // Same idea as the hidden-placeholder bubbles below -- while
-            // chat's own privacy toggle is on, what's actually being typed
-            // shows as dots too, not just what's already been sent. The
-            // real text is still what gets encrypted and sent; this is
-            // purely how it's drawn on screen. See DECISIONS.md.
-            obscureText: _hidden,
-            decoration: const InputDecoration(hintText: 'লিখুন...'),
-            onSubmitted: (_) => _sendText(),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 54,
+                  height: 54,
+                  decoration: BoxDecoration(color: color.withValues(alpha: 0.16), borderRadius: BorderRadius.circular(16)),
+                  child: Icon(icon, color: color, size: 24),
+                ),
+                const SizedBox(height: 6),
+                Text(label, style: const TextStyle(fontSize: 12)),
+              ],
+            ),
+          ),
+        );
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              tile(ctx, Iconsax.gallery_copy, 'ছবি', AppColors.mint, _pickImage),
+              tile(ctx, Iconsax.video_copy, 'ভিডিও', AppColors.wife, _pickVideo),
+              tile(ctx, Iconsax.camera_copy, 'ক্যামেরা', AppColors.pending, _takePhoto),
+              tile(ctx, Iconsax.document_copy, 'ফাইল', AppColors.husband, _pickFile),
+            ],
           ),
         ),
-        IconButton(
-          icon: Icon(Iconsax.send, color: Theme.of(context).colorScheme.primary),
-          onPressed: _sendText,
+      ),
+    );
+  }
+
+  Future<void> _takePhoto() async {
+    final file = await ImagePicker().pickImage(source: ImageSource.camera, imageQuality: 90);
+    if (file != null) await _sendMediaFile('photo', 'image', File(file.path));
+  }
+
+  Widget _roundAction({required IconData icon, required VoidCallback onTap, String? tooltip}) {
+    final primary = Theme.of(context).colorScheme.primary;
+    return Tooltip(
+      message: tooltip ?? '',
+      child: Material(
+        color: primary,
+        shape: const CircleBorder(),
+        child: InkWell(
+          customBorder: const CircleBorder(),
+          onTap: onTap,
+          child: SizedBox(
+            width: 44,
+            height: 44,
+            child: Icon(icon, color: Theme.of(context).colorScheme.onPrimary, size: 20),
+          ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildNormalInputBar() {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Expanded(
+          child: Container(
+            constraints: const BoxConstraints(minHeight: 44),
+            padding: const EdgeInsets.only(left: 14),
+            decoration: BoxDecoration(
+              color: AppColors.surfaceHigh,
+              borderRadius: BorderRadius.circular(22),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _textController,
+                    // While chat privacy is on, what's being typed shows as
+                    // dots too (DECISIONS.md #44); obscureText needs one line.
+                    obscureText: _hidden,
+                    minLines: 1,
+                    maxLines: _hidden ? 1 : 5,
+                    textCapitalization: TextCapitalization.sentences,
+                    decoration: const InputDecoration(
+                      hintText: 'মেসেজ…',
+                      border: InputBorder.none,
+                      enabledBorder: InputBorder.none,
+                      focusedBorder: InputBorder.none,
+                      filled: false,
+                      isDense: true,
+                      contentPadding: EdgeInsets.symmetric(vertical: 12),
+                    ),
+                    onSubmitted: (_) => _sendText(),
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Iconsax.paperclip_2, size: 21, color: AppColors.muted),
+                  tooltip: 'সংযুক্ত করুন',
+                  onPressed: _openAttachSheet,
+                ),
+                if (!_hasText)
+                  IconButton(
+                    icon: const Icon(Iconsax.camera, size: 21, color: AppColors.muted),
+                    tooltip: 'ক্যামেরা',
+                    onPressed: _takePhoto,
+                  ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        _hasText
+            ? _roundAction(icon: Iconsax.send_1_copy, onTap: _sendText, tooltip: 'পাঠান')
+            : _roundAction(icon: Iconsax.microphone_2_copy, onTap: _startRecording, tooltip: 'ভয়েস মেসেজ'),
       ],
     );
   }
 
   Widget _buildRecordingBar() {
+    final primary = Theme.of(context).colorScheme.primary;
     return Row(
       children: [
         IconButton(
-          icon: const Icon(Iconsax.trash, color: AppColors.rejected),
+          icon: const Icon(Iconsax.trash_copy, color: AppColors.rejected),
           tooltip: 'বাতিল করুন',
           onPressed: _cancelRecording,
         ),
         Expanded(
           child: Container(
-            height: 42,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(
-              color: Colors.grey.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(21),
-            ),
+            height: 44,
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            decoration: BoxDecoration(color: AppColors.surfaceHigh, borderRadius: BorderRadius.circular(22)),
             child: Row(
               children: [
-                Icon(
-                  Iconsax.record,
-                  color: _paused ? Colors.grey : Colors.red,
-                  size: 12,
-                ),
+                Icon(Icons.fiber_manual_record_rounded, color: _paused ? Colors.grey : Colors.redAccent, size: 12),
                 const SizedBox(width: 8),
-                Expanded(
-                  child: _WaveformBars(
-                    levels: _waveform,
-                    color: _paused ? Colors.grey : Theme.of(context).colorScheme.primary,
-                  ),
-                ),
+                Expanded(child: _WaveformBars(levels: _waveform, color: _paused ? Colors.grey : AppColors.mint)),
                 const SizedBox(width: 8),
-                Text(
-                  _fmtDuration(_recordDuration),
-                  style: const TextStyle(fontSize: 12),
-                ),
+                Text(_fmtDuration(_recordDuration), style: const TextStyle(fontSize: 12.5)),
               ],
             ),
           ),
         ),
         IconButton(
-          icon: Icon(
-            _paused ? Iconsax.play_circle_copy : Iconsax.pause_circle_copy,
-            color: Theme.of(context).colorScheme.primary,
-          ),
+          icon: Icon(_paused ? Iconsax.play_circle_copy : Iconsax.pause_circle_copy, color: primary),
           tooltip: _paused ? 'আবার শুরু করুন' : 'থামান',
           onPressed: _togglePause,
         ),
-        IconButton(
-          icon: Icon(Iconsax.send, color: Theme.of(context).colorScheme.primary),
-          tooltip: 'পাঠান',
-          onPressed: _finishAndSendRecording,
-        ),
+        _roundAction(icon: Iconsax.send_1_copy, onTap: _finishAndSendRecording, tooltip: 'পাঠান'),
       ],
     );
   }
 }
 
-/// A centered pill showing "আজ" / "গতকাল" / the actual date, inserted
-/// between messages sent on different days -- makes it possible to tell
-/// where you are while scrolling back through a long history. See
-/// DECISIONS.md.
-/// The small quoted-message box shown at the top of a bubble that's
-/// replying to another one -- tap it to jump back to the original. See
-/// DECISIONS.md.
-class _QuotedReply extends StatelessWidget {
-  final ChatMessageModel? message;
-  final String preview;
-  final bool mine;
+/// Small eye toggle shown on every message while privacy mode is on --
+/// tap to show just that one message, tap again to hide it.
+class _EyeButton extends StatelessWidget {
+  final bool revealed;
+  final Color color;
+  final bool filled;
   final VoidCallback onTap;
-  const _QuotedReply({
-    required this.message,
-    required this.preview,
-    required this.mine,
-    required this.onTap,
-  });
+  const _EyeButton({required this.revealed, required this.color, required this.onTap, this.filled = false});
 
   @override
   Widget build(BuildContext context) {
-    final barColor = mine
-        ? Theme.of(context).colorScheme.onPrimary
-        : Theme.of(context).colorScheme.primary;
-    final textColor = mine
-        ? Theme.of(context).colorScheme.onPrimary.withValues(alpha: 0.85)
-        : Colors.grey.shade700;
+    final icon = Icon(revealed ? Iconsax.eye_slash_copy : Iconsax.eye_copy, size: 15, color: color.withValues(alpha: 0.85));
+    return Semantics(
+      button: true,
+      label: revealed ? 'মেসেজ লুকান' : 'মেসেজ দেখুন',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: filled
+            ? Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.45), shape: BoxShape.circle),
+                child: Center(child: icon),
+              )
+            : Padding(padding: const EdgeInsets.all(5), child: icon),
+      ),
+    );
+  }
+}
+
+/// The quoted-message box at the top of a reply bubble -- tap it to jump
+/// back to the original.
+class _QuotedReply extends StatelessWidget {
+  final String preview;
+  final bool mine;
+  final VoidCallback onTap;
+  const _QuotedReply({required this.preview, required this.mine, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
         margin: const EdgeInsets.only(bottom: 6),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+        padding: const EdgeInsets.fromLTRB(8, 5, 10, 5),
         decoration: BoxDecoration(
-          color: (mine ? Colors.black : Colors.white).withValues(alpha: 0.12),
+          color: (mine ? Colors.black : Colors.white).withValues(alpha: mine ? 0.18 : 0.06),
           borderRadius: BorderRadius.circular(8),
-          border: Border(left: BorderSide(color: barColor, width: 3)),
         ),
-        child: Text(
-          preview,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-          style: TextStyle(fontSize: 12, color: textColor),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 2.5,
+              height: 18,
+              decoration: BoxDecoration(
+                color: mine ? Colors.white70 : AppColors.mint,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(width: 6),
+            Flexible(
+              child: Text(
+                preview,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(fontSize: 12, color: mine ? Colors.white.withValues(alpha: 0.85) : AppColors.muted),
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
+/// "আজ" / "গতকাল" / the date, between messages sent on different days.
 class _DateDivider extends StatelessWidget {
   final DateTime date;
   const _DateDivider({required this.date});
@@ -1276,18 +1763,12 @@ class _DateDivider extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 10),
+      padding: const EdgeInsets.only(top: 14, bottom: 6),
       child: Center(
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-          decoration: BoxDecoration(
-            color: Colors.grey.withValues(alpha: 0.18),
-            borderRadius: BorderRadius.circular(999),
-          ),
-          child: Text(
-            _label(),
-            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.grey),
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 3),
+          decoration: BoxDecoration(color: AppColors.surfaceHigh, borderRadius: BorderRadius.circular(10)),
+          child: Text(_label(), style: const TextStyle(fontSize: 11, color: AppColors.muted)),
         ),
       ),
     );

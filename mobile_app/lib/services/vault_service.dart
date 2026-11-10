@@ -152,9 +152,8 @@ class VaultService {
     return entry;
   }
 
-  /// Moves an entry to the trash immediately -- no spouse approval. The
-  /// entry and its media are never purged; see [listTrash]/[restoreEntry]
-  /// and DECISIONS.md.
+  /// Moves an entry to the trash immediately -- no spouse approval. It stays
+  /// restorable until deleted for good from the trash ([deleteForever]).
   Future<void> deleteEntry(String entryId) async {
     await _dio.delete('/vault/entries/$entryId');
   }
@@ -172,6 +171,18 @@ class VaultService {
 
   Future<void> restoreEntry(String entryId) async {
     await _dio.post('/vault/entries/$entryId/restore');
+  }
+
+  /// Permanently deletes a trashed entry -- the database row AND its
+  /// encrypted files on the server. Cannot be undone. DECISIONS.md #55.
+  Future<void> deleteForever(String entryId) async {
+    await _dio.delete('/vault/trash/$entryId');
+  }
+
+  /// Permanently empties the whole trash, server files included.
+  Future<int> emptyTrash() async {
+    final res = await _dio.delete('/vault/trash');
+    return (res.data['deleted'] as num?)?.toInt() ?? 0;
   }
 
   Future<ConsentRequestModel> requestEdit(

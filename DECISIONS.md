@@ -1794,3 +1794,90 @@ flow completely unmodified -- the new device still has to pass a real
 password + TOTP (+ face, if enabled) login against the server to obtain
 its own tokens and Device row. No backend changes were needed; this is
 purely a client-side onboarding path into endpoints that already existed.
+
+## 54. Master password + server-side device approval (replaces setup codes)
+
+**Request:** onboarding had become too hard (setup code QR, role claim,
+per-role passwords, peer-to-peer pairing, reset-approval flow). Wanted: one
+shared master password for both people; a new phone needs a one-time
+approval from the server; after that, that phone gets in with just the
+password, nothing else to set up.
+
+**Decision:**
+- `POST /auth/master/login {password, device_uuid, device_name}` checks the
+  master password (`app_settings.master_password_hash`). A phone whose
+  `device_uuid` already has a `Device` row is logged straight in (tokens +
+  `vmk_b64`). An unknown phone gets a `DeviceRequest` (new table) with a
+  short human code (e.g. `K7-42`) and a secret poll token.
+- The phone shows "অনুমতির অপেক্ষায়" with that code and polls
+  `POST /auth/master/status` every 3s. The admin panel lists pending phones
+  with the same code; the admin approves **as husband or as wife** (role is
+  chosen here, never on the phone) or rejects. The next poll mints the real
+  `Device` + tokens exactly once and deletes the request.
+- Admin panel: set/change master password, approve/reject pending phones,
+  revoke approved ones (a revoked phone's refresh fails and it must be
+  approved again). Setup-code UI removed (endpoints left in place, unused).
+- App: `WelcomeScreen`/`ClaimRoleScreen`/`PairDeviceScreen`/
+  `ScanSetupScreen`/`PasswordResetScreen`/`AddDeviceScreen`/
+  `ApprovePasswordResetScreen` deleted. `needsSetup` and `locked` both show
+  the one master-password `LoginScreen`; new `awaitingApproval` state shows
+  `AwaitingApprovalScreen`. Hourly-password + fingerprint window (#27) and
+  duress PIN unchanged.
+- Server address: no setup code carries it anymore, so it comes from the
+  phone's saved value, an older install's session, or
+  `--dart-define=SERVER_URL=...` at build time; the login screen's ⚙ lets
+  you type it once otherwise.
+- **Vault key, stated honestly:** the server already held the VMK
+  (Fernet-encrypted at rest in `vault_keys`, #22) -- this design hands it
+  to approved phones after the correct password, over TLS. So the server
+  is trusted with the key, same as before; it is not true zero-knowledge
+  E2E. A fresh deployment generates the key the first time the master
+  password is set. A deployment with phones but no stored key (both roles
+  claimed before #22) never invents one: the first already-working phone
+  that logs in uploads its own key (`POST /auth/master/vault-key`, refuses
+  to overwrite). A phone that already has a key locally always keeps it.
+- Existing phones keep working: they already have `Device` rows with a
+  `device_uuid`, so their next password entry logs straight in.
+
+Verified against SQLite through the real FastAPI app (httpx ASGI):
+not-set 409, wrong password 401, pending → same code on retry, stale poll
+token 404, approve → tokens + 32-byte key, re-login direct, reject →
+rejected → new request on retry, revoke kills refresh.
+
+## 55. Trash: delete forever really deletes from the server
+
+Reverses #46's "never purge" rule, per explicit request. Trash rows now
+have "চিরতরে মুছুন" (and the app bar has "সব মুছুন"), both behind a
+confirmation that says it can't be undone. `DELETE /vault/trash/{id}` and
+`DELETE /vault/trash` delete the entry, its media rows, its reactions/
+comments/favorites, and then remove the encrypted blobs (file, thumbnail,
+legacy pre-chunking copy) from MinIO via the new `storage.remove_object`
+-- blobs are removed only after the DB commit succeeds. Moving something
+TO the trash still never touches storage.
+
+## 56. Modern messenger redesign + per-message eye in chat privacy mode
+
+Picked design "B" from three mockups. Theme: deeper background
+(`#0B100E`), two stepped surfaces, 0.5px hairlines, no shadows, real
+per-tier TextTheme, 8px cards, 12px primary buttons vs. full-pill
+secondary buttons, solid-fill selected chips.
+
+Chat:
+- Header: partner avatar with online dot, name from profile, live status
+  (লিখছে… / অনলাইন / "X মিনিট আগে দেখেছে"). Backend: `presence` WS event
+  on connect/disconnect + `GET /chat/partner-status`.
+- One shared pinned message (`GET/PUT /chat/pin`, stored in
+  `app_settings`, broadcast as `chat_pin`).
+- Rounded bubbles grouped by sender (<3 min), time + ticks inside the
+  bubble, pill date dividers, round scroll-to-bottom button.
+- **Privacy mode:** every message is masked and carries its own eye
+  button; tapping it shows just that message (text, photo, video, voice),
+  tapping again hides it. Reveals are cleared each time privacy mode is
+  toggled. Pinned bar and reply preview also stay masked.
+- Long-press → action sheet: one-tap reactions, reply, copy, **select and
+  copy** (opens the full text as `SelectableText` -- the bubble's own
+  long-press is taken by the menu, so selection lives there), pin/unpin,
+  show/hide. Copy options are hidden for a still-masked message.
+- Quick replies (ঠিক আছে / আসছি / ইনশাআল্লাহ …) when the last message is
+  your partner's and you haven't started typing; pill composer with
+  attach sheet (photo/video/camera/file), camera shortcut, mic ↔ send.
